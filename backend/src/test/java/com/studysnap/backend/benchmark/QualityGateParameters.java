@@ -17,6 +17,10 @@ public final class QualityGateParameters {
     static final int G4_RECURRING_NOTES = 2;
     // SIGNED OFF 2026-10-27
     static final double G7_NOISE_POINTS = .10;
+    static final boolean G7_DENOMINATOR_REQUESTED = true;
+    static final int MISSING_ARM_EXCESS = 2;
+    static final int MISSING_MIN_PAIRED_PER_LEVEL = 6;
+    static final int MISSING_VALIDATION_MIN_STARTS = 2;
     // PROPOSED, set at rubric sign-off
     static final double REVIEW_SAMPLE_FRACTION = .20;
     // PROPOSED, set at rubric sign-off

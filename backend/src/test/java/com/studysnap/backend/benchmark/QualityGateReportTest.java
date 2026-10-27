@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -14,6 +16,86 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class QualityGateReportTest {
     @TempDir Path temp;
+
+    @Test void generationCountsUseReturnedAttemptsAndStrictFields() {
+        String first="action=challenge_quiz_generation_counts requested=15 accepted=0 rejected=4 retried=4 omitted=0 outcome=threw verified=0 verifierRejected=99";
+        String second="action=challenge_quiz_generation_counts requested=15 accepted=15 rejected=3 retried=3 omitted=0 outcome=returned verified=0 verifierRejected=8";
+        Map<String,Object> captured=LlmModelBenchmark.validatorTelemetry(true,List.of(first,second));
+        assertThat(captured.get("validatorTelemetry")).isEqualTo("CAPTURED");
+        assertThat(captured.get("validatorRequested")).isEqualTo(15);
+        assertThat(captured.get("validatorRejected")).isEqualTo(3);
+        assertThat(captured.get("discardedAttempts")).isEqualTo(1);
+        assertThat(LlmModelBenchmark.validatorTelemetry(true,List.of(second,second)).get("validatorRequested")).isEqualTo(30);
+        assertThat(LlmModelBenchmark.validatorTelemetry(false,List.of(second)).get("validatorRequested")).isNull();
+        assertThat(LlmModelBenchmark.validatorTelemetry(false,List.of(second)).get("validatorTelemetry")).isEqualTo("NOT_APPLICABLE");
+        assertThat(LlmModelBenchmark.validatorTelemetry(true,List.of(first)).get("validatorTelemetry")).isEqualTo("MISSING");
+        assertThat(LlmModelBenchmark.validatorTelemetry(true,List.of(first)).get("validatorRejected")).isNull();
+        assertThatThrownBy(()->LlmModelBenchmark.validatorTelemetry(true,List.of(second.replace("retried=3","retried=oops"))))
+                .hasMessageContaining("Missing retried");
+    }
+
+    @Test void requestedDenominatorIsReversibleAtOneSwitch() throws Exception {
+        JsonNode row=QualityScoreFiles.JSON.readTree("{\"validatorRequested\":15,\"validatorAccepted\":15,\"validatorRejected\":3,\"validatorRetried\":3}");
+        assertThat(QualityGateParameters.G7_DENOMINATOR_REQUESTED).isTrue();
+        assertThat(QualityGateReport.validatorRate(row,"validatorRejected",true)).isEqualTo(.2);
+        assertThat(QualityGateReport.validatorRate(row,"validatorRetried",true)).isEqualTo(.2);
+        assertThat(QualityGateReport.validatorRate(row,"validatorRejected",false)).isCloseTo(1d/6,org.assertj.core.data.Offset.offset(1e-12));
+    }
+
+    @Test void missingnessTriggersAndNearMissesAreMechanical() throws Exception {
+        Set<String> packs=new java.util.TreeSet<>(); Map<String,String> levels=new TreeMap<>(),strata=new TreeMap<>();
+        for (int i=0;i<20;i++) { String pack="p"+i; packs.add(pack);
+            levels.put(pack,i<10?"COLLEGE":"BOARD_EXAM_REVIEW"); strata.put(pack,i==0?"unique":"shared"); }
+        Map<String,JsonNode> a=starts(packs),b=starts(packs);
+        b.put("p1",start(false,"HTTP_ERROR"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).doesNotContain("more failed");
+        b.put("p2",start(false,"HTTP_ERROR"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).contains("more failed");
+        b=starts(packs); a=starts(packs);
+        for (int i=1;i<=4;i++) a.put("p"+i,start(false,"HTTP_ERROR"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).doesNotContain("noteLevel COLLEGE");
+        a.put("p5",start(false,"HTTP_ERROR"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).contains("noteLevel COLLEGE");
+        a=starts(packs); a.put("p0",start(false,"HTTP_ERROR"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).contains("Stratum unique");
+        strata.put("p1","unique");
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).doesNotContain("Stratum unique");
+        strata.put("p1","shared");
+        a=starts(packs); a.put("p1",start(false,"SCHEMA_OR_PARSE"));
+        a.put("p2",start(false,"MULTI_OUTPUT_TEXT")); a.put("p3",start(false,"HTTP_ERROR"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).contains("failed starts correlate");
+        a.put("p2",start(false,"HTTP_ERROR"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).doesNotContain("correlate");
+        a.put("p2",start(false,"MULTI_OUTPUT_TEXT")); a.put("p4",start(false,"HTTP_ERROR"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).doesNotContain("correlate"); // exactly half is not more than half
+        a.put("p2",start(false,"HTTP_ERROR")); a.put("p4",start(true,"SUCCESS"));
+        a.put("p1",start(false,"HTTP_ERROR"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).doesNotContain("correlate");
+        a=starts(packs); b=starts(packs); a.put("p1",start(false,"SCHEMA_OR_PARSE")); b.put("p1",start(false,"SCHEMA_OR_PARSE"));
+        assertThat(missing(packs,levels,strata,a,b).path("verdict").asText()).isEqualTo("CLEAR");
+        assertThat(missing(packs,levels,strata,a,b).path("missingPairs")).hasSize(1);
+        a.put("p0",start(false,"SCHEMA_OR_PARSE")); b.put("p0",start(false,"SCHEMA_OR_PARSE"));
+        String sharedOnly=missing(packs,levels,strata,a,b).path("reasons").toString();
+        assertThat(sharedOnly).contains("Stratum unique").doesNotContain("more failed").doesNotContain("correlate");
+        a=starts(packs); b=starts(packs);
+        a.put("p1",telemetry("SCHEMA_OR_PARSE")); a.put("p2",telemetry("MULTI_OUTPUT_TEXT"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).contains("MISSING telemetry correlates");
+        a.put("p2",telemetry("HTTP_ERROR"));
+        assertThat(missing(packs,levels,strata,a,b).path("reasons").toString()).doesNotContain("correlates");
+    }
+    private static Map<String,JsonNode> starts(Set<String> packs) throws Exception {
+        Map<String,JsonNode> rows=new TreeMap<>(); for (String pack:packs) rows.put(pack,start(true,"SUCCESS")); return rows;
+    }
+    private static JsonNode start(boolean success,String classification) throws Exception {
+        return QualityScoreFiles.JSON.readTree("{\"success\":"+success+",\"failureClass\":\""+classification+"\"}");
+    }
+    private static JsonNode telemetry(String classification) throws Exception {
+        return QualityScoreFiles.JSON.readTree("{\"success\":true,\"validatorTelemetry\":\"MISSING\",\"validatorTelemetryFailureClass\":\""+classification+"\"}");
+    }
+    private static JsonNode missing(Set<String> packs,Map<String,String> levels,Map<String,String> strata,
+            Map<String,JsonNode> a,Map<String,JsonNode> b) {
+        return QualityScoreFiles.JSON.valueToTree(QualityDescriptors.missingness(packs,levels,strata,a,b,"A2","B2"));
+    }
 
     @Test void rubricG4IllustrationsAndExactBinomialLimit() {
         assertThat(QualityGateReport.cpUpper(0,30,.90)).isCloseTo(.074,org.assertj.core.data.Offset.offset(.0005));

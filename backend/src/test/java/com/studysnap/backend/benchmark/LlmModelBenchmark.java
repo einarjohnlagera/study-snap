@@ -328,23 +328,15 @@ public class LlmModelBenchmark {
                     if (quality) {
                         result.put("packId", needed(input,"packId"));
                         result.put("noteLevel", needed(input,"noteLevel"));
+                        result.put("stratum", input.path("stratum").asText(""));
                         result.put("sourceNoteText", input.path("sources").get(0).path("sourceNoteText").asText());
                         result.put("studyPackSummary", needed(input.path("sources").get(0), "studyPackSummary"));
                         result.put("keyConcepts", strings(input.path("sources").get(0), "keyConcepts"));
-                        int accepted = 0, rejected = 0, retried = 0, events = 0;
-                        for (ILoggingEvent event : generationLog.list.subList(logBefore, generationLog.list.size())) {
-                            String message = event.getFormattedMessage();
-                            if (!message.contains("action=challenge_quiz_generation_counts")) continue;
-                            events++;
-                            accepted += loggedCount(message, "accepted");
-                            rejected += loggedCount(message, "rejected");
-                            retried += loggedCount(message, "retried");
-                        }
-                        boolean missing = "SUCCESS".equals(classification) && events == 0;
-                        result.put("validatorTelemetry", missing ? "MISSING" : events > 0 ? "CAPTURED" : "NOT_APPLICABLE");
-                        result.put("validatorAccepted", missing ? null : accepted);
-                        result.put("validatorRejected", missing ? null : rejected);
-                        result.put("validatorRetried", missing ? null : retried);
+                        List<String> messages = generationLog.list.subList(logBefore, generationLog.list.size()).stream()
+                                .map(ILoggingEvent::getFormattedMessage).toList();
+                        result.putAll(validatorTelemetry("SUCCESS".equals(classification), messages));
+                        if ("MISSING".equals(result.get("validatorTelemetry")))
+                            result.put("validatorTelemetryFailureClass", telemetryFailureClass(messages));
                     }
                     ECell profile = ECell.of(needed(input,"cell"));
                     result.put("cell",needed(input,"cell")); result.put("run",input.path("run").asInt());
@@ -372,6 +364,42 @@ public class LlmModelBenchmark {
         var match = java.util.regex.Pattern.compile("(?:^| )" + field + "=(\\d+)(?: |$)").matcher(message);
         if (!match.find()) throw new IllegalArgumentException("Missing " + field + " in generation log: " + message);
         return Integer.parseInt(match.group(1));
+    }
+
+    static Map<String,Object> validatorTelemetry(boolean successful, List<String> messages) {
+        Map<String,Object> result = new LinkedHashMap<>();
+        int requested=0, accepted=0, rejected=0, retried=0, omitted=0, verified=0, returned=0, discarded=0;
+        for (String message : messages) {
+            if (!message.contains("action=challenge_quiz_generation_counts")) continue;
+            int lineRequested=loggedCount(message,"requested"), lineAccepted=loggedCount(message,"accepted");
+            int lineRejected=loggedCount(message,"rejected"), lineRetried=loggedCount(message,"retried");
+            int lineOmitted=loggedCount(message,"omitted"), lineVerified=loggedCount(message,"verified");
+            var outcome=java.util.regex.Pattern.compile("(?:^| )outcome=([^ ]+)(?: |$)").matcher(message);
+            if (!outcome.find()) throw new IllegalArgumentException("Missing outcome in generation log: " + message);
+            if ("threw".equals(outcome.group(1))) { discarded++; continue; }
+            if (!"returned".equals(outcome.group(1))) throw new IllegalArgumentException("Unknown outcome in generation log: " + message);
+            returned++; requested+=lineRequested; accepted+=lineAccepted; rejected+=lineRejected;
+            retried+=lineRetried; omitted+=lineOmitted; verified+=lineVerified;
+        }
+        boolean captured=successful && returned>0;
+        result.put("validatorTelemetry",successful ? captured ? "CAPTURED" : "MISSING" : "NOT_APPLICABLE");
+        result.put("validatorRequested",captured ? requested : null);
+        result.put("validatorAccepted",captured ? accepted : null);
+        result.put("validatorRejected",captured ? rejected : null);
+        result.put("validatorRetried",captured ? retried : null);
+        result.put("validatorOmitted",captured ? omitted : null);
+        result.put("validatorVerified",captured ? verified : null);
+        result.put("discardedAttempts",discarded);
+        return result;
+    }
+    private static String telemetryFailureClass(List<String> messages) {
+        for (String message:messages) if (message.contains("action=llm_call")) {
+            if (message.contains("outcome=SCHEMA_OR_PARSE")) return "SCHEMA_OR_PARSE";
+            if (message.contains("outcome=MULTI_OUTPUT_TEXT")) return "MULTI_OUTPUT_TEXT";
+        }
+        for (String message:messages) if (message.contains("action=llm_call") && message.contains("outcome=HTTP_ERROR"))
+            return "HTTP_ERROR";
+        return "EMPTY";
     }
 
     static String qualityPreflight(Config config, ObjectMapper mapper, EFilter filter, String arm) throws IOException {

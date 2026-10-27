@@ -193,6 +193,7 @@ class QualityEvaluationTest {
             assertThat(captured.path("success").asBoolean()).isTrue();
             assertThat(captured.path("studyPackSummary").asText()).isEqualTo("Summary");
             assertThat(captured.path("keyConcepts").size()).isEqualTo(2);
+            assertThat(captured.path("stratum").asText()).isEqualTo("Biology");
             assertThat(captured.path("validatorTelemetry").asText()).isEqualTo("CAPTURED");
             assertThat(captured.path("validatorAccepted").isInt()).isTrue();
             logger.setLevel(ch.qos.logback.classic.Level.OFF);
@@ -242,7 +243,8 @@ class QualityEvaluationTest {
                 assertThat(row.path("arm").asText()).isEqualTo(labels[i]);
                 assertThat(row.path("promptSha256").asText()).hasSize(64);
                 assertThat(row.path("noteLevel").asText()).isEqualTo("COLLEGE");
-                assertThat(row.path("validatorRejected").isInt()).isTrue();
+                assertThat(row.path("validatorTelemetry").asText()).isEqualTo("NOT_APPLICABLE");
+                assertThat(row.path("validatorRejected").isNull()).isTrue();
                 assertThat(Files.readString(out.resolve("summary.csv"))).contains(labels[i],"COLLEGE",row.path("promptSha256").asText());
                 hashes[i] = row.path("promptSha256").asText();
             }
@@ -408,6 +410,21 @@ class QualityEvaluationTest {
         assertThat(report.path("arms").path("A2").path("g7").path("allFormatValidatorRetryRate").asDouble()).isEqualTo(.5);
     }
 
+    @Test void verifiedStartIsListedAndExcludedFromValidatorRates() throws Exception {
+        Path dir=temp.resolve("verified"),out=temp.resolve("verified-descriptors");
+        Files.createDirectories(dir);
+        ObjectNode clean=(ObjectNode)mapper.readTree(result("A2",HASH_A,1,true));
+        ObjectNode verified=(ObjectNode)mapper.readTree(result("A2",HASH_A,2,true));
+        verified.put("validatorVerified",2); verified.put("validatorRejected",9); verified.put("validatorRetried",9);
+        Files.write(dir.resolve("results.jsonl"),List.of(mapper.writeValueAsString(clean),mapper.writeValueAsString(verified)));
+        QualityDescriptors.report(List.of(dir),out);
+        JsonNode g7=mapper.readTree(out.resolve("descriptors.json").toFile()).path("arms").path("A2").path("g7");
+        assertThat(g7.path("verifiedStarts").toString()).contains("pack-2");
+        assertThat(g7.path("validatorRejected").asInt()).isEqualTo(1);
+        assertThat(g7.path("validatorRequested").asInt()).isEqualTo(2);
+        assertThat(g7.path("discardedAttempts").asInt()).isZero();
+    }
+
     private LlmModelBenchmark.Config config(Path input) { return new LlmModelBenchmark.Config("test",input,temp,
             EnumSet.of(LlmModelBenchmark.Leg.E),1,BigDecimal.ONE,BigDecimal.ONE,BigDecimal.ONE,"fake"); }
     private LlmModelBenchmark.EFilter filter(String cell) { return new LlmModelBenchmark.EFilter(Set.of(cell),1,20,java.util.Map.of()); }
@@ -416,6 +433,7 @@ class QualityEvaluationTest {
         for (int i=1;i<=20;i++) {
             ObjectNode line=mapper.createObjectNode(); line.put("id","Q-"+i); line.put("leg","E");
             line.put("cell","S15"); line.put("run",i); line.put("packId","pack-"+i);
+            line.put("stratum","Biology");
             line.put("officialOwner",true);
             String level = i <= 10 ? "COLLEGE" : "BOARD_EXAM_REVIEW";
             line.put("noteLevel",level); line.put("effectiveLevel",level);
@@ -444,9 +462,13 @@ class QualityEvaluationTest {
         row.put("promptSha256",hash); row.put("packId","pack-"+i); row.put("sourceNoteText","Official note " + i);
         row.put("studyPackSummary","Summary"); row.putArray("keyConcepts").add("one").add("two");
         row.put("noteLevel",i <= 10 ? "COLLEGE" : "BOARD_EXAM_REVIEW");
+        row.put("stratum",i % 2 == 0 ? "Biology" : "Chemistry");
         row.put("success",success); row.put("failureClass",success ? "SUCCESS" : "SPEND_STOP");
         row.put("attempts",1); row.put("latencyMs",100); row.put("inputTokens",100); row.put("outputTokens",50);
-        row.put("validatorAccepted",success ? 1 : 0); row.put("validatorRejected",1); row.put("validatorRetried",1);
+        row.put("validatorRequested",success ? 2 : 0); row.put("validatorAccepted",success ? 1 : 0);
+        row.put("validatorRejected",success ? 1 : 0); row.put("validatorRetried",success ? 1 : 0);
+        row.put("validatorVerified",0);
+        row.put("validatorTelemetry",success ? "CAPTURED" : "NOT_APPLICABLE");
         if (success) row.putArray("questions").add(question("Question " + i)); else row.putArray("questions");
         return mapper.writeValueAsString(row);
     }

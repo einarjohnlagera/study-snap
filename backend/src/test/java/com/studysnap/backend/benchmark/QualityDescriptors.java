@@ -37,7 +37,7 @@ public final class QualityDescriptors {
     static void report(List<Path> dirs, Path out, Path qualityInput) throws Exception {
         Map<String,Map<String,JsonNode>> arms = new TreeMap<>();
         Set<String> packs = new java.util.TreeSet<>();
-        Map<String,String> packLevels = new TreeMap<>();
+        Map<String,String> packLevels = new TreeMap<>(), packStrata = new TreeMap<>();
         if (qualityInput != null) {
             List<String> lines = Files.readAllLines(qualityInput);
             if (lines.size() != QualityGateParameters.EXPECTED_NOTES)
@@ -47,6 +47,7 @@ public final class QualityDescriptors {
                 if (!input.path("packId").isTextual()) throw new IllegalArgumentException("Quality input lacks packId");
                 packs.add(input.path("packId").asText());
                 recordLevel(packLevels,input);
+                recordStratum(packStrata,input);
             }
             if (packs.size() != QualityGateParameters.EXPECTED_NOTES) throw new IllegalArgumentException("Quality input packIds must be unique");
         }
@@ -60,6 +61,7 @@ public final class QualityDescriptors {
             if (arms.computeIfAbsent(arm, ignored -> new TreeMap<>()).putIfAbsent(pack, row) != null)
                 throw new IllegalArgumentException("Duplicate start for " + arm + "/" + pack);
             recordLevel(packLevels,row);
+            recordStratum(packStrata,row);
             packs.add(pack);
         }
         Map<String,Object> armReports = new LinkedHashMap<>();
@@ -108,6 +110,8 @@ public final class QualityDescriptors {
                                         .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,Map.Entry::getValue))))));
             }
             pairReport.put("perNoteLevel",perLevel);
+            pairReport.put("missingness",missingness(packs,packLevels,packStrata,
+                    arms.getOrDefault(pair[0],Map.of()),arms.getOrDefault(pair[1],Map.of()),pair[0],pair[1]));
             pairReports.put(pair[0] + "/" + pair[1],pairReport);
         }
         Map<String,Object> report = new LinkedHashMap<>();
@@ -142,28 +146,113 @@ public final class QualityDescriptors {
         if (previous != null && !previous.equals(level)) throw new IllegalArgumentException("Conflicting noteLevel for " + pack);
     }
 
+    private static void recordStratum(Map<String,String> strata, JsonNode row) {
+        String value=row.path("stratum").asText("");
+        if (value.isBlank()) return; // Older synthetic results predate the input stratum field.
+        String pack=row.path("packId").asText();
+        String previous=strata.putIfAbsent(pack,value);
+        if (previous!=null && !previous.equals(value)) throw new IllegalArgumentException("Conflicting stratum for " + pack);
+    }
+
+    static Map<String,Object> missingness(Set<String> packs,Map<String,String> levels,Map<String,String> strata,
+            Map<String,JsonNode> current,Map<String,JsonNode> proposed,String a,String b) {
+        List<Map<String,String>> missing=new ArrayList<>();
+        Map<String,int[]> byLevel=new TreeMap<>(),byStratum=new TreeMap<>();
+        int failedA=0,failedB=0,rawFailedA=0,rawFailedB=0,validationFailedA=0,validationFailedB=0;
+        int telemetryA=0,telemetryB=0,validationTelemetryA=0,validationTelemetryB=0;
+        for (String pack:packs) {
+            JsonNode left=current.get(pack),right=proposed.get(pack);
+            boolean okA=left!=null && left.path("success").asBoolean();
+            boolean okB=right!=null && right.path("success").asBoolean();
+            String level=levels.getOrDefault(pack,"UNKNOWN"),stratum=strata.getOrDefault(pack,"UNKNOWN");
+            int[] levelCounts=byLevel.computeIfAbsent(level,k->new int[2]);
+            int[] stratumCounts=byStratum.computeIfAbsent(stratum,k->new int[2]);
+            if (okA && okB) { levelCounts[0]++; stratumCounts[0]++; }
+            else {
+                levelCounts[1]++; stratumCounts[1]++;
+                missing.add(Map.of("packId",pack,"noteLevel",level,"stratum",stratum,a,side(left),b,side(right)));
+            }
+            if (!okA) rawFailedA++;
+            if (!okB) rawFailedB++;
+            // Shared missing sides are described, but cannot bias the paired comparison.
+            if (!okA && !okB) continue;
+            if (!okA) { failedA++; if (validationFailure(left)) validationFailedA++; }
+            if (!okB) { failedB++; if (validationFailure(right)) validationFailedB++; }
+            if (okA && "MISSING".equals(left.path("validatorTelemetry").asText())) {
+                telemetryA++; if (validationTelemetry(left)) validationTelemetryA++;
+            }
+            if (okB && "MISSING".equals(right.path("validatorTelemetry").asText())) {
+                telemetryB++; if (validationTelemetry(right)) validationTelemetryB++;
+            }
+        }
+        List<String> reasons=new ArrayList<>();
+        if (failedB-failedA>=QualityGateParameters.MISSING_ARM_EXCESS)
+            reasons.add("Proposed arm has "+(failedB-failedA)+" more failed or spend-stopped starts");
+        // Trigger 2 describes the remaining paired set, so a note missing on both sides still counts as lost here.
+        for (var entry:byLevel.entrySet()) if (entry.getValue()[0]<QualityGateParameters.MISSING_MIN_PAIRED_PER_LEVEL)
+            reasons.add("Paired noteLevel "+entry.getKey()+" has fewer than "+QualityGateParameters.MISSING_MIN_PAIRED_PER_LEVEL+" notes");
+        for (var entry:byStratum.entrySet()) if (entry.getValue()[0]==0)
+            reasons.add("Stratum "+entry.getKey()+" has no paired note");
+        if (validationDominates(validationFailedA,failedA)) reasons.add(a+" failed starts correlate with validation failure");
+        if (validationDominates(validationFailedB,failedB)) reasons.add(b+" failed starts correlate with validation failure");
+        if (validationDominates(validationTelemetryA,telemetryA)) reasons.add(a+" MISSING telemetry correlates with validation failure");
+        if (validationDominates(validationTelemetryB,telemetryB)) reasons.add(b+" MISSING telemetry correlates with validation failure");
+        Map<String,Object> out=new LinkedHashMap<>();
+        out.put("missingPairs",missing); out.put("byNoteLevel",distribution(byLevel)); out.put("byStratum",distribution(byStratum));
+        out.put("failedStarts",Map.of(a,rawFailedA,b,rawFailedB));
+        out.put("comparableFailedStarts",Map.of(a,failedA,b,failedB));
+        out.put("proposedMinusCurrentFailedStarts",rawFailedB-rawFailedA);
+        out.put("validationFailureCounts",Map.of(a,validationFailedA,b,validationFailedB));
+        out.put("missingTelemetryCounts",Map.of(a,telemetryA,b,telemetryB));
+        out.put("validationMissingTelemetryCounts",Map.of(a,validationTelemetryA,b,validationTelemetryB));
+        out.put("reasons",reasons); out.put("verdict",reasons.isEmpty()?"CLEAR":"INCONCLUSIVE");
+        return out;
+    }
+    private static boolean validationDominates(int validation,int total) {
+        return validation>=QualityGateParameters.MISSING_VALIDATION_MIN_STARTS && validation*2>total;
+    }
+    private static boolean validationFailure(JsonNode row) {
+        String classification=row==null?"":row.path("failureClass").asText();
+        return "SCHEMA_OR_PARSE".equals(classification)||"MULTI_OUTPUT_TEXT".equals(classification);
+    }
+    private static boolean validationTelemetry(JsonNode row) {
+        String classification=row==null?"":row.path("validatorTelemetryFailureClass").asText();
+        return "SCHEMA_OR_PARSE".equals(classification)||"MULTI_OUTPUT_TEXT".equals(classification);
+    }
+    private static Map<String,Map<String,Integer>> distribution(Map<String,int[]> counts) {
+        Map<String,Map<String,Integer>> result=new TreeMap<>();
+        counts.forEach((key,value)->result.put(key,Map.of("paired",value[0],"unpaired",value[1])));
+        return result;
+    }
+
     private static Map<String,Object> describeArm(Map<String,JsonNode> starts) {
         Map<String,Object> report = new LinkedHashMap<>();
         Map<String,Object> perNote = new LinkedHashMap<>();
         Map<String,Integer> formats = new TreeMap<>(), answers = new TreeMap<>();
         int longest = 0, absolutes = 0, duplicateChoices = 0, duplicateQuestions = 0;
         int choiceItems = 0, trueFalse = 0, multiTwo = 0, multiThree = 0, delivered = 0, calls = 0;
-        int accepted = 0, rejected = 0, retried = 0, telemetryMissing = 0;
+        int requested = 0, accepted = 0, rejected = 0, retried = 0, telemetryMissing = 0, discarded = 0;
+        List<String> verifiedStarts=new ArrayList<>(),retryMismatchStarts=new ArrayList<>();
         long inputTokens = 0, outputTokens = 0;
         List<Long> latencies = new ArrayList<>();
         for (var entry : starts.entrySet()) {
             JsonNode row = entry.getValue();
+            discarded+=row.path("discardedAttempts").asInt(0);
             if (!row.path("success").asBoolean()) continue;
             int count = row.path("questions").size(), attempts = row.path("attempts").asInt();
-            int rowAccepted = -1, rowRejected = -1, rowRetried = -1;
+            int rowRequested = -1, rowAccepted = -1, rowRejected = -1, rowRetried = -1;
             delivered += count; calls += attempts; inputTokens += row.path("inputTokens").asLong();
             outputTokens += row.path("outputTokens").asLong();
             latencies.add(row.path("latencyMs").asLong());
-            if (row.path("validatorAccepted").isInt() && row.path("validatorRejected").isInt() && row.path("validatorRetried").isInt()) {
-                accepted += row.path("validatorAccepted").asInt();
-                rejected += row.path("validatorRejected").asInt(); retried += row.path("validatorRetried").asInt();
+            if ("CAPTURED".equals(row.path("validatorTelemetry").asText())
+                    && row.path("validatorRequested").isInt() && row.path("validatorAccepted").isInt()
+                    && row.path("validatorRejected").isInt() && row.path("validatorRetried").isInt()
+                    && row.path("validatorVerified").isInt()) {
                 rowAccepted=row.path("validatorAccepted").asInt(); rowRejected=row.path("validatorRejected").asInt();
-                rowRetried=row.path("validatorRetried").asInt();
+                rowRetried=row.path("validatorRetried").asInt(); rowRequested=row.path("validatorRequested").asInt();
+                if (rowRetried!=rowRejected) retryMismatchStarts.add(entry.getKey());
+                if (row.path("validatorVerified").asInt()>0) verifiedStarts.add(entry.getKey());
+                else { requested+=rowRequested; accepted+=rowAccepted; rejected+=rowRejected; retried+=rowRetried; }
             } else if (row.path("success").asBoolean()) telemetryMissing++;
             List<String> seen = new ArrayList<>(); int duplicateInStart = 0, rowMultiTwo = 0, rowMultiThree = 0;
             for (JsonNode q : row.path("questions")) {
@@ -208,8 +297,10 @@ public final class QualityDescriptors {
             noteMetrics.put("deliveredRate",(double)count/QualityGateParameters.REQUESTED_PER_START);
             noteMetrics.put("apiCalls",attempts); noteMetrics.put("latencyMs",row.path("latencyMs").asLong());
             noteMetrics.put("tokensPerDeliveredQuestion",count==0 ? "MISSING" : (double)(row.path("inputTokens").asLong()+row.path("outputTokens").asLong())/count);
-            noteMetrics.put("allFormatValidatorRetryRate",rowAccepted<0 || rowAccepted+rowRejected==0 ? "MISSING" : (double)rowRetried/(rowAccepted+rowRejected));
-            noteMetrics.put("allFormatValidatorRejectionRate",rowAccepted<0 || rowAccepted+rowRejected==0 ? "MISSING" : (double)rowRejected/(rowAccepted+rowRejected));
+            int denominator=QualityGateParameters.G7_DENOMINATOR_REQUESTED?rowRequested:rowAccepted+rowRejected;
+            boolean usable=rowRequested>=0 && row.path("validatorVerified").asInt(0)==0 && denominator>0;
+            noteMetrics.put("allFormatValidatorRetryRate",usable ? (double)rowRetried/denominator : "MISSING");
+            noteMetrics.put("allFormatValidatorRejectionRate",usable ? (double)rowRejected/denominator : "MISSING");
             noteMetrics.put("multiSelectThreeShare",rowMultiTwo+rowMultiThree==0 ? "MISSING" : (double)rowMultiThree/(rowMultiTwo+rowMultiThree));
             noteMetrics.put("nearDuplicateQuestions",duplicateInStart);
             noteMetrics.put("nearDuplicateStart",duplicateInStart>0 ? 1 : 0);
@@ -218,6 +309,7 @@ public final class QualityDescriptors {
         latencies.sort(Long::compare);
         int successful=(int)starts.values().stream().filter(r -> r.path("success").asBoolean()).count();
         report.put("starts",successful); report.put("failedStarts",starts.size()-successful);
+        report.put("discardedAttempts",discarded);
         report.put("perNote",perNote);
         report.put("g4",Map.of("choiceItems",choiceItems,"correctChoiceLongest",longest,
                 "absoluteOnlyIncorrect",absolutes,"answerPositions",answers,
@@ -228,14 +320,21 @@ public final class QualityDescriptors {
                 Map.entry("p50LatencyMs",latencies.isEmpty() ? 0 : latencies.get((latencies.size()-1)/2)),
                 Map.entry("tokensPerDeliveredQuestion",delivered == 0 ? 0d : (double)(inputTokens+outputTokens)/delivered),
                 Map.entry("validatorAccepted",accepted),Map.entry("validatorRejected",rejected),Map.entry("validatorRetried",retried),Map.entry("telemetryMissingStarts",telemetryMissing),
-                Map.entry("allFormatValidatorRejectionRate",accepted+rejected > 0 ? (double)rejected/(accepted+rejected) : "UNOBSERVABLE"),
-                Map.entry("allFormatValidatorRetryRate",accepted+rejected > 0 ? (double)retried/(accepted+rejected) : "UNOBSERVABLE")));
-        report.put("g7",Map.of("starts",successful,"formatMix",formats,"multiSelectTwoCorrect",multiTwo,"multiSelectThreeCorrect",multiThree,
-                "validatorAccepted",accepted,"validatorRejected",rejected,"validatorRetried",retried,
-                "telemetryMissingStarts",telemetryMissing,
-                "allFormatValidatorRejectionRate",accepted+rejected > 0 ? (double)rejected/(accepted+rejected) : "UNOBSERVABLE",
-                "allFormatValidatorRetryRate",accepted+rejected > 0 ? (double)retried/(accepted+rejected) : "UNOBSERVABLE"));
+                Map.entry("allFormatValidatorRejectionRate",denominator(requested,accepted,rejected)>0 ? (double)rejected/denominator(requested,accepted,rejected) : "UNOBSERVABLE"),
+                Map.entry("allFormatValidatorRetryRate",denominator(requested,accepted,rejected)>0 ? (double)retried/denominator(requested,accepted,rejected) : "UNOBSERVABLE")));
+        Map<String,Object> g7=new LinkedHashMap<>();
+        g7.put("starts",successful); g7.put("formatMix",formats); g7.put("multiSelectTwoCorrect",multiTwo); g7.put("multiSelectThreeCorrect",multiThree);
+        g7.put("validatorRequested",requested); g7.put("validatorAccepted",accepted); g7.put("validatorRejected",rejected); g7.put("validatorRetried",retried);
+        g7.put("telemetryMissingStarts",telemetryMissing); g7.put("discardedAttempts",discarded);
+        g7.put("verifiedStarts",verifiedStarts); g7.put("retryMismatchStarts",retryMismatchStarts);
+        g7.put("retriedEqualsRejected",retryMismatchStarts.isEmpty());
+        g7.put("allFormatValidatorRejectionRate",denominator(requested,accepted,rejected)>0 ? (double)rejected/denominator(requested,accepted,rejected) : "UNOBSERVABLE");
+        g7.put("allFormatValidatorRetryRate",denominator(requested,accepted,rejected)>0 ? (double)retried/denominator(requested,accepted,rejected) : "UNOBSERVABLE");
+        report.put("g7",g7);
         return report;
+    }
+    private static int denominator(int requested,int accepted,int rejected) {
+        return QualityGateParameters.G7_DENOMINATOR_REQUESTED?requested:accepted+rejected;
     }
     private static boolean isCorrect(JsonNode q, String format, int index) {
         if ("MULTI_SELECT".equals(format)) for (JsonNode n : q.path("correctIndices")) if (n.asInt(-1) == index) return true;

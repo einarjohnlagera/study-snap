@@ -157,15 +157,29 @@ class QualityGateIntegrationTest {
         assertThat(beyond.path("allFormatValidatorRejectionVerdict").asText()).isEqualTo("INCONCLUSIVE");
         assertThat(beyond.path("allFormatValidatorRetryVerdict").asText()).isEqualTo("INCONCLUSIVE");
     }
-    @Test void g7UsesAbsolutePointsAndAcceptedPlusRejectedRetryDenominator() throws Exception {
+    @Test void missingnessReasonMakesModelComparisonInconclusive() throws Exception {
+        Fixture fixture=new Fixture(false,false);
+        ObjectNode descriptor=(ObjectNode)QualityScoreFiles.JSON.readTree(fixture.descriptors.toFile());
+        ObjectNode missing=QualityScoreFiles.JSON.createObjectNode();
+        missing.put("verdict","INCONCLUSIVE"); missing.putArray("reasons").add("Proposed arm has 2 more failed or spend-stopped starts");
+        missing.putArray("missingPairs"); missing.putObject("byNoteLevel"); missing.putObject("byStratum");
+        missing.put("proposedMinusCurrentFailedStarts",2);
+        ((ObjectNode)descriptor.path("pairs").path("A2/B2")).set("missingness",missing);
+        QualityScoreFiles.JSON.writeValue(fixture.descriptors.toFile(),descriptor);
+        JsonNode model=fixture.run(true).path("models").path("Luna");
+        assertThat(model.path("verdict").asText()).isEqualTo("INCONCLUSIVE");
+        assertThat(model.path("reasons").toString()).contains("Proposed arm has 2 more");
+        assertThat(Files.readString(fixture.out.resolve("gates.md"))).contains("INCONCLUSIVE: Proposed arm has 2 more");
+    }
+    @Test void g7UsesAbsolutePointsAndRequestedDenominator() throws Exception {
         Fixture fixture=new Fixture(false,false);
         fixture.run(true);
         ObjectNode descriptor=(ObjectNode)QualityScoreFiles.JSON.readTree(fixture.descriptors.toFile());
         ObjectNode pair=(ObjectNode)descriptor.path("pairs").path("A2/B2");
         ObjectNode current=(ObjectNode)pair.path("pairedArms").path("A2").path("g7");
         ObjectNode proposed=(ObjectNode)pair.path("pairedArms").path("B2").path("g7");
-        current.put("validatorAccepted",90); current.put("validatorRejected",10); current.put("validatorRetried",10);
-        proposed.put("validatorAccepted",81); proposed.put("validatorRejected",19); proposed.put("validatorRetried",19);
+        current.put("validatorRequested",100); current.put("validatorAccepted",90); current.put("validatorRejected",10); current.put("validatorRetried",10);
+        proposed.put("validatorRequested",100); proposed.put("validatorAccepted",81); proposed.put("validatorRejected",19); proposed.put("validatorRetried",19);
         current.put("multiSelectTwoCorrect",50); current.put("multiSelectThreeCorrect",50);
         proposed.put("multiSelectTwoCorrect",41); proposed.put("multiSelectThreeCorrect",59);
         QualityScoreFiles.JSON.writeValue(fixture.descriptors.toFile(),descriptor);
@@ -327,7 +341,7 @@ class QualityGateIntegrationTest {
                     Map.entry("validatorAccepted",starts*10),Map.entry("validatorRejected",0),Map.entry("validatorRetried",0),
                     Map.entry("telemetryMissingStarts",0),Map.entry("p50LatencyMs",100),Map.entry("tokensPerDeliveredQuestion",10));
             Map<String,Object> g7=Map.of("multiSelectTwoCorrect",starts,"multiSelectThreeCorrect",starts,
-                    "starts",starts,"validatorAccepted",starts*10,"validatorRejected",0,"validatorRetried",0,"telemetryMissingStarts",0);
+                    "starts",starts,"validatorRequested",starts*10,"validatorAccepted",starts*10,"validatorRejected",0,"validatorRetried",0,"telemetryMissingStarts",0);
             Map<String,Object> result=new LinkedHashMap<>(Map.of("g6",g6,"g7",g7,"perNote",perNote));
             if (starts==20) result.put("perNoteLevel",Map.of("COLLEGE",armDescriptor(10,0),"BOARD_EXAM_REVIEW",armDescriptor(10,10)));
             return result;

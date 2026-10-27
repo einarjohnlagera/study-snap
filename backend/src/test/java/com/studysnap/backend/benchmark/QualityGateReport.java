@@ -101,7 +101,7 @@ public final class QualityGateReport {
         Map<String,Object> models=new LinkedHashMap<>(); List<String> holdReasons=new ArrayList<>();
         for (String[] pair : new String[][]{{"A2","B2","Luna"},{"A3","B3","Sol"}}) {
             if (incomplete.containsKey(pair[0]) || incomplete.containsKey(pair[1])) {
-                models.put(pair[2],incompleteModel(incomplete,pair));
+                models.put(pair[2],incompleteModel(incomplete,pair,descriptors));
                 holdReasons.add(pair[2]+": incomplete primary scoring");
                 continue;
             }
@@ -143,12 +143,43 @@ public final class QualityGateReport {
             Map<String,Object> model=(Map<String,Object>)entry.getValue();
             md.append("\n## ").append(entry.getKey()).append("\n\n");
             if (model.containsKey("incompleteScoring")) {
+                JsonNode missing=(JsonNode)model.get("missingness");
+                md.append("### Missingness\n\n| Note | Level | Stratum | Current | Proposed |\n| --- | --- | --- | --- | --- |\n");
+                String current=entry.getKey().equals("Luna")?"A2":"A3",proposed=entry.getKey().equals("Luna")?"B2":"B3";
+                for (JsonNode row:missing.path("missingPairs")) md.append("| ").append(row.path("packId").asText())
+                        .append(" | ").append(row.path("noteLevel").asText()).append(" | ").append(row.path("stratum").asText())
+                        .append(" | ").append(row.path(current).asText()).append(" | ").append(row.path(proposed).asText()).append(" |\n");
+                appendDistributions(md,missing);
+                md.append("Failed-start difference (proposed minus current): ")
+                        .append(missing.path("proposedMinusCurrentFailedStarts")).append("\n\n");
                 md.append("Incomplete primary scoring. G1–G8 are INCONCLUSIVE for this model.\n\n```json\n")
                         .append(QualityScoreFiles.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(model)).append("\n```\n");
                 continue;
             }
             md
                     .append("BOARD_EXAM_REVIEW: ").append(model.get("boardExamReviewFinding")).append("\n\n");
+            JsonNode missing=(JsonNode)model.get("missingness");
+            md.append("### Missingness\n\n| Note | Level | Stratum | Current | Proposed |\n| --- | --- | --- | --- | --- |\n");
+            for (JsonNode row:missing.path("missingPairs")) {
+                String current=entry.getKey().equals("Luna")?"A2":"A3",proposed=entry.getKey().equals("Luna")?"B2":"B3";
+                md.append("| ").append(row.path("packId").asText()).append(" | ").append(row.path("noteLevel").asText())
+                        .append(" | ").append(row.path("stratum").asText()).append(" | ").append(row.path(current).asText())
+                        .append(" | ").append(row.path(proposed).asText()).append(" |\n");
+            }
+            appendDistributions(md,missing);
+            md.append("Failed-start difference (proposed minus current): ")
+                    .append(missing.path("proposedMinusCurrentFailedStarts")).append("\n\n");
+            for (JsonNode reason:missing.path("reasons")) md.append("- INCONCLUSIVE: ").append(reason.asText()).append('\n');
+            JsonNode g7data=QualityScoreFiles.JSON.valueToTree(model.get("G7"));
+            md.append("\nG7 discarded attempts (current/proposed): ").append(g7data.path("currentDiscardedAttempts"))
+                    .append(" / ").append(g7data.path("proposedDiscardedAttempts"))
+                    .append(". Verified starts: ").append(g7data.path("currentVerifiedStarts"))
+                    .append(" / ").append(g7data.path("proposedVerifiedStarts"))
+                    .append(". retried == rejected: ").append(g7data.path("retriedEqualsRejected"));
+            if (!g7data.path("retriedEqualsRejected").asBoolean()) md.append("; mismatch starts: ")
+                    .append(g7data.path("currentRetryMismatchStarts")).append(" / ")
+                    .append(g7data.path("proposedRetryMismatchStarts"));
+            md.append("\n\n");
             Map<String,Object> g1=(Map<String,Object>)model.get("G1");
             md.append("G1 overall no-regression: ").append(g1.get("overallNoRegression")).append("\n\n");
             md.append("Confirmed critical defects (each listed regardless of type):\n\n");
@@ -160,6 +191,17 @@ public final class QualityGateReport {
                     .append(QualityScoreFiles.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(model)).append("\n```\n");
         }
         Files.writeString(out.resolve("gates.md"),md.toString());
+    }
+    private static void appendDistributions(StringBuilder md,JsonNode missing) {
+        for (String dimension:List.of("byNoteLevel","byStratum")) {
+            md.append("\n| ").append(dimension.equals("byNoteLevel")?"Note level":"Stratum")
+                    .append(" | Paired | Unpaired |\n| --- | ---: | ---: |\n");
+            JsonNode rows=missing.path(dimension);
+            if (rows.isObject()) rows.fields().forEachRemaining(entry->md.append("| ").append(entry.getKey())
+                    .append(" | ").append(entry.getValue().path("paired").asInt())
+                    .append(" | ").append(entry.getValue().path("unpaired").asInt()).append(" |\n"));
+            md.append('\n');
+        }
     }
     private static Map<String,List<String>> incompletePrimary(Map<String,JsonNode> keys,Path primary) throws Exception {
         Map<String,List<String>> problems=new TreeMap<>();
@@ -203,12 +245,13 @@ public final class QualityGateReport {
                     .add(key.getKey()+": missing PRIMARY row");
         return problems;
     }
-    private static Map<String,Object> incompleteModel(Map<String,List<String>> incomplete,String[] pair) {
+    private static Map<String,Object> incompleteModel(Map<String,List<String>> incomplete,String[] pair,JsonNode descriptors) {
         Map<String,Object> model=new LinkedHashMap<>();
         model.put("verdict","HOLD");
         model.put("reasons",List.of("Incomplete primary scoring"));
         model.put("incompleteScoring",Map.of("current",incomplete.getOrDefault(pair[0],List.of()),
                 "proposed",incomplete.getOrDefault(pair[1],List.of())));
+        model.put("missingness",descriptors.path("pairs").path(pair[0]+"/"+pair[1]).path("missingness"));
         for (int gate=1;gate<=8;gate++) model.put("G"+gate,Map.of("verdict","INCONCLUSIVE"));
         return model;
     }
@@ -227,6 +270,10 @@ public final class QualityGateReport {
         JsonNode pair=descriptors.path("pairs").path(a+"/"+b);
         JsonNode da=pair.path("pairedArms").path(a), db=pair.path("pairedArms").path(b);
         Map<String,Object> result=new LinkedHashMap<>(), levels=new LinkedHashMap<>(); List<String> reasons=new ArrayList<>();
+        JsonNode missingness=pair.path("missingness");
+        result.put("missingness",missingness);
+        if ("INCONCLUSIVE".equals(missingness.path("verdict").asText()))
+            for (JsonNode reason:missingness.path("reasons")) reasons.add("Missingness: "+reason.asText());
         Metrics base=metrics(baseline,da);
         Metrics next=metrics(proposed,db);
         result.put("current",base.data); result.put("proposed",next.data);
@@ -303,7 +350,9 @@ public final class QualityGateReport {
         result.put("perNoteLevel",levels);
         result.put("pairedBootstrap",pairedBootstrap(baseline,proposed,da,db));
         result.put("representativePairedNotes",representativePairedNotes(baseline,proposed));
-        result.put("reasons",reasons); result.put("verdict",reasons.isEmpty()?"PASS":"HOLD");
+        result.put("reasons",reasons);
+        result.put("verdict","INCONCLUSIVE".equals(missingness.path("verdict").asText())
+                ? "INCONCLUSIVE" : reasons.isEmpty()?"PASS":"HOLD");
         return result;
     }
     private static void gate(List<String> reasons,String name,boolean pass) { if (!pass) reasons.add(name+" did not pass"); }
@@ -455,13 +504,19 @@ public final class QualityGateReport {
     }
     private static double rate(JsonNode row,String numerator,double denominator) { return denominator<=0?Double.NaN:row.path(numerator).asDouble()/denominator; }
     private static double retryRate(JsonNode row) {
-        double accepted=row.path("validatorAccepted").asDouble(0), rejected=row.path("validatorRejected").asDouble(0);
-        return accepted+rejected==0?Double.NaN:row.path("validatorRetried").asDouble(0)/(accepted+rejected);
+        return validatorRate(row,"validatorRetried",QualityGateParameters.G7_DENOMINATOR_REQUESTED);
     }
     private static Map<String,Object> multi(JsonNode a,JsonNode b) {
         double splitA=split(a),splitB=split(b),rejectA=rejection(a),rejectB=rejection(b),retryA=retryRate(a),retryB=retryRate(b);
         Map<String,Object> out=new LinkedHashMap<>();
         out.put("telemetryScope","ALL_FORMAT; generation-count log has no per-format rejection or retry breakdown");
+        out.put("currentDiscardedAttempts",a.path("discardedAttempts").asInt());
+        out.put("proposedDiscardedAttempts",b.path("discardedAttempts").asInt());
+        out.put("currentVerifiedStarts",a.path("verifiedStarts"));
+        out.put("proposedVerifiedStarts",b.path("verifiedStarts"));
+        out.put("currentRetryMismatchStarts",a.path("retryMismatchStarts"));
+        out.put("proposedRetryMismatchStarts",b.path("retryMismatchStarts"));
+        out.put("retriedEqualsRejected",a.path("retryMismatchStarts").isEmpty() && b.path("retryMismatchStarts").isEmpty());
         out.put("currentSuccessfulStarts",a.path("starts").asInt());
         out.put("proposedSuccessfulStarts",b.path("starts").asInt());
         out.put("currentTelemetryMissingStarts",a.path("telemetryMissingStarts").asInt());
@@ -496,8 +551,12 @@ public final class QualityGateReport {
         return two+three==0?Double.NaN:three/(two+three);
     }
     private static double rejection(JsonNode row) {
-        double accepted=row.path("validatorAccepted").asDouble(0), rejected=row.path("validatorRejected").asDouble(0);
-        return accepted+rejected==0?Double.NaN:rejected/(accepted+rejected);
+        return validatorRate(row,"validatorRejected",QualityGateParameters.G7_DENOMINATOR_REQUESTED);
+    }
+    static double validatorRate(JsonNode row,String numerator,boolean requestedDenominator) {
+        double denominator=requestedDenominator?row.path("validatorRequested").asDouble(0)
+                :row.path("validatorAccepted").asDouble(0)+row.path("validatorRejected").asDouble(0);
+        return denominator==0?Double.NaN:row.path(numerator).asDouble(0)/denominator;
     }
     private static boolean missingTelemetry(JsonNode row) {
         int starts=row.path("starts").asInt(0);
