@@ -19,14 +19,20 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** Deterministic, offline quality gates. All score identities stay in private artifacts. */
 public final class QualityGateReport {
+    private static final String RUBRIC_VERSION_PROPERTY = "llm.benchmark.rubricVersion";
+    static final String DISTRACTOR = "distractorPlausibility", MODE = "modeAlignment";
+    private static final String G5_NOT_EVALUATED = "NOT_EVALUATED", G5_V2_RULE = "v2";
+    private static final String G5_OWNER_REVIEW_REASON = "G5 owner review: NOT_EVALUATED formats with 20+ items in one arm: ";
+    static final List<String> G5_DIMENSIONS = List.of(DISTRACTOR,MODE);
     @Test void reportWhenRequested() throws Exception {
         assumeTrue(Boolean.getBoolean("llm.benchmark.qualityGates"));
+        RubricVersion rubricVersion=RubricVersion.parse(System.getProperty(RUBRIC_VERSION_PROPERTY));
         Path blind=Path.of(required("llm.benchmark.blindOutDir"));
         Path plan=Path.of(required("llm.benchmark.reviewOutDir"));
         report(blind.resolve("blind-key.jsonl"),Path.of(required("llm.benchmark.scoresCodex")),
                 Path.of(required("llm.benchmark.reviewsOpus")),Path.of(required("llm.benchmark.adjudications")),
                 Path.of(required("llm.benchmark.descriptors")),plan.resolve("review-manifest.json"),
-                plan.resolve("review-order.jsonl"),Path.of(required("llm.benchmark.gatesOutDir")));
+                plan.resolve("review-order.jsonl"),Path.of(required("llm.benchmark.gatesOutDir")),rubricVersion);
     }
     private static String required(String name) {
         String value=System.getProperty(name);
@@ -93,7 +99,8 @@ public final class QualityGateReport {
     }
 
     static void report(Path keyFile,Path primary,Path reviews,Path adjudications,Path descriptorsFile,
-                       Path reviewManifest,Path reviewOrder,Path out) throws Exception {
+                       Path reviewManifest,Path reviewOrder,Path out,RubricVersion rubricVersion) throws Exception {
+        if (rubricVersion==null) throw new IllegalArgumentException(RUBRIC_VERSION_PROPERTY+" is required and must be v1 or v2");
         QualityReviewPlan.verify(reviewOrder,reviewManifest);
         Map<String,JsonNode> keys=QualityScoreFiles.keyed(keyFile);
         Map<String,List<String>> incomplete=incompletePrimary(keys,primary);
@@ -119,7 +126,7 @@ public final class QualityGateReport {
             Set<String> requiredReview=new HashSet<>(QualityReviewBatches.selection(pairOrder,pairKeys,primaries).keySet());
             for (Item item:items.values()) if (item.primary.path("critical").asBoolean() || item.primary.path("seriousGiveaway").asBoolean())
                 requiredReview.add(item.id);
-            Map<String,Object> result=model(pair[0],pair[1],items,descriptors);
+            Map<String,Object> result=model(pair[0],pair[1],items,descriptors,rubricVersion);
             List<String> unreviewed=new ArrayList<>();
             for (String id:requiredReview) if (items.get(id).review==null) unreviewed.add(id);
             if (!unreviewed.isEmpty()) {
@@ -134,10 +141,24 @@ public final class QualityGateReport {
         output.put("incompleteScoring",incomplete);
         output.put("reviewOrderSha256",QualityScoreFiles.text(QualityScoreFiles.JSON.readTree(reviewManifest.toFile()),"sha256"));
         output.put("models",models);
+        List<String> ownerReview=new ArrayList<>();
+        if (rubricVersion==RubricVersion.V2) {
+            for (var entry:models.entrySet()) {
+                Map<String,Object> model=(Map<String,Object>)entry.getValue();
+                for (String reason:(List<String>)model.get("reasons"))
+                    if (reason.startsWith(G5_OWNER_REVIEW_REASON)) ownerReview.add(entry.getKey()+": "+reason);
+            }
+            output.put("ownerReview",ownerReview);
+        }
         Files.createDirectories(out);
         QualityScoreFiles.JSON.writerWithDefaultPrettyPrinter().writeValue(out.resolve("gates.json").toFile(),output);
-        StringBuilder md=new StringBuilder("# Challenge quality gates\n\nVerdict: **"+output.get("verdict")+"**\n\n"
-                +"Wording-sensitive regression is a mechanical excess-over-same-model-current-arm screen, not proof of individual causal attribution.\n\n");
+        StringBuilder md=new StringBuilder("# Challenge quality gates\n\nVerdict: **"+output.get("verdict")+"**\n");
+        if (!ownerReview.isEmpty()) {
+            md.append("Owner review required (evidence not complete):\n");
+            for (String reason:ownerReview) md.append("- ").append(reason).append('\n');
+        }
+        md.append("\nWording-sensitive regression is a mechanical excess-over-same-model-current-arm screen, not proof of individual causal attribution.\n\n");
+        if (rubricVersion==RubricVersion.V2) md.append("Rubric version: ").append(G5_V2_RULE).append("\n\n");
         for (String reason:holdReasons) md.append("- ").append(reason).append('\n');
         for (var entry:models.entrySet()) {
             Map<String,Object> model=(Map<String,Object>)entry.getValue();
@@ -180,6 +201,7 @@ public final class QualityGateReport {
                     .append(g7data.path("currentRetryMismatchStarts")).append(" / ")
                     .append(g7data.path("proposedRetryMismatchStarts"));
             md.append("\n\n");
+            if (rubricVersion==RubricVersion.V2) appendG5V2(md,(Map<String,Object>)model.get("G5"));
             Map<String,Object> g1=(Map<String,Object>)model.get("G1");
             md.append("G1 overall no-regression: ").append(g1.get("overallNoRegression")).append("\n\n");
             md.append("Confirmed critical defects (each listed regardless of type):\n\n");
@@ -202,6 +224,19 @@ public final class QualityGateReport {
                     .append(" | ").append(entry.getValue().path("unpaired").asInt()).append(" |\n"));
             md.append('\n');
         }
+    }
+    private static void appendG5V2(StringBuilder md,Map<String,Object> g5) {
+        md.append("### G5 formats (").append(G5_V2_RULE).append(")\n\n| Format | Status | Current n | Proposed n | Current share | Proposed share | Distractor current / proposed mean | Mode current / proposed mean |\n")
+                .append("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |\n");
+        for (G5Format format:(List<G5Format>)g5.get("formats")) md.append("| ").append(format.format()).append(" | ").append(format.status())
+                .append(" | ").append(format.currentItems()).append(" | ").append(format.proposedItems())
+                .append(" | ").append(format.currentShare()).append(" | ").append(format.proposedShare())
+                .append(" | ").append(meanPair(format.dimensions().get(DISTRACTOR)))
+                .append(" | ").append(meanPair(format.dimensions().get(MODE))).append(" |\n");
+        md.append("\nOwner-review flag: ").append(g5.get("ownerReviewFlag")).append("\n\n");
+    }
+    private static String meanPair(G5Dimension dimension) {
+        return dimension.currentMean()+" / "+dimension.proposedMean();
     }
     private static Map<String,List<String>> incompletePrimary(Map<String,JsonNode> keys,Path primary) throws Exception {
         Map<String,List<String>> problems=new TreeMap<>();
@@ -255,7 +290,7 @@ public final class QualityGateReport {
         for (int gate=1;gate<=8;gate++) model.put("G"+gate,Map.of("verdict","INCONCLUSIVE"));
         return model;
     }
-    private static Map<String,Object> model(String a,String b,Map<String,Item> all,JsonNode descriptors) {
+    private static Map<String,Object> model(String a,String b,Map<String,Item> all,JsonNode descriptors,RubricVersion rubricVersion) {
         List<Item> allA=arm(all,a,null),allB=arm(all,b,null);
         Set<String> modelsA=new HashSet<>(),modelsB=new HashSet<>(),hashesA=new HashSet<>(),hashesB=new HashSet<>(),packsA=new HashSet<>(),packsB=new HashSet<>();
         for (Item item:allA) { modelsA.add(item.model); hashesA.add(item.promptHash); packsA.add(item.pack); }
@@ -292,10 +327,22 @@ public final class QualityGateReport {
         boolean g3=next.mean("modeAlignment")>=QualityGateParameters.G3_MIN_MEAN;
         gate(reasons,"G3",g3); result.put("G3",g3?"PASS":"FAIL");
         gate(reasons,"G4", "PASS".equals(next.g4.verdict())); result.put("G4",next.g4);
-        boolean g5=next.formatMeans.values().stream().allMatch(m -> (int)m.get("count")<QualityGateParameters.G5_FORMAT_MIN_ITEMS
-                || ((Map<String,Double>)m.get("means")).values().stream().filter(Double::isFinite)
-                .allMatch(v->v>=QualityGateParameters.G5_FORMAT_MIN_MEAN));
-        gate(reasons,"G5",g5); result.put("G5",g5?"PASS":"FAIL");
+        String ownerReviewReason=null;
+        if (rubricVersion==RubricVersion.V1) {
+            boolean g5=g5V1(next.formatMeans);
+            gate(reasons,"G5",g5); result.put("G5",g5?"PASS":"FAIL");
+        } else {
+            G5V2 g5=g5V2(base.formatCounts,baseline.size(),next.formatCounts,proposed.size());
+            gate(reasons,"G5","PASS".equals(g5.verdict()));
+            Map<String,Object> g5Output=new LinkedHashMap<>();
+            g5Output.put("verdict",g5.verdict()); g5Output.put("rule",g5.rule());
+            g5Output.put("ownerReviewFlag",g5.ownerReviewFlag()); g5Output.put("formats",g5.formats());
+            result.put("G5",g5Output);
+            if (g5.ownerReviewFlag()) ownerReviewReason=G5_OWNER_REVIEW_REASON
+                    +g5.formats().stream().filter(f->G5_NOT_EVALUATED.equals(f.status())
+                    && (f.currentItems()>=QualityGateParameters.G5_V2_MIN_ITEMS || f.proposedItems()>=QualityGateParameters.G5_V2_MIN_ITEMS))
+                    .map(f->f.format()+" (current="+f.currentItems()+", proposed="+f.proposedItems()+")").toList();
+        }
         Map<String,Object> g6=collateral(base,next,da.path("g6"),db.path("g6"));
         gate(reasons,"G6","PASS".equals(g6.get("verdict"))); result.put("G6",g6);
         Map<String,Object> g7=multi(da.path("g7"),db.path("g7"));
@@ -353,9 +400,52 @@ public final class QualityGateReport {
         result.put("reasons",reasons);
         result.put("verdict","INCONCLUSIVE".equals(missingness.path("verdict").asText())
                 ? "INCONCLUSIVE" : reasons.isEmpty()?"PASS":"HOLD");
+        if (ownerReviewReason!=null) reasons.add(ownerReviewReason);
         return result;
     }
     private static void gate(List<String> reasons,String name,boolean pass) { if (!pass) reasons.add(name+" did not pass"); }
+    static boolean g5V1(Map<String,Map<String,Object>> formatMeans) {
+        return formatMeans.values().stream().allMatch(m -> (int)m.get("count")<QualityGateParameters.G5_FORMAT_MIN_ITEMS
+                || ((Map<String,Double>)m.get("means")).values().stream().filter(Double::isFinite)
+                .allMatch(v->v>=QualityGateParameters.G5_FORMAT_MIN_MEAN));
+    }
+    record CountSum(int n,long sum) {}
+    record FormatCounts(int items,Map<String,CountSum> dimensions) {
+        CountSum count(String dimension) { return dimensions.getOrDefault(dimension,new CountSum(0,0)); }
+    }
+    record G5Dimension(String status,int currentN,int proposedN,Double currentMean,Double proposedMean) {}
+    record G5Format(String format,String status,int currentItems,int proposedItems,double currentShare,double proposedShare,
+                    Map<String,G5Dimension> dimensions) {}
+    record G5V2(String verdict,String rule,boolean ownerReviewFlag,List<G5Format> formats) {}
+    static G5V2 g5V2(Map<String,FormatCounts> current,int currentTotal,
+                     Map<String,FormatCounts> proposed,int proposedTotal) {
+        Set<String> names=new java.util.TreeSet<>(current.keySet()); names.addAll(proposed.keySet());
+        List<G5Format> formats=new ArrayList<>(); boolean anyFail=false,anyEvaluated=false,ownerReview=false;
+        for (String name:names) {
+            FormatCounts c=current.getOrDefault(name,new FormatCounts(0,Map.of()));
+            FormatCounts p=proposed.getOrDefault(name,new FormatCounts(0,Map.of()));
+            Map<String,G5Dimension> dimensions=new LinkedHashMap<>(); boolean formatFail=false,formatEvaluated=false;
+            for (String dimension:G5_DIMENSIONS) {
+                CountSum cs=c.count(dimension),ps=p.count(dimension);
+                boolean eligible=cs.n()>=QualityGateParameters.G5_V2_MIN_ITEMS && ps.n()>=QualityGateParameters.G5_V2_MIN_ITEMS;
+                boolean fail=eligible && QualityGateParameters.G5_V2_MEAN_FLOOR_DENOMINATOR*ps.sum()
+                        < (long)QualityGateParameters.G5_V2_MEAN_FLOOR_NUMERATOR*ps.n()
+                        && QualityGateParameters.G5_V2_MAX_DECLINE_DENOMINATOR*(cs.sum()*ps.n()-ps.sum()*cs.n())
+                        > (long)QualityGateParameters.G5_V2_MAX_DECLINE_NUMERATOR*cs.n()*ps.n();
+                String status=eligible?(fail?"FAIL":"PASS"):G5_NOT_EVALUATED;
+                dimensions.put(dimension,new G5Dimension(status,cs.n(),ps.n(),mean(cs),mean(ps)));
+                formatFail|=fail; formatEvaluated|=eligible;
+            }
+            String status=formatFail?"FAIL":formatEvaluated?"PASS":G5_NOT_EVALUATED;
+            anyFail|=formatFail; anyEvaluated|=formatEvaluated;
+            ownerReview|=G5_NOT_EVALUATED.equals(status)
+                    && (c.items()>=QualityGateParameters.G5_V2_MIN_ITEMS || p.items()>=QualityGateParameters.G5_V2_MIN_ITEMS);
+            formats.add(new G5Format(name,status,c.items(),p.items(),currentTotal==0?0:(double)c.items()/currentTotal,
+                    proposedTotal==0?0:(double)p.items()/proposedTotal,dimensions));
+        }
+        return new G5V2(anyFail?"FAIL":anyEvaluated?"PASS":"INCONCLUSIVE",G5_V2_RULE,ownerReview,formats);
+    }
+    private static Double mean(CountSum value) { return value.n()==0?null:(double)value.sum()/value.n(); }
     private static List<Item> arm(Map<String,Item> all,String arm,String level) {
         List<Item> rows=new ArrayList<>();
         for (Item item:all.values()) if (arm.equals(item.arm) && (level==null || level.equals(item.level))) rows.add(item);
@@ -407,7 +497,8 @@ public final class QualityGateReport {
         }
     }
     private record Metrics(Map<String,Object> data,Map<String,Integer> types,List<Map<String,String>> critical,
-                           Map<String,Map<String,Object>> formatMeans,G4 g4,int missed,int missedCriticalAny,
+                           Map<String,Map<String,Object>> formatMeans,Map<String,FormatCounts> formatCounts,
+                           G4 g4,int missed,int missedCriticalAny,
                            int reviewedUnflagged,int unresolved,
                            Map<String,Double> means) {
         double mean(String name) { return means.getOrDefault(name,Double.NaN); }
@@ -464,6 +555,18 @@ public final class QualityGateReport {
         G4 g4=g4(choice,flaggedConfirmed,strata,!recurringPatterns.isEmpty());
         Map<String,Double> means=means(items); Map<String,Map<String,Object>> formatMeans=new TreeMap<>();
         for (var format:formats.entrySet()) formatMeans.put(format.getKey(),Map.of("count",format.getValue().size(),"means",means(format.getValue())));
+        Map<String,FormatCounts> formatCounts=new TreeMap<>();
+        for (var format:formats.entrySet()) {
+            Map<String,CountSum> sums=new LinkedHashMap<>();
+            for (String dimension:G5_DIMENSIONS) {
+                int n=0; long sum=0;
+                for (Item item:format.getValue()) if (item.finalScore.path(dimension).isInt()) {
+                    n++; sum+=item.finalScore.path(dimension).asInt();
+                }
+                sums.put(dimension,new CountSum(n,sum));
+            }
+            formatCounts.put(format.getKey(),new FormatCounts(format.getValue().size(),sums));
+        }
         Map<String,Object> data=new LinkedHashMap<>();
         data.put("items",items.size()); data.put("means",means); data.put("formatMeans",formatMeans);
         data.put("criticalDefects",defects); data.put("confirmedCriticalCount",defects.size());
@@ -473,7 +576,7 @@ public final class QualityGateReport {
         data.put("missedDefectRate",reviewedUnflagged==0?"MISSING":(double)missed/reviewedUnflagged);
         data.put("unresolved",unresolved); data.put("descriptorsG6",descriptors.path("g6"));
         data.put("descriptorsG7",descriptors.path("g7")); data.put("nearDuplicateStartRate",nearDuplicateRate(descriptors));
-        return new Metrics(data,types,defects,formatMeans,g4,missed,missedCriticalAny,reviewedUnflagged,unresolved,means);
+        return new Metrics(data,types,defects,formatMeans,formatCounts,g4,missed,missedCriticalAny,reviewedUnflagged,unresolved,means);
     }
     private static Map<String,Double> means(List<Item> items) {
         Map<String,Double> result=new LinkedHashMap<>();

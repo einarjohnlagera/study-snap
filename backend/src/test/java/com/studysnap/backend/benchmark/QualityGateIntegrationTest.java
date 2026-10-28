@@ -16,6 +16,114 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Synthetic scored rows exercise the unblinding joins and actual gate verdicts. */
 class QualityGateIntegrationTest {
+    private static final String OWNER_REVIEW_KEY = "ownerReview";
+    private static final String OWNER_REVIEW_HEADLINE = "Owner review required (evidence not complete):";
+    @Test void v1ReportMatchesPreChangeGoldenAfterMapMemberOrderNormalization() throws Exception {
+        Fixture fixture=new Fixture(false,false);
+        fixture.run(true);
+        Path golden=Path.of("src/test/resources/benchmark/challenge-quality/golden-v1");
+        assertThat(canonicalJson(Files.readString(fixture.out.resolve("gates.json"))))
+                .isEqualTo(canonicalJson(Files.readString(golden.resolve("gates.json"))));
+        assertThat(canonicalMarkdown(Files.readString(fixture.out.resolve("gates.md"))))
+                .isEqualTo(canonicalMarkdown(Files.readString(golden.resolve("gates.md"))));
+    }
+    // Existing Map.of fields serialize in a different member order between JVM runs; normalize only that order.
+    private static String canonicalJson(String source) throws Exception {
+        return QualityScoreFiles.JSON.writeValueAsString(sorted(QualityScoreFiles.JSON.readTree(source)));
+    }
+    private static JsonNode sorted(JsonNode node) {
+        if (node.isObject()) {
+            ObjectNode result=QualityScoreFiles.JSON.createObjectNode();
+            node.properties().stream().sorted(Map.Entry.comparingByKey()).forEach(entry->result.set(entry.getKey(),sorted(entry.getValue())));
+            return result;
+        }
+        if (node.isArray()) {
+            var result=QualityScoreFiles.JSON.createArrayNode();
+            node.forEach(value->result.add(sorted(value)));
+            return result;
+        }
+        return node;
+    }
+    private static String canonicalMarkdown(String source) throws Exception {
+        StringBuilder result=new StringBuilder(); int from=0;
+        while (true) {
+            int start=source.indexOf("```json\n",from);
+            if (start<0) return result.append(source,from,source.length()).toString();
+            int body=start+8,end=source.indexOf("\n```",body);
+            result.append(source,from,body).append(canonicalJson(source.substring(body,end)));
+            from=end;
+        }
+    }
+    @Test void v2ReportListsUnevaluatedFormatAndOwnerReviewInTopLevelReasons() throws Exception {
+        Fixture fixture=new Fixture(false,false);
+        moveMultiSelectItems(fixture,"A2");
+        JsonNode report=runV2(fixture);
+        JsonNode luna=report.path("models").path("Luna"),g5=luna.path("G5");
+        assertThat(g5.path("rule").asText()).isEqualTo("v2");
+        assertThat(g5.path("verdict").asText()).isEqualTo("PASS");
+        assertThat(g5.path("ownerReviewFlag").asBoolean()).isTrue();
+        assertThat(luna.path("verdict").asText()).isEqualTo("PASS");
+        JsonNode multi=g5.path("formats").get(1);
+        assertThat(multi.path("format").asText()).isEqualTo("MULTI_SELECT");
+        assertThat(multi.path("status").asText()).isEqualTo("NOT_EVALUATED");
+        assertThat(multi.path("currentItems").asInt()).isEqualTo(15);
+        assertThat(multi.path("proposedItems").asInt()).isEqualTo(40);
+        assertThat(multi.path("currentShare").asDouble()).isEqualTo(.075);
+        assertThat(multi.path("dimensions").path("modeAlignment").path("currentMean").asDouble()).isEqualTo(4);
+        assertThat(luna.path("reasons").toString()).contains("G5 owner review","MULTI_SELECT","current=15, proposed=40");
+        assertThat(report.path("verdict").asText()).isEqualTo("PASS");
+        assertThat(report.path(OWNER_REVIEW_KEY)).hasSize(1);
+        assertThat(report.path(OWNER_REVIEW_KEY).get(0).asText())
+                .isEqualTo("Luna: "+luna.path("reasons").get(0).asText());
+        assertThat(report.path("models").path("Sol").path("G5").path("ownerReviewFlag").asBoolean()).isFalse();
+        assertThat(Files.readString(fixture.out.resolve("gates.md")))
+                .contains("Verdict: **PASS**\n"+OWNER_REVIEW_HEADLINE+"\n- "+report.path(OWNER_REVIEW_KEY).get(0).asText()+"\n")
+                .containsOnlyOnce("Rubric version: v2")
+                .contains("### G5 formats (v2)","| MULTI_SELECT | NOT_EVALUATED | 15 | 40 |","Owner-review flag: true");
+    }
+    @Test void v2WithoutOwnerReviewHasEmptyArrayAndNoHeadline() throws Exception {
+        Fixture fixture=new Fixture(false,false);
+        JsonNode report=runV2(fixture);
+        assertThat(report.path("verdict").asText()).isEqualTo("PASS");
+        assertThat(report.path(OWNER_REVIEW_KEY)).isEmpty();
+        assertThat(Files.readString(fixture.out.resolve("gates.md"))).doesNotContain(OWNER_REVIEW_HEADLINE);
+    }
+    @Test void v1WithOwnerReviewFixtureHasNoOwnerReviewOutput() throws Exception {
+        Fixture fixture=new Fixture(false,false);
+        moveMultiSelectItems(fixture,"A2");
+        JsonNode report=fixture.run(true);
+        assertThat(report.has(OWNER_REVIEW_KEY)).isFalse();
+        assertThat(Files.readString(fixture.out.resolve("gates.md"))).doesNotContain(OWNER_REVIEW_HEADLINE);
+    }
+    @Test void v2OwnerReviewListsLunaBeforeSolWhenBothFlagged() throws Exception {
+        Fixture fixture=new Fixture(false,false);
+        moveMultiSelectItems(fixture,"A2","A3");
+        JsonNode report=runV2(fixture);
+        assertThat(report.path(OWNER_REVIEW_KEY)).hasSize(2);
+        assertThat(report.path(OWNER_REVIEW_KEY).get(0).asText()).startsWith("Luna: G5 owner review:");
+        assertThat(report.path(OWNER_REVIEW_KEY).get(1).asText()).startsWith("Sol: G5 owner review:");
+        assertThat(Files.readString(fixture.out.resolve("gates.md")))
+                .contains(OWNER_REVIEW_HEADLINE+"\n- "+report.path(OWNER_REVIEW_KEY).get(0).asText()
+                        +"\n- "+report.path(OWNER_REVIEW_KEY).get(1).asText()+"\n");
+    }
+    private static void moveMultiSelectItems(Fixture fixture,String... arms) throws Exception {
+        for (int index=0;index<fixture.keys.size();index++) {
+            Map<String,Object> row=fixture.keys.get(index);
+            int item=Integer.parseInt(((String)row.get("id")).substring(3));
+            if (List.of(arms).contains(row.get("arm")) && item<125 && item%5==0) {
+                Map<String,Object> copy=new LinkedHashMap<>(row); copy.put("questionFormat","MCQ"); fixture.keys.set(index,copy);
+            }
+        }
+        QualityScoreFiles.write(fixture.key,fixture.keys);
+        Files.delete(fixture.plan.resolve("review-order.jsonl")); Files.delete(fixture.plan.resolve("review-manifest.json"));
+        QualityReviewPlan.plan(fixture.key,fixture.plan,176);
+    }
+    private static JsonNode runV2(Fixture fixture) throws Exception {
+        fixture.run(true);
+        QualityGateReport.report(fixture.key,fixture.primary,fixture.reviews,fixture.adjudications,fixture.descriptors,
+                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out,RubricVersion.V2);
+        return QualityScoreFiles.JSON.readTree(fixture.out.resolve("gates.json").toFile());
+    }
     @TempDir Path temp;
 
     @Test void missedCriticalEscalatesAndCompleteFreshReReviewCanPass() throws Exception {
@@ -98,7 +206,7 @@ class QualityGateIntegrationTest {
         }
         QualityScoreFiles.write(fixture.reviews,edited);
         QualityGateReport.report(fixture.key,fixture.primary,fixture.reviews,fixture.adjudications,fixture.descriptors,
-                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out);
+                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out,RubricVersion.V1);
         JsonNode luna=QualityScoreFiles.JSON.readTree(fixture.out.resolve("gates.json").toFile()).path("models").path("Luna");
         assertThat(luna.path("verdict").asText()).isEqualTo("HOLD");
         assertThat(luna.path("proposed").path("unresolved").asInt()).isEqualTo(1);
@@ -114,7 +222,7 @@ class QualityGateIntegrationTest {
         ((ObjectNode)proposed.path("g6")).put("telemetryMissingStarts",1);
         QualityScoreFiles.JSON.writeValue(fixture.descriptors.toFile(),descriptor);
         QualityGateReport.report(fixture.key,fixture.primary,fixture.reviews,fixture.adjudications,fixture.descriptors,
-                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out);
+                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out,RubricVersion.V1);
         JsonNode luna=QualityScoreFiles.JSON.readTree(fixture.out.resolve("gates.json").toFile()).path("models").path("Luna");
         assertThat(luna.path("G7").path("proposedAllFormatValidatorRejectionRate").asText()).isEqualTo("MISSING");
         assertThat(luna.path("G7").path("verdict").asText()).isEqualTo("INCONCLUSIVE");
@@ -228,7 +336,7 @@ class QualityGateIntegrationTest {
         }
         QualityScoreFiles.write(fixture.key,corrupted);
         assertThatThrownBy(() -> QualityGateReport.report(fixture.key,fixture.primary,fixture.reviews,fixture.adjudications,
-                fixture.descriptors,fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out))
+                fixture.descriptors,fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out,RubricVersion.V1))
                 .hasMessageContaining("distinct single prompt hashes");
     }
     @Test void missingOrInvalidPrimaryRowMakesGatesInconclusive() throws Exception {
@@ -238,7 +346,7 @@ class QualityGateIntegrationTest {
         rows.removeIf(row->"B2-19".equals(row.path("id").asText()));
         QualityScoreFiles.write(fixture.primary,rows);
         QualityGateReport.report(fixture.key,fixture.primary,fixture.reviews,fixture.adjudications,fixture.descriptors,
-                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out);
+                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out,RubricVersion.V1);
         JsonNode report=QualityScoreFiles.JSON.readTree(fixture.out.resolve("gates.json").toFile());
         assertThat(report.path("models").path("Luna").path("G4").path("verdict").asText()).isEqualTo("INCONCLUSIVE");
         assertThat(report.path("models").path("Sol").path("verdict").asText()).isEqualTo("PASS");
@@ -248,12 +356,12 @@ class QualityGateIntegrationTest {
         invalid.put("clarity",6);
         QualityScoreFiles.write(fixture.primary,rows);
         QualityGateReport.report(fixture.key,fixture.primary,fixture.reviews,fixture.adjudications,fixture.descriptors,
-                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out);
+                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out,RubricVersion.V1);
         report=QualityScoreFiles.JSON.readTree(fixture.out.resolve("gates.json").toFile());
         assertThat(report.path("incompleteScoring").path("B2").get(0).asText()).contains("clarity");
         Files.writeString(fixture.primary,"{\n",java.nio.file.StandardOpenOption.APPEND);
         QualityGateReport.report(fixture.key,fixture.primary,fixture.reviews,fixture.adjudications,fixture.descriptors,
-                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out);
+                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out,RubricVersion.V1);
         report=QualityScoreFiles.JSON.readTree(fixture.out.resolve("gates.json").toFile());
         assertThat(report.path("incompleteScoring").path("A3").toString()).contains("Unparseable PRIMARY row");
     }
@@ -320,7 +428,7 @@ class QualityGateIntegrationTest {
 
     private JsonNode runReport(Fixture fixture) throws Exception {
         QualityGateReport.report(fixture.key,fixture.primary,fixture.reviews,fixture.adjudications,fixture.descriptors,
-                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out);
+                fixture.plan.resolve("review-manifest.json"),fixture.plan.resolve("review-order.jsonl"),fixture.out,RubricVersion.V1);
         return QualityScoreFiles.JSON.readTree(fixture.out.resolve("gates.json").toFile());
     }
 
@@ -383,7 +491,7 @@ class QualityGateIntegrationTest {
             if (adjudicate) adjudicationRows.add(score("B2-0","judge","ADJUDICATION",true,wrongKey?"WRONG_KEY":"AMBIGUOUS_STEM",5));
             QualityScoreFiles.write(reviews,reviewRows); QualityScoreFiles.write(adjudications,adjudicationRows);
             QualityGateReport.report(key,primary,reviews,adjudications,descriptors,plan.resolve("review-manifest.json"),
-                    plan.resolve("review-order.jsonl"),out);
+                    plan.resolve("review-order.jsonl"),out,RubricVersion.V1);
             return QualityScoreFiles.JSON.readTree(out.resolve("gates.json").toFile());
         }
         private Map<String,Object> descriptorData() {

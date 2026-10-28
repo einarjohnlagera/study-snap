@@ -39,6 +39,16 @@ public final class QualityGateParameters {
     static final double G5_FORMAT_MIN_MEAN = 3.5;
     // PROPOSED, set at rubric sign-off
     static final int G5_FORMAT_MIN_ITEMS = 20;
+    // SIGNED OFF 2026-10-28
+    static final int G5_V2_MIN_ITEMS = 20;
+    // SIGNED OFF 2026-10-28
+    static final int G5_V2_MEAN_FLOOR_NUMERATOR = 7;
+    // SIGNED OFF 2026-10-28
+    static final int G5_V2_MEAN_FLOOR_DENOMINATOR = 2;
+    // SIGNED OFF 2026-10-28
+    static final int G5_V2_MAX_DECLINE_NUMERATOR = 1;
+    // SIGNED OFF 2026-10-28
+    static final int G5_V2_MAX_DECLINE_DENOMINATOR = 5;
     // PROPOSED, set at rubric sign-off
     static final double G6_SCORE_TOLERANCE = .2;
     // SIGNED OFF 2026-10-27
