@@ -6,7 +6,7 @@
 
 Theme: close the Challenge Quiz quality gap the `v0.176.0` evaluation found on the free plan. On today's prompt Luna scored distractors 3.23 against Sol's 3.75, a giveaway estimate of 10.5% against 4.5%, and 5 confirmed critical defects of 300 against 0; the proposed wording lowered difficulty on Sol and so was not shipped. This release decides which lever to test, under the same blind pipeline, and changes the production prompt only if a new evaluation passes for BOTH Luna and Sol. Internal only: customer copy never names a model and implies no plan quality difference.
 
-**Selection record.** The owner selected "Luna-first quality follow-up" as the theme on 2026-10-28 (answer to a scope question in the kickoff session). **No plan file is marked `Status: ready for release`, and the Backlog row and the report's section 6 list levers, not a contract. The scope below is therefore a lever list awaiting the owner's selection, not locked scope.** Scope lock (kickoff lifecycle step 2) happens when the owner picks levers.
+**Selection record.** The owner selected "Luna-first quality follow-up" as the theme on 2026-10-28 (answer to a scope question in the kickoff session). No plan file is marked `Status: ready for release`; the Backlog row and the report's section 6 list levers, not a contract. **Scope locked by the owner on 2026-10-28 (after the kickoff commit `3d70da87`, answer to a scope question): items 1 to 3, with item 4 gated on the evaluation result.**
 
 **Deploy gate (carried unchanged):** on HOLD for deployment until the operational gate clears (four Postgres signal-9 kills after four deploys; first input is the 2026-11-01 cache read). Every `main` merge deploys. Nothing merges to `main` before the final deploy decision. **Re-read at kickoff (Render deploy list, 2026-10-28):** the newest deploy is still `v0.175.0`, live 2026-10-26T14:58:47Z; none since.
 
@@ -14,15 +14,16 @@ Theme: close the Challenge Quiz quality gap the `v0.176.0` evaluation found on t
 - `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md` (section 6, the levers), the pre-registration `docs/claude-plans/2026-10-27-challenge-quiz-quality-preregistration.md`, the frozen scorer instructions and the rubric (v3), all from `v0.176.0`.
 - The `v0.176.0` harness (PRs #1536, #1537), reusable as is: alternate prompt directory, five generation arms plus an Official stock arm, blind export, leak check, per-arm prompt hash.
 - `ROADMAP.md` Backlog row "Challenge Quiz Luna-first quality follow-up".
+- `docs/claude-plans/2026-10-28-challenge-quiz-g5-reword-proposal.md` (item 1's options, awaiting the owner).
 
 ### Planned Scope
 
-Every item is `[queued, awaiting owner selection]`. Order is a proposal.
+Items 1 to 3 are locked (owner, 2026-10-28); item 4 is gated. Status per item: `[queued | with-Codex | in-audit | merged-to-release | blocked: <reason>]`.
 
-1. **Reword G5 and re-pre-register. Docs, Tier S.** G5 ("no format below 3.5 with at least 20 items") was "harsh by construction" (evaluation report section 4) and is one of the three gates Sol failed. The reword needs the owner's sign-off before any paid run, and a new pre-registration is committed before the first paid command; the frozen `v0.176.0` rubric and scorer instructions stay as the record and are not edited.
-2. **Giveaway-only prompt variant, without Change A. Test scope, Tier N (Codex).** An alternate Challenge prompt file that carries only the giveaway fix (absolute words, parallel choices), so the arms can be attributed. The exact wording goes to the owner before the brief. The production file `challenge-quiz-developer.txt` is not touched by this item.
-3. **Evaluation run. Owner-run, no agent paid call.** Luna and Sol judged separately, same blind pipeline, owner-set generation cap (about $3 to $4 per rerun last time), gates re-registered in item 1. The scorer pipeline uses the harness's own validator.
-4. **Production prompt change. Tier N, gated by item 3. NOT STARTED.** Only if the new evaluation passes for BOTH models and the owner gives final approval; otherwise HOLD, with no measurement-only deploy without separate owner approval.
+1. **Reword G5 and re-pre-register. Docs plus a small test-scope calculator change (Tier N, Codex). `[queued, blocked: owner decision on Option A, B or C in `docs/claude-plans/2026-10-28-challenge-quiz-g5-reword-proposal.md`]`** G5 ("no format below 3.5 with at least 20 items") was "harsh by construction" (evaluation report section 4) and is one of the three gates Sol failed. The reword needs the owner's sign-off before any paid run, and a new pre-registration is committed before the first paid command; the frozen `v0.176.0` rubric and scorer instructions stay as the record and are not edited.
+2. **Giveaway-only prompt variant, without Change A. Test scope, Tier N (Codex). `[queued, blocked: exact wording goes to the owner before the brief]`** An alternate Challenge prompt file that carries only the giveaway fix (absolute words, parallel choices), so the arms can be attributed. The exact wording goes to the owner before the brief. The production file `challenge-quiz-developer.txt` is not touched by this item.
+3. **Evaluation run. Owner-run, no agent paid call. `[queued, after items 1 and 2]`** Luna and Sol judged separately, same blind pipeline, owner-set generation cap (about $3 to $4 per rerun last time), gates re-registered in item 1. The scorer pipeline uses the harness's own validator.
+4. **Production prompt change. Tier N, gated by item 3. `[NOT STARTED, gated]`** Only if the new evaluation passes for BOTH models and the owner gives final approval; otherwise HOLD, with no measurement-only deploy without separate owner approval.
 5. **Backlog rows and checkpoints. Docs. `[done at kickoff, extended at signoff]`**
 
 **Levers the report lists that this release's anti-drift EXCLUDES, so the owner is not offered them as scope:** routing free-plan Challenge to a stronger model (a pricing and entitlement change), and a Luna-specific verifier pass (the three verifier switches stay OFF). Either needs its own owner decision and release.
