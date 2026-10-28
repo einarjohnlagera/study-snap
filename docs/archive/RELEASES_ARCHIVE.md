@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) and `v0.165.0` (moved at the `v0.171.0` kickoff) and `v0.166.0` (moved at the `v0.172.0` kickoff) and `v0.167.0` (moved at the `v0.173.0` kickoff) and `v0.168.0` (moved at the `v0.174.0` kickoff) and `v0.169.0` (moved at the `v0.175.0` kickoff) and `v0.170.0` (moved at the `v0.176.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) and `v0.165.0` (moved at the `v0.171.0` kickoff) and `v0.166.0` (moved at the `v0.172.0` kickoff) and `v0.167.0` (moved at the `v0.173.0` kickoff) and `v0.168.0` (moved at the `v0.174.0` kickoff) and `v0.169.0` (moved at the `v0.175.0` kickoff) and `v0.170.0` (moved at the `v0.176.0` kickoff) and `v0.171.0` (moved at the `v0.177.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -22867,6 +22867,85 @@ pending real adopters. Neither is "Study Journey" work this release can close by
   should be cross-checked against the actual Vercel dashboard before anyone acts on it. Comment-only
   change to the script; no logic changed.
 
+## v0.171.0 - Checkout, Recovered
+
+**Status: Released**
+
+Theme: close the checkout-abandonment leak the product-health release plan's RC-0 diagnosis found
+(`docs/claude-plans/2026-10-09-product-health-release-plan.md`), plus signup entry-surface
+attribution from the same plan.
+
+### Planned Scope
+
+1. **RC-0 — Checkout diagnosis: CLOSED by owner decision, 2026-10-14, outreach step skipped.** The
+   Xendit dashboard pull was done directly by the owner: none of the 16 failed invoices show a
+   selected payment channel or an attempt inside the invoice — every one is a plain, un-engaged
+   expiry, not a declined payment. The one-question outreach to the 11 genuine users (why didn't you
+   finish paying?) was explicitly skipped — a deliberate call, not an oversight, accepting the plan's
+   own named risk ("building recovery for a cause RC-0 did not find"). Per-invoice table (Xendit
+   invoice IDs, emails, plan/amount) was handed to the owner out-of-band; not committed here per the
+   plan's own acceptance criteria ("no emails in any committed file").
+
+2. **RC-3 — Checkout reminder, via Xendit's native invoice notifications (not an in-house job). SHIPPED
+   (PR #1495, commit `ab8e006e` on `releases/v0.171.0`).**
+   `advisor()` caught, before any Codex prompt was written, that Xendit's Invoice API supports a
+   native payment-reminder email gated by an account-level Settings → Checkout → Notifications
+   toggle — **the owner has already enabled "Payment reminders" in the Xendit dashboard, 2026-10-14.**
+   Our own `createInvoice` call (`PaymentService.java:330-347`) sends no `payer_email` today, so
+   Xendit has never had an address to notify. The code fix is one field: add `payer_email` (the
+   checkout user's own email, already available via `userRepository.findById(userId)` in
+   `createCheckoutSession`) to the invoice-creation payload. No migration, no job, no template, no
+   `email_log` row — this supersedes the in-house reminder-job design originally sketched for RC-3 in
+   the product-health plan (kept there as historical record, not an instruction to build it).
+   **Restarts RC-4's baseline clock**: any checkout-path change lands inside the post-RC-1 baseline
+   window (started 2026-10-09), so the price test's start moves past ~2026-11-06 regardless.
+
+3. **RC-2 — Minimal funnel attribution (signup entry surface). SHIPPED (PR #1496, commit `4e3f727e`
+   on `releases/v0.171.0`).** Implemented by Codex from a Long-mode prompt, independently re-verified
+   (full backend suite including `NativeQueryPostgresIntegrationTest`: 2675/0; full frontend suite:
+   2662/0) before merging — Codex's own sandbox could not reach Docker for the Postgres-backed test.
+   Extends the existing
+   first-touch-attribution mechanism (`V93__user_first_touch_attribution.sql`'s
+   `utm_source`/`utm_medium`/`utm_campaign`/`utm_content`/`utm_term`/`referrer` columns, captured
+   client-side via `sessionStorage` and submitted once at signup) with one more column,
+   `first_touch_surface` (`V156`), classifying the first-touch pathname into `landing` / `public_note`
+   / `explore` / `exam_hub` / `other`. Resolves both halves of the plan's §8 item 9 from this existing
+   precedent rather than as fresh decisions: a `users` column (matching all 6 siblings, not the
+   `SIGNUP_COMPLETED`-metadata alternative, which covers only 311/420 historic accounts), and no new
+   anonymous-session-state risk (the capture mechanism already runs on every page today, including
+   public ones, per `app/layout.tsx:78`). Narrowed from the plan's "optionally the raw path truncated"
+   — class only. Touches both stacks (new migration + `UserEntity`/`SignupRequest`/`GoogleAuthRequest`/
+   `AuthService` + `first-touch-attribution.ts`/`lib/api.ts`).
+
+4. **RC-6 — deferred, not scoped into this release.** Raising the discovery-intent/copy-intent
+   cookie TTLs touches the same adoption-path instrumentation RC-5 (shipped `v0.170.0`, 2026-10-13) is
+   currently measuring for its own H3 pre/post read. The product-health plan says RC-6 "should not
+   land inside the RC-5 window," but RC-5 was never given a concrete window end-date at `v0.170.0`
+   signoff (a gap in itself — flagged below). Revisit once that window is explicitly dated.
+
+### Anti-drift
+
+No change to `PricingService`, voucher resolution, webhook handling, or any payment amount. No new
+endpoint. `payer_email` is read-only existing data, not collected anew.
+
+### Known gaps carried into this release
+
+- **RC-3's reminder is UNVERIFIED to actually fire inside the 24h invoice window — `[CHECKPOINT —
+  due 2026-10-21]` owed, since the outreach step that would have given independent signal on checkout
+  behavior was itself skipped (RC-0).** Xendit's per-invoice `reminder_time`/`reminder_time_unit`
+  fields were not set (only `payer_email` was added), so timing falls back to the Xendit account's own
+  Dashboard Invoice Settings default — unconfirmed, and some Xendit SDK examples pair a 1-day-before
+  reminder with a 48h invoice, not NoteLib's 24h. **Proximal check (owed, owner action): start a real
+  test checkout, leave it unpaid, confirm the reminder email arrives within 24h.** If it does not fire,
+  RC-3 has shipped a dashboard toggle with no effect, not a verified fix. Recorded in
+  `docs/features/billing.md`.
+- **RC-5 (`v0.170.0`) never got its own `[CHECKPOINT]` row for its H3 adoption read at signoff** —
+  only the Hikari leak-trace checkpoint was added. This is why RC-6's deferral above has no concrete
+  re-open date; owed as a follow-up.
+- **The `v0.166.0` Hikari checkpoint (`due 2026-10-14T11:19:29Z`) was read at this kickoff and found a
+  THIRD long-hold mechanism `v0.166.0` did not catch** — see `ROADMAP.md`'s Backlog Index for the full
+  read and the new row it produced. Not in this release's scope; flagged to the owner as a candidate.
+
 ## Archived releases
 
 - `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
@@ -22879,3 +22958,4 @@ pending real adopters. Neither is "Study Journey" work this release can close by
 - `v0.167.0 — Study Journey Purpose` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.173.0` kickoff.
 - `v0.168.0 — Free Quota, Fairly Metered` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.174.0` kickoff.
 - `v0.169.0 — Study Journey, Continued` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.175.0` kickoff.
+- `v0.171.0 — Checkout, Recovered` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.177.0` kickoff.

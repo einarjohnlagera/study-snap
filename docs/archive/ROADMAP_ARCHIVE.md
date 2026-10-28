@@ -5452,3 +5452,17 @@ full detail in `RELEASES.md`. Owes its own checkpoint at signoff tracking whethe
 grows post-ship. **Excluded, unaffected by either override:** the Degree Journey catalog (Phase C) — its
 own dependency (≥2 published Years) is a content gap no decision overrides, exactly one BSCS Year exists
 and it's unpublished — and Phase D, unscoped. Full scope in `RELEASES.md`.
+
+**Kicked off 2026-10-14, signed off 2026-10-14.** `v0.171.0 — Checkout, Recovered` is **Released** on `releases/v0.171.0`,
+cut from `main` after `v0.170.0` merged as #1492. Scope: **RC-0** (checkout diagnosis) CLOSED by owner
+decision — Xendit dashboard pull done, shows plain un-engaged invoice expiry on all 16 failed
+transactions (no channel picked, no attempt), outreach step explicitly skipped; **RC-3** (checkout
+reminder) via Xendit's native invoice-reminder notification (owner enabled Settings → Checkout →
+Notifications → "Payment reminders" 2026-10-14) plus one `payer_email` field added to
+`PaymentService.createInvoice` — not the in-house reminder job originally sketched in the
+product-health plan; **unverified whether the reminder fires inside the 24h invoice window**, owed as
+a `[CHECKPOINT — due 2026-10-21]`. **RC-2** (signup entry-surface attribution) SHIPPED (PR #1496,
+commit `4e3f727e`) — a `first_touch_surface` column extending `V93`'s existing first-touch-attribution
+columns. **RC-6** deferred — conflicts with RC-5's (`v0.170.0`) still-undated adoption-read
+window. Full scope, anti-drift and the Hikari checkpoint read performed at this kickoff in
+`RELEASES.md`.

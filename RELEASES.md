@@ -1,5 +1,46 @@
 # RELEASES.md - NoteLib
 
+## v0.177.0 - Challenge Quiz Quality, Continued
+
+**Status: In Progress** (kicked off 2026-10-28 on `releases/v0.177.0`, cut from `releases/v0.176.0` at `5e2db468`, not from `main`: `v0.176.0` is Released on its branch, unmerged, deploy on HOLD; draft `DO NOT MERGE` PR #1538 keeps its diff against `main` visible, still open and draft when read 2026-10-28). **The theme name is proposed by the Release Implementor and the owner may rename it. It is deliberately model-neutral: this repo's docs are internal, but the name travels into the README baseline, the release notes and the PR title, and customer copy never names a model or implies a plan quality difference.**
+
+Theme: close the Challenge Quiz quality gap the `v0.176.0` evaluation found on the free plan. On today's prompt Luna scored distractors 3.23 against Sol's 3.75, a giveaway estimate of 10.5% against 4.5%, and 5 confirmed critical defects of 300 against 0; the proposed wording lowered difficulty on Sol and so was not shipped. This release decides which lever to test, under the same blind pipeline, and changes the production prompt only if a new evaluation passes for BOTH Luna and Sol. Internal only: customer copy never names a model and implies no plan quality difference.
+
+**Selection record.** The owner selected "Luna-first quality follow-up" as the theme on 2026-10-28 (answer to a scope question in the kickoff session). **No plan file is marked `Status: ready for release`, and the Backlog row and the report's section 6 list levers, not a contract. The scope below is therefore a lever list awaiting the owner's selection, not locked scope.** Scope lock (kickoff lifecycle step 2) happens when the owner picks levers.
+
+**Deploy gate (carried unchanged):** on HOLD for deployment until the operational gate clears (four Postgres signal-9 kills after four deploys; first input is the 2026-11-01 cache read). Every `main` merge deploys. Nothing merges to `main` before the final deploy decision. **Re-read at kickoff (Render deploy list, 2026-10-28):** the newest deploy is still `v0.175.0`, live 2026-10-26T14:58:47Z; none since.
+
+**Sources:**
+- `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md` (section 6, the levers), the pre-registration `docs/claude-plans/2026-10-27-challenge-quiz-quality-preregistration.md`, the frozen scorer instructions and the rubric (v3), all from `v0.176.0`.
+- The `v0.176.0` harness (PRs #1536, #1537), reusable as is: alternate prompt directory, five generation arms plus an Official stock arm, blind export, leak check, per-arm prompt hash.
+- `ROADMAP.md` Backlog row "Challenge Quiz Luna-first quality follow-up".
+
+### Planned Scope
+
+Every item is `[queued, awaiting owner selection]`. Order is a proposal.
+
+1. **Reword G5 and re-pre-register. Docs, Tier S.** G5 ("no format below 3.5 with at least 20 items") was "harsh by construction" (evaluation report section 4) and is one of the three gates Sol failed. The reword needs the owner's sign-off before any paid run, and a new pre-registration is committed before the first paid command; the frozen `v0.176.0` rubric and scorer instructions stay as the record and are not edited.
+2. **Giveaway-only prompt variant, without Change A. Test scope, Tier N (Codex).** An alternate Challenge prompt file that carries only the giveaway fix (absolute words, parallel choices), so the arms can be attributed. The exact wording goes to the owner before the brief. The production file `challenge-quiz-developer.txt` is not touched by this item.
+3. **Evaluation run. Owner-run, no agent paid call.** Luna and Sol judged separately, same blind pipeline, owner-set generation cap (about $3 to $4 per rerun last time), gates re-registered in item 1. The scorer pipeline uses the harness's own validator.
+4. **Production prompt change. Tier N, gated by item 3. NOT STARTED.** Only if the new evaluation passes for BOTH models and the owner gives final approval; otherwise HOLD, with no measurement-only deploy without separate owner approval.
+5. **Backlog rows and checkpoints. Docs. `[done at kickoff, extended at signoff]`**
+
+**Levers the report lists that this release's anti-drift EXCLUDES, so the owner is not offered them as scope:** routing free-plan Challenge to a stronger model (a pricing and entitlement change), and a Luna-specific verifier pass (the three verifier switches stay OFF). Either needs its own owner decision and release.
+
+Anti-drift: no learner-facing difficulty selection; no change to the 10/12/15 question counts; no Phase 2 bank selection or Phase 3 question reporting; no mass regeneration or bank migration; Board Exam and Long Exam untouched (deferred by the owner, 2026-10-27); no pricing, quota or entitlement change; customer copy never names a model; no production prompt change before a new evaluation passes for both models and the owner approves; the +5 signed-prompt file, its byte-parity test and the three verifier switches untouched (switches stay OFF); no deployment until the operational gate clears; the `v0.176.0` frozen rubric, scorer instructions and pre-registration are never edited.
+
+### Owner items carried at kickoff
+
+- **Overdue `[CHECKPOINT]` rows, carried unread, not actioned at this kickoff** (same convention as the `v0.176.0` kickoff). Crude filter: a dated `[CHECKPOINT — due …]` title on or before 2026-10-28 with no `✅`, `READ`, `CLOSED`, `RESOLVED`, `VERDICT`, `DISCHARGED`, `SUPERSEDED` or strikethrough marker in its title or the first 400 characters of its Status. **12 rows, and the filter over- and under-counts (it reads titles, not verdicts), so none is claimed open or closed:** `v0.111.0` and `v0.96.0` (due 2026-09-28), the `v0.74.0` conversion read (09-30), the `v0.119.1` public-read row (10-04), `v0.107.0`, `v0.90.0`, `v0.106.0` and `v0.97.0` (10-13), the `v0.166.0` Hikari row (10-14), **RC-3's Xendit payment reminder (10-21, `v0.171.0`; an owner action, a real unpaid test checkout, with no instrumentation possible)**, the `v0.160.0` bulk-notification read (10-25) and `v0.92.0` (10-27). No `Last reviewed` was advanced on any of them. A real read of each is owed before any is called overdue-and-open.
+- **Dated reads:** 2026-10-29 (set `CHALLENGE_QUIZ_STATEMENT_PAIR_LEGACY_CUTOFF`), 2026-11-01 (cache and kill read), 2026-11-03 (`v0.110.0` distal checkpoint), 2026-11-08 (`v0.174.0` model read, last day logs exist), 2026-11-09 (`v0.175.0` Challenge read).
+- **Rotate the OpenAI key in `backend/.env`:** a line of it appeared in the 2026-10-27 session transcript.
+- **Decide what happens to draft PR #1538** (close or merge) when this release's own PR goes in. A merge to `main` auto-deploys.
+- **Do not run `./mvnw clean` while the `v0.176.0` evaluation data is in `backend/target/llm-benchmark`** (backup at `~/quality-eval-v0176-backup/`).
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.176.0 - Challenge Quiz Quality
 
 **Status: Released** (kicked off 2026-10-27 on `releases/v0.176.0`, cut from `main` at `06a09f7c` after `v0.175.0` merged as #1533; **closed 2026-10-28 on its branch, NOT merged to `main`, deploy on HOLD**; the evaluation outcome was HOLD, so this release changes no production behavior).
@@ -1576,82 +1617,3 @@ was **not** a duplicate-key violation, so it is not evidence against item 2 bein
   in the bank repository once that file held a native query. The three claim queries now use
   `cast(:learnerLevel as string)`, which is behaviour-neutral (verified on PG with a NULL level).
   Narrowing the lint to native-query blocks is a follow-up.
-
-## v0.171.0 - Checkout, Recovered
-
-**Status: Released**
-
-Theme: close the checkout-abandonment leak the product-health release plan's RC-0 diagnosis found
-(`docs/claude-plans/2026-10-09-product-health-release-plan.md`), plus signup entry-surface
-attribution from the same plan.
-
-### Planned Scope
-
-1. **RC-0 — Checkout diagnosis: CLOSED by owner decision, 2026-10-14, outreach step skipped.** The
-   Xendit dashboard pull was done directly by the owner: none of the 16 failed invoices show a
-   selected payment channel or an attempt inside the invoice — every one is a plain, un-engaged
-   expiry, not a declined payment. The one-question outreach to the 11 genuine users (why didn't you
-   finish paying?) was explicitly skipped — a deliberate call, not an oversight, accepting the plan's
-   own named risk ("building recovery for a cause RC-0 did not find"). Per-invoice table (Xendit
-   invoice IDs, emails, plan/amount) was handed to the owner out-of-band; not committed here per the
-   plan's own acceptance criteria ("no emails in any committed file").
-
-2. **RC-3 — Checkout reminder, via Xendit's native invoice notifications (not an in-house job). SHIPPED
-   (PR #1495, commit `ab8e006e` on `releases/v0.171.0`).**
-   `advisor()` caught, before any Codex prompt was written, that Xendit's Invoice API supports a
-   native payment-reminder email gated by an account-level Settings → Checkout → Notifications
-   toggle — **the owner has already enabled "Payment reminders" in the Xendit dashboard, 2026-10-14.**
-   Our own `createInvoice` call (`PaymentService.java:330-347`) sends no `payer_email` today, so
-   Xendit has never had an address to notify. The code fix is one field: add `payer_email` (the
-   checkout user's own email, already available via `userRepository.findById(userId)` in
-   `createCheckoutSession`) to the invoice-creation payload. No migration, no job, no template, no
-   `email_log` row — this supersedes the in-house reminder-job design originally sketched for RC-3 in
-   the product-health plan (kept there as historical record, not an instruction to build it).
-   **Restarts RC-4's baseline clock**: any checkout-path change lands inside the post-RC-1 baseline
-   window (started 2026-10-09), so the price test's start moves past ~2026-11-06 regardless.
-
-3. **RC-2 — Minimal funnel attribution (signup entry surface). SHIPPED (PR #1496, commit `4e3f727e`
-   on `releases/v0.171.0`).** Implemented by Codex from a Long-mode prompt, independently re-verified
-   (full backend suite including `NativeQueryPostgresIntegrationTest`: 2675/0; full frontend suite:
-   2662/0) before merging — Codex's own sandbox could not reach Docker for the Postgres-backed test.
-   Extends the existing
-   first-touch-attribution mechanism (`V93__user_first_touch_attribution.sql`'s
-   `utm_source`/`utm_medium`/`utm_campaign`/`utm_content`/`utm_term`/`referrer` columns, captured
-   client-side via `sessionStorage` and submitted once at signup) with one more column,
-   `first_touch_surface` (`V156`), classifying the first-touch pathname into `landing` / `public_note`
-   / `explore` / `exam_hub` / `other`. Resolves both halves of the plan's §8 item 9 from this existing
-   precedent rather than as fresh decisions: a `users` column (matching all 6 siblings, not the
-   `SIGNUP_COMPLETED`-metadata alternative, which covers only 311/420 historic accounts), and no new
-   anonymous-session-state risk (the capture mechanism already runs on every page today, including
-   public ones, per `app/layout.tsx:78`). Narrowed from the plan's "optionally the raw path truncated"
-   — class only. Touches both stacks (new migration + `UserEntity`/`SignupRequest`/`GoogleAuthRequest`/
-   `AuthService` + `first-touch-attribution.ts`/`lib/api.ts`).
-
-4. **RC-6 — deferred, not scoped into this release.** Raising the discovery-intent/copy-intent
-   cookie TTLs touches the same adoption-path instrumentation RC-5 (shipped `v0.170.0`, 2026-10-13) is
-   currently measuring for its own H3 pre/post read. The product-health plan says RC-6 "should not
-   land inside the RC-5 window," but RC-5 was never given a concrete window end-date at `v0.170.0`
-   signoff (a gap in itself — flagged below). Revisit once that window is explicitly dated.
-
-### Anti-drift
-
-No change to `PricingService`, voucher resolution, webhook handling, or any payment amount. No new
-endpoint. `payer_email` is read-only existing data, not collected anew.
-
-### Known gaps carried into this release
-
-- **RC-3's reminder is UNVERIFIED to actually fire inside the 24h invoice window — `[CHECKPOINT —
-  due 2026-10-21]` owed, since the outreach step that would have given independent signal on checkout
-  behavior was itself skipped (RC-0).** Xendit's per-invoice `reminder_time`/`reminder_time_unit`
-  fields were not set (only `payer_email` was added), so timing falls back to the Xendit account's own
-  Dashboard Invoice Settings default — unconfirmed, and some Xendit SDK examples pair a 1-day-before
-  reminder with a 48h invoice, not NoteLib's 24h. **Proximal check (owed, owner action): start a real
-  test checkout, leave it unpaid, confirm the reminder email arrives within 24h.** If it does not fire,
-  RC-3 has shipped a dashboard toggle with no effect, not a verified fix. Recorded in
-  `docs/features/billing.md`.
-- **RC-5 (`v0.170.0`) never got its own `[CHECKPOINT]` row for its H3 adoption read at signoff** —
-  only the Hikari leak-trace checkpoint was added. This is why RC-6's deferral above has no concrete
-  re-open date; owed as a follow-up.
-- **The `v0.166.0` Hikari checkpoint (`due 2026-10-14T11:19:29Z`) was read at this kickoff and found a
-  THIRD long-hold mechanism `v0.166.0` did not catch** — see `ROADMAP.md`'s Backlog Index for the full
-  read and the new row it produced. Not in this release's scope; flagged to the owner as a candidate.
