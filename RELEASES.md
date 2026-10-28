@@ -24,11 +24,11 @@ inconclusive evaluation means HOLD, with **no measurement-only deploy without se
 
 ### Planned Scope
 
-1. **Evaluation harness (test scope). Tier N. `[in review: PR #1536 into `releases/v0.176.0`]`** Extends the existing Leg E (cell `S15`) with a quality mode: an alternate Challenge
+1. **Evaluation harness (test scope). Tier N. `[✅ SHIPPED to the release branch: PR #1536 (harness), PR #1537 (batch builder follows the rubric for an invalid primary row)]`** Extends the existing Leg E (cell `S15`) with a quality mode: an alternate Challenge
    prompt file (`challengeResources` replaces `challengeQuizDeveloperPromptTemplate`), five generation arms (current prompt on `gpt-4.1-mini`, Luna, Sol;
    proposed prompt on Luna and Sol) plus a stock arm of about 100 Official template questions, with blind export, a leak check and a per-arm
    prompt hash. Official notes only. No production code.
-2. **Evaluation run. Owner-run, no agent paid call. `[queued]`** **20 Official notes, 10 `COLLEGE` + 10 `BOARD_EXAM_REVIEW` by each note's own level** (owner decision, design A,
+2. **Evaluation run. Owner-run, no agent paid call. `[✅ DONE 2026-10-27, outcome HOLD: Sol fails G2, G3 and G5; see `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md`]`** **20 Official notes, 10 `COLLEGE` + 10 `BOARD_EXAM_REVIEW` by each note's own level** (owner decision, design A,
    2026-10-27; each level at least 4 strata and 2 quantitative notes, overall at least 6 and 4), with template stock, all `hard` (cell `S15`),
    one fresh 15-question start per note per arm, bank off, **$4 generation cap**. Blind Codex scoring (D11), independent Opus review of a stratified
    sample including unflagged items against the source notes, disputes adjudicated. **Finalized gates (Luna and Sol judged separately, both must
@@ -39,13 +39,13 @@ inconclusive evaluation means HOLD, with **no measurement-only deploy without se
    within 2 points, latency and tokens within 15%); G7 MULTI_SELECT cardinality and scoring unchanged; G8 inconclusive counts as not passing (a stratum
    with fewer than 150 reviewed choice-based items is inconclusive). Feasibility is stated before the run: about 200 choice-based items per arm cannot
    prove 5%, so G4 is applied to the observed rate with the interval reported.
-3. **Prompt change. Tier N code, gated by item 2. `[queued, gated]`** The single file `challenge-quiz-developer.txt` (Changes A, B, C as approved);
+3. **Prompt change. Tier N code, gated by item 2. `[NOT SHIPPED: the gate did not pass (HOLD); the production prompt is unchanged]`** The single file `challenge-quiz-developer.txt` (Changes A, B, C as approved);
    the Java `{DIFFICULTY}` substitution stays; the 10/12/15 counts are untouched. **The one-sentence reword in
    `challenge-more-no-statement-pair-developer.txt` is DEFERRED** (it is pinned byte for byte to the owner-signed wording document by
    `StatementPairProductionParityTest`, and the +5 exclusion switch is OFF, so the file is never sent). Tests: a prompt-contract test pinning the
    MULTI_SELECT cardinality sentence, and a test that a normal +5 still uses the updated Challenge template. Update
    `docs/features/challenge-quiz.md:238` and the "Balancing difficulty…" loading line (`quiz-generation-overlay.tsx:9`) under `VOICE_AND_TONE.md`.
-4. **Measurement log. Tier N. `[queued]`** Extend `challenge_quiz_delivery_counts` with prior bank outcomes at delivery time (separate from the current
+4. **Measurement log. Tier N. `[NOT BUILT: HOLD allows no measurement-only deploy without separate owner approval; awaiting the owner's decision]`** Extend `challenge_quiz_delivery_counts` with prior bank outcomes at delivery time (separate from the current
    attempt), actual delivered counts, fresh versus bank or template reuse, and the model, with **unknown provenance kept as unknown**; no question text,
    private-note content or unnecessary learner identifiers; a failure to log never affects correctness, availability or quota; a real-database or
    log-contract test. It also makes the `model_used` read in the `[CHECKPOINT — due 2026-11-09]` row readable.
@@ -61,12 +61,12 @@ inconclusive evaluation means HOLD, with **no measurement-only deploy without se
   notes in 4 strata. The corrected pool is 1,529 notes in 41 strata, and the per-level selection validated read-only against production (counts only): 10 + 10 notes, 12 strata, 4 quantitative.
 - **The drift guard must be retired or updated by item 3.** `ChallengeQualityPromptGuardTest` pins production's current prompt hash, so the prompt-change commit breaks it by design.
 - **Spend stops (README run sheet):** smoke 0.33 + full 3.28 = 3.61, worst case about 3.95 under the $4 cap; the Sol full stops are 1.40 against an expected spend of about $1.20 per Sol arm.
-- **Scoring rubric v3 written, not yet frozen:** `docs/claude-plans/2026-10-27-challenge-quiz-quality-scoring-rubric.md`. Product UX's three decisions and four sign-offs of 2026-10-27 (relayed by the owner) are in it: grounding is
+- **Scoring rubric v3 (SIGNED and frozen 2026-10-27, with its pre-registration committed before any paid call):** `docs/claude-plans/2026-10-27-challenge-quiz-quality-scoring-rubric.md`. Product UX's three decisions and four sign-offs of 2026-10-27 (relayed by the owner) are in it: grounding is
   scored against the generator's inputs (summary and key concepts) with the full note as a consistency safeguard; **G4 decides on a sampling-adjusted estimate** (at most 5%, 90% one-sided bound, `UL` at most 10% as a tolerance,
   at least 60 randomly sampled unflagged items per arm stratified across notes and formats, 3-items-across-2-notes pattern rule, `N` at least 150); a **missed critical defect in a proposed arm triggers a whole-arm independent
   re-review**; the **wording-sensitive regression rule** (excess over the same-model current arm for four defect types; a mechanical screen, not proof of causation); **G7 tolerance 10 percentage points**, absolute. Denominators and
   missing-data handling were written by the Release Implementor and are not separately signed.
-- **Still open before any paid run:** the owner signs and freezes the rubric (its SHA-256, the 20 pack ids, the SHA-256 of `quality-e.jsonl`, the review-order seed and the gate calculator's commit SHA are committed to a
+- **Done before the paid run (kept for the record):** the owner signed and froze the rubric (its SHA-256, the 20 pack ids, the SHA-256 of `quality-e.jsonl`, the review-order seed and the gate calculator's commit SHA are committed to a
   pre-registration file on this branch before the first paid command; the review-order manifest hash follows as an addendum after generation and before scoring).
 
 **Operational deployment gate (Product UX, 2026-10-27):** the four Postgres signal-9 kills that followed four deploys are investigated before any
@@ -106,7 +106,10 @@ review so far**; feature PRs never edit this file.
 
 ### Shipped
 
-_(nothing yet)_
+- **Evaluation harness and method (test scope, no production code).** `QualityEvaluation*`, the blind export, the review plan, the review-batch builder and the offline gate report under `backend/src/test/java/com/studysnap/backend/benchmark/` (PR #1536; PR #1537 fixed the batch builder so an invalid primary row marks only that arm incompletely scored). Rubric signed and pre-registered, with Amendments 1 to 4 and Addenda A to D recording every deviation.
+- **Evaluation result (2026-10-27): HOLD.** 20 Official notes, five generation arms plus stock, 1,600 blind questions, Codex primary scoring, 497 items independently re-scored by cold Opus reviewers, 144 disagreements adjudicated; about $3.03 spent of the $4 cap. **Sol, proposed against current prompt: G1 PASS, G2 FAIL (distractors 3.59 against 3.75), G3 FAIL (mode alignment 3.81 against 4.23), G4 PASS, G5 FAIL, G6 to G8 PASS.** The proposed wording reduced giveaways but made questions easier. Both models must pass, so HOLD; Luna's proposed arm was deliberately not interpreted (a whole-arm re-review could not change the outcome). **The prompt change (item 3) is not shipped and the production prompt is unchanged.**
+- **Product finding for the owner:** on today's prompt Luna (free plan) scored distractors 3.23, mode alignment 3.36, a 10.5% giveaway estimate and 5 confirmed critical defects, against Sol's 3.75, 4.23, 4.5% and 0 (internal only; customer copy still never names a model). Full report: `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md`.
+- **Not shipped:** item 3 (prompt change, gate failed), item 4 (measurement log, awaiting the owner's decision), and no deploy of any kind.
 
 ## v0.175.0 - Quiz Ready
 
