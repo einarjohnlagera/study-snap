@@ -1,6 +1,6 @@
 # G5 reword proposal for the v0.177.0 evaluation
 
-Status: **PROPOSAL, awaiting the owner's decision (Option A, B or C below). Nothing here is signed, frozen or built.** Written 2026-10-28 by the Release Implementor. It authorizes no paid call, no production prompt change and no deployment.
+Status: **DECIDED 2026-10-28: Option A, approved with clarification, skip-and-disclose for a thin baseline, $4 cap (record: `2026-10-28-v0177-g5-decisions-product-ux.md`). The rule text is in the v0.177.0 rubric draft `2026-10-28-challenge-quiz-quality-scoring-rubric-v2.md`, which is NOT signed or frozen.** The options below are kept as the record of what was weighed. Written 2026-10-28 by the Release Implementor. It authorizes no paid call, no production prompt change and no deployment.
 
 Context: `v0.176.0` item 1 of `v0.177.0`'s Planned Scope (`RELEASES.md`). The frozen `v0.176.0` rubric (`2026-10-27-challenge-quiz-quality-scoring-rubric.md`), scorer instructions and pre-registration are the record and are **not edited**; a changed gate lives in a new v2 rubric file and a new pre-registration, committed before the first paid command of the new run.
 
