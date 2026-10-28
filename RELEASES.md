@@ -1,9 +1,132 @@
 # RELEASES.md - NoteLib
 
+## v0.176.0 - Challenge Quiz Quality
+
+**Status: Released** (kicked off 2026-10-27 on `releases/v0.176.0`, cut from `main` at `06a09f7c` after `v0.175.0` merged as #1533; **closed 2026-10-28 on its branch, NOT merged to `main`, deploy on HOLD**; the evaluation outcome was HOLD, so this release changes no production behavior).
+
+Theme: Challenge Quiz should test meaningful understanding with accurate answers and believable distractors, without a difficulty
+setting or any new learner flow. A learner's feedback ("Distractors are easily spotted", "Too easy", 2026-10-23) led to a read-only audit
+that found the Challenge prompt carries no distractor rule and a bare, undefined difficulty word. This release improves **newly
+generated** questions, and only if an owner-run evaluation proves it safe.
+
+**⚠️ DEPLOY GATE:** this release is **on HOLD for deployment** until the operational gate below clears. Every `main` merge deploys, so
+nothing merges to `main` before the final deploy decision; the evaluation harness runs from this branch. A failed, incomplete or
+inconclusive evaluation means HOLD, with **no measurement-only deploy without separate owner approval** (Product UX, 2026-10-27).
+
+**Sources:**
+- Feature Planner's audit `docs/claude-findings/2026-10-26-challenge-quiz-quality-audit-distractors-and-difficulty.md` and Phase 1
+  proposal `docs/claude-plans/2026-10-26-challenge-quiz-quality-phase1-proposal.md` (both uncommitted in the shared checkout at kickoff; the
+  owner commits them from Feature Planner's session), which record the owner's 2026-10-27 approval of the exact prompt wording (Changes A, B, C),
+  the evaluation with a $4 generation cap run by the owner, and the reframed correctness criterion. I have the record, not the owner's own words.
+- This release's scope `docs/claude-plans/2026-10-26-challenge-quiz-quality-scope.md`, with Product UX's final review applied (its sections 7 and 8).
+- The deferred Board Exam / Long Exam follow-up scope `docs/claude-plans/2026-10-26-board-long-exam-follow-up-scope.md` (owner deferral,
+  2026-10-27: no paying learners yet).
+
+### Planned Scope
+
+1. **Evaluation harness (test scope). Tier N. `[✅ SHIPPED to the release branch: PR #1536 (harness), PR #1537 (batch builder follows the rubric for an invalid primary row)]`** Extends the existing Leg E (cell `S15`) with a quality mode: an alternate Challenge
+   prompt file (`challengeResources` replaces `challengeQuizDeveloperPromptTemplate`), five generation arms (current prompt on `gpt-4.1-mini`, Luna, Sol;
+   proposed prompt on Luna and Sol) plus a stock arm of about 100 Official template questions, with blind export, a leak check and a per-arm
+   prompt hash. Official notes only. No production code.
+2. **Evaluation run. Owner-run, no agent paid call. `[✅ DONE 2026-10-27, outcome HOLD: Sol fails G2, G3 and G5; see `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md`]`** **20 Official notes, 10 `COLLEGE` + 10 `BOARD_EXAM_REVIEW` by each note's own level** (owner decision, design A,
+   2026-10-27; each level at least 4 strata and 2 quantitative notes, overall at least 6 and 4), with template stock, all `hard` (cell `S15`),
+   one fresh 15-question start per note per arm, bank off, **$4 generation cap**. Blind Codex scoring (D11), independent Opus review of a stratified
+   sample including unflagged items against the source notes, disputes adjudicated. **Finalized gates (Luna and Sol judged separately, both must
+   pass):** G1 correctness (no more confirmed critical defects than the same-model current arm, zero attributable to the new wording; owner-approved);
+   G2 distractor plausibility at least 4.0 and at least +0.3; G3 mode alignment at least 4.0 of 5 (cognitive demand reported separately, no multi-step
+   requirement); G4 independently confirmed serious giveaways at most 5% of reviewed choice-based items with no recurring pattern (mechanical indicators
+   diagnostic only); G5 no format below 3.5 with at least 20 items; G6 collateral (clarity and faithfulness within 0.2, delivered count and retry rate
+   within 2 points, latency and tokens within 15%); G7 MULTI_SELECT cardinality and scoring unchanged; G8 inconclusive counts as not passing (a stratum
+   with fewer than 150 reviewed choice-based items is inconclusive). Feasibility is stated before the run: about 200 choice-based items per arm cannot
+   prove 5%, so G4 is applied to the observed rate with the interval reported.
+3. **Prompt change. Tier N code, gated by item 2. `[NOT SHIPPED: the gate did not pass (HOLD); the production prompt is unchanged]`** The single file `challenge-quiz-developer.txt` (Changes A, B, C as approved);
+   the Java `{DIFFICULTY}` substitution stays; the 10/12/15 counts are untouched. **The one-sentence reword in
+   `challenge-more-no-statement-pair-developer.txt` is DEFERRED** (it is pinned byte for byte to the owner-signed wording document by
+   `StatementPairProductionParityTest`, and the +5 exclusion switch is OFF, so the file is never sent). Tests: a prompt-contract test pinning the
+   MULTI_SELECT cardinality sentence, and a test that a normal +5 still uses the updated Challenge template. Update
+   `docs/features/challenge-quiz.md:238` and the "Balancing difficulty…" loading line (`quiz-generation-overlay.tsx:9`) under `VOICE_AND_TONE.md`.
+4. **Measurement log. Tier N. `[NOT BUILT: HOLD allows no measurement-only deploy without separate owner approval; awaiting the owner's decision]`** Extend `challenge_quiz_delivery_counts` with prior bank outcomes at delivery time (separate from the current
+   attempt), actual delivered counts, fresh versus bank or template reuse, and the model, with **unknown provenance kept as unknown**; no question text,
+   private-note content or unnecessary learner identifiers; a failure to log never affects correctness, availability or quota; a real-database or
+   log-contract test. It also makes the `model_used` read in the `[CHECKPOINT — due 2026-11-09]` row readable.
+5. **Backlog rows and checkpoints. Docs. `[done at kickoff, extended at signoff]`**
+
+**Owner decisions and corrections recorded 2026-10-27 (evaluation design).**
+- **Design A (owner):** 10 `COLLEGE` + 10 `BOARD_EXAM_REVIEW` notes by each note's own level; the difficulty stays `hard`. Gates are read **overall**; per-level results are
+  descriptive only (10 notes each).
+- **Why:** the prompt's `{LEARNER_LEVEL_GUIDANCE}` comes from `StudyPackGenerationContextResolver.effectiveCurriculumLevel`, which uses the **note's own level first**, so a viewer-level pin
+  only affects notes with no level. For `BOARD_EXAM_REVIEW` the guidance already says "plausible distractors, multi-step thinking". Real completed Challenge sessions run at
+  `BOARD_EXAM_REVIEW` for 128 of 215 (about 59%); the Official eligible pool is 875 `COLLEGE`, 447 `BOARD_EXAM_REVIEW`, 207 with no level.
+- **Correction:** Official template rows carry a **NULL** `generation_stamp` and are claimable (`findClaimableForUpdate`); an early draft of the selection filtered on the pack's current stamp and found only 33
+  notes in 4 strata. The corrected pool is 1,529 notes in 41 strata, and the per-level selection validated read-only against production (counts only): 10 + 10 notes, 12 strata, 4 quantitative.
+- **The drift guard must be retired or updated by item 3.** `ChallengeQualityPromptGuardTest` pins production's current prompt hash, so the prompt-change commit breaks it by design.
+- **Spend stops (README run sheet):** smoke 0.33 + full 3.28 = 3.61, worst case about 3.95 under the $4 cap; the Sol full stops are 1.40 against an expected spend of about $1.20 per Sol arm.
+- **Scoring rubric v3 (SIGNED and frozen 2026-10-27, with its pre-registration committed before any paid call):** `docs/claude-plans/2026-10-27-challenge-quiz-quality-scoring-rubric.md`. Product UX's three decisions and four sign-offs of 2026-10-27 (relayed by the owner) are in it: grounding is
+  scored against the generator's inputs (summary and key concepts) with the full note as a consistency safeguard; **G4 decides on a sampling-adjusted estimate** (at most 5%, 90% one-sided bound, `UL` at most 10% as a tolerance,
+  at least 60 randomly sampled unflagged items per arm stratified across notes and formats, 3-items-across-2-notes pattern rule, `N` at least 150); a **missed critical defect in a proposed arm triggers a whole-arm independent
+  re-review**; the **wording-sensitive regression rule** (excess over the same-model current arm for four defect types; a mechanical screen, not proof of causation); **G7 tolerance 10 percentage points**, absolute. Denominators and
+  missing-data handling were written by the Release Implementor and are not separately signed.
+- **Done before the paid run (kept for the record):** the owner signed and froze the rubric (its SHA-256, the 20 pack ids, the SHA-256 of `quality-e.jsonl`, the review-order seed and the gate calculator's commit SHA are committed to a
+  pre-registration file on this branch before the first paid command; the review-order manifest hash follows as an addendum after generation and before scoring).
+
+**Operational deployment gate (Product UX, 2026-10-27):** the four Postgres signal-9 kills that followed four deploys are investigated before any
+production approval: cause and current database health (the `[CHECKPOINT — due cache deploy + 7 days]` read of 2026-11-01 is the first input),
+capacity and pre-deploy health checks, a documented rollback and recovery, and post-deploy checks of the core quiz and study flows. A single deploy
+reduces exposure but does not resolve the risk; **unexplained with no credible recovery plan means HOLD.**
+
+**Not in this release:** a learner-facing difficulty selector; any change to the 10/12/15 counts; Phase 2 outcome-aware bank selection and Phase 3
+per-question reporting (indexed as Backlog rows); a difficulty-aware bank (it needs a migration); mass regeneration; Board Exam and Long Exam; pricing,
+quota or entitlement; the +5 reword; retiring `resolveGenerationProfile` or the stored difficulty label.
+
+**Verification tier:** about four code and test items, and the risky one (the prompt) is gated by the evaluation rather than by code review.
+`advisor()` before the harness brief and on the diff, a real-PostgreSQL or log-contract test for item 4, and a scoped cold agent only if item 3 or 4
+touches a shared method beyond the log line.
+
+**Kickoff scan (2026-10-27):**
+- **Docs carried in.** The diffs of PR #1534 (dated checkpoints) and PR #1535 (deploy state of `v0.173.0` to `v0.175.0`) were applied inside this
+  kickoff commit, as the owner chose (no extra deploys). Their PRs are closed with a note, unmerged.
+- **Production facts re-read before carrying them in:** no Render deploy since `v0.175.0` (2026-10-26T14:56 to 14:58Z) and one Postgres signal-9 kill
+  since (14:58:07Z, during that deploy), so "4 of 4 deploys followed by a kill" stands.
+- `v0.170.0` was archived from `RELEASES.md` and the ROADMAP baseline (verified verbatim at the end of each archive); the `RELEASES_ARCHIVE.md`
+  header now also names `v0.169.0` (moved at the `v0.175.0` kickoff, omitted from it then).
+- **Planning files with no Backlog row:** 7 `v0.175.0` files are now indexed in its Backlog row (two are one-off Product UX consultation prompts, the
+  release-artifact exemption). The Challenge quality files and the deferred Board/Long Exam scope each have a row.
+- **Checkpoint scan, carried unread, not actioned at this kickoff.** Crude filter (a dated `[CHECKPOINT — due …]` title in the past, with no
+  `✅`, `READ`, `CLOSED` or similar marker in its title or the first 400 characters of its Status): **10 of 36 past-due rows** (`v0.111.0` and
+  `v0.96.0` of 2026-09-28; the public-read pool row of 10-07; `v0.106.0`, `v0.107.0`, `v0.90.0`, `v0.97.0` of 10-13; `v0.166.0` Hikari of 10-14;
+  RC-3's reminder of 10-21; the bulk-notification read of 10-25), plus five rows due today (`v0.91.0` to `v0.95.0`). The filter overcounts. Rows
+  due inside this release are `[CHECKPOINT — due 2026-10-29]` (the cutoff variable, reported set by the owner), the cache read of 2026-11-01, and
+  the `v0.174.0` and `v0.175.0` reads of 2026-11-08 and 2026-11-09.
+
+Anti-drift: no learner-facing difficulty selection; no change to the 10/12/15 question counts; no Phase 2 or Phase 3 implementation; no mass
+regeneration or bank migration; Board Exam and Long Exam untouched; no pricing, quota or entitlement change; customer copy never names a model and
+implies no plan quality difference; **no production prompt change before the evaluation passes for both Luna and Sol and the owner gives final
+approval**; the +5 signed-prompt file, its parity test and the three verifier switches (all OFF) are untouched; **no deployment is authorized by any
+review so far**; feature PRs never edit this file.
+
+### Shipped
+
+- **Evaluation harness and method (test scope, no production code).** `QualityEvaluation*`, the blind export, the review plan, the review-batch builder and the offline gate report under `backend/src/test/java/com/studysnap/backend/benchmark/` (PR #1536; PR #1537 fixed the batch builder so an invalid primary row marks only that arm incompletely scored). Rubric signed and pre-registered, with Amendments 1 to 4 and Addenda A to D recording every deviation.
+- **Evaluation result (2026-10-27): HOLD.** 20 Official notes, five generation arms plus stock, 1,600 blind questions, Codex primary scoring, 497 items independently re-scored by cold Opus reviewers, 144 disagreements adjudicated; about $3.03 spent of the $4 cap. **Sol, proposed against current prompt: G1 PASS, G2 FAIL (distractors 3.59 against 3.75), G3 FAIL (mode alignment 3.81 against 4.23), G4 PASS, G5 FAIL, G6 to G8 PASS.** The proposed wording reduced giveaways but made questions easier. Both models must pass, so HOLD; Luna's proposed arm was deliberately not interpreted (a whole-arm re-review could not change the outcome). **The prompt change (item 3) is not shipped and the production prompt is unchanged.**
+- **Product finding for the owner:** on today's prompt Luna (free plan) scored distractors 3.23, mode alignment 3.36, a 10.5% giveaway estimate and 5 confirmed critical defects, against Sol's 3.75, 4.23, 4.5% and 0 (internal only; customer copy still never names a model). Full report: `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md`.
+- **Not shipped:** item 3 (prompt change, gate failed), item 4 (measurement log, awaiting the owner's decision), and no deploy of any kind.
+
+### Signoff record (2026-10-28)
+
+- **Scope completeness.** Item 1 shipped: the harness (`backend/src/test/java/com/studysnap/backend/benchmark/`, PR #1536) and the batch-builder fix (`QualityReviewBatches.java`, PR #1537). Item 2 done: pre-registration `docs/claude-plans/2026-10-27-challenge-quiz-quality-preregistration.md` and gate report `gates.json` (SHA-256 `fc6875e7…`), outcome HOLD. Item 3 **not shipped**: the gate failed; it lives on as the candidate row "Challenge Quiz Luna-first quality follow-up" in the Backlog. Item 4 **not built**: HOLD allows no measurement-only deploy without separate owner approval (owner chose to leave it unbuilt, 2026-10-28). Item 5 done.
+- **Feature-doc drift.** No feature doc was touched and no behavior changed (`git diff origin/main...HEAD` shows nothing under `backend/src/main` or any frontend source), so there is nothing to re-read; `docs/features/challenge-quiz.md:238` is unchanged because the prompt change did not ship.
+- **Backlog closure.** The Challenge quality row is marked EVALUATED: HOLD with the evidence; a new candidate row indexes the follow-up; Phase 2, Phase 3 and the Board/Long Exam deferral rows are unchanged.
+- **Checkpoint gate.** Nothing shipped ahead of its own evidence (no production change), so no new `[CHECKPOINT]` row is owed. Existing checkpoints are unchanged (2026-10-29 cutoff variable, 2026-11-01 cache and kill read, 2026-11-08 and 2026-11-09 model reads).
+- **Pre-signoff check.** The "delivery introduced a defect the same session then fixed" trigger fired (the batch-builder abort and a wrong "all rows valid" claim, both corrected in the pre-registration). One scoped cold claim-checker (Sonnet) tried to falsify 8 claims of the evaluation report against the real files: **all 8 held**; it found four wording imprecisions in the report, all corrected. Mutation checks were run on the late harness rounds (round 5: 7 mutants, round 6: 5 mutants) and every mutant was killed by a named test.
+- **Known limitations, carried.** 20 notes and one start per arm; model reviewers only, no human review; reviewer isolation by scratch directory and self-report, weaker than the command-transcript audit used for the primary pass; G5 is harsh by construction and should be reworded before a rerun; the test cannot attribute the drop to Change A, B or C; Luna's proposed arm (B2) was deliberately not interpreted and the 300-item whole-arm re-review was not run (it could not change the outcome); the `gpt-4.1-mini` arm is incompletely scored (2 rows) and is no gate's arm; the orchestrator once printed Luna's failed-gate list it had said would stay uninterpreted; **the 20% missing-telemetry threshold is hard-coded (`>.20`) in `QualityGateReport.java:563` and not a named constant in `QualityGateParameters`** as the Round 3 acceptance criteria required (it matches the signed value and changed no verdict).
+- **Handoff.** `releases/v0.176.0` is closed and **not merged to `main`** (no production change; the deploy gate and the unexplained Postgres kills stand). **A held draft PR keeps the diff visible: #1538 (`DO NOT MERGE`, draft so it cannot be merged by accident; mergeable against `main` at 2026-10-28).** The next release is cut from this branch, as `v0.175.0` was cut from `v0.174.0`. Private evaluation data stays git-ignored under `backend/target/llm-benchmark/` with a backup at `~/quality-eval-v0176-backup/`; **do not run `./mvnw clean` until it is archived.**
+
 ## v0.175.0 - Quiz Ready
 
-**Status: Released** (kicked off 2026-10-20, signed off 2026-10-25 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
-(`e539b045`, signed off, NOT yet on `main`)**, the same stacking pattern `v0.174.0` used on `v0.173.0`.
+**Status: Released and deployed** (kicked off 2026-10-20, signed off 2026-10-25 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
+(`e539b045`)**, the same stacking pattern `v0.174.0` used on `v0.173.0`. **Merged to `main` as #1533 (`06a09f7c`) on 2026-10-26;
+Render live at 14:58:47Z, Vercel at 15:02:51Z.** `v0.174.0` had been squash-merged to `main` with a tree identical to `e539b045`, so #1533 carried a
+no-op `ours` merge (`bff16fbd`) to clear the conflict.
 Anything that changes on `releases/v0.174.0` after this cut is merged forward.)
 
 Theme: a learner who starts a Challenge Quiz is never stuck watching a spinner or racing a timer that
@@ -11,8 +134,9 @@ started without them. The quiz is prepared in the background, waits on a "Your q
 starts only when they press Start Quiz. Challenge also moves to each plan's model, behind a guard that
 catches wrong answer keys.
 
-**⚠️ MERGE GATE:** this release's PR merges to `main` only after `v0.174.0`'s PR #1512 has merged (itself
-held behind `v0.173.0`'s #1505 and two checkpoints).
+**MERGE GATE (discharged 2026-10-26):** this release's PR merged to `main` only after `v0.174.0`'s PR #1512 (2026-10-25), which in turn
+followed `v0.173.0`'s #1505 (2026-10-25). The owner overrode #1512's "wait for the cache read" hold on 2026-10-25; the cost is attribution,
+recorded in the cache checkpoint row in `ROADMAP.md`.
 
 **Sources, all owner-approved:**
 - plan: `docs/claude-plans/2026-10-19-v0175-challenge-quiz-preparation-plan.md` (Feature Planner; §1
@@ -619,8 +743,9 @@ prepared quiz" line on secondary notes.
 
 ## v0.174.0 - Enhanced Generation
 
-**Status: Released** (signed off 2026-10-19; **merge to `main` HELD behind the v0.173.0 gates, so NOT yet
-deployed, and the new models go live only with the owner's post-merge Render switch**; see the merge-day
+**Status: Released** (signed off 2026-10-19; **merged to `main` as #1512 (`cd2d55f3`) on 2026-10-25 and live on
+Render at 2026-10-25T15:56:25Z; the owner has set `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM` on Render (reported 2026-10-26; 25 of 25 Study
+Packs since the deploy ran on `gpt-6.1-sol`)**; see the merge-day
 handoff in the signoff record below. Kicked off 2026-10-16 on `releases/v0.174.0`, **cut from
 `releases/v0.173.0` (`7d1407a1`, signed off, NOT yet on `main`)** — owner decision 2026-10-16, the same pattern `v0.111.0`
 and `v0.120.0` used. Anything that changes on `releases/v0.173.0` after this cut is merged forward.)
@@ -1029,7 +1154,7 @@ ADMIN carve-out.
 due 2026-12-15.
 ## v0.173.0 - Cached Catalog
 
-**Status: Released** (signed off 2026-10-16; **merge to `main` HELD for the 2026-10-22 gate, so NOT yet deployed**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
+**Status: Released** (signed off 2026-10-16; **merged to `main` as #1505 (`ff2ea964`) on 2026-10-25 after the 2026-10-22 gate read (partial); the first deploy failed on a database kill, and the cache has been live since 2026-10-25T01:47:11Z**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
 (`3961383e`), which is `main` after `v0.172.0` merged as #1501 plus one docs commit.)
 
 Theme: take the remaining repeat load off the production database's Explore discovery reads by
@@ -1530,218 +1655,3 @@ endpoint. `payer_email` is read-only existing data, not collected anew.
 - **The `v0.166.0` Hikari checkpoint (`due 2026-10-14T11:19:29Z`) was read at this kickoff and found a
   THIRD long-hold mechanism `v0.166.0` did not catch** — see `ROADMAP.md`'s Backlog Index for the full
   read and the new row it produced. Not in this release's scope; flagged to the owner as a candidate.
-
-## v0.170.0 - Study Journey, Closed
-
-**Status: Released**
-
-Theme: close out the Study Journey Purpose / Learner Goal architecture — the last discovery item
-(Public Note → Official Review Set) plus multi-goal exam support, both shipping on explicit owner
-overrides of their own evidence gates rather than waiting for either to clear naturally. **Renamed
-same-day from "Public Note → Official Review Set Discovery"** when the owner expanded scope to include
-item 2 below; nothing had deployed yet.
-
-### Planned Scope
-
-1. **Public Note → Official Review Set link (RC-5, backend + frontend). SHIPPED — see below.** On the
-   public note detail page (`/public/library/[subject]/[slug]`), when the note sits in a qualifying
-   Official Review Set — top-level, a true source (not an adopted copy), owned by a `UserRole.ADMIN`
-   account — show a callout linking to `/collections/published?highlight={id}`, which scrolls to and
-   expands that set's existing `PublicStudyPlanCard`. Reuses the existing signed-out intent-cookie
-   handoff (`discovery-intent.ts`), widened to accept this new return path. 3 new analytics events
-   (`PUBLIC_NOTE_OFFICIAL_SET_LINK_CLICKED/_PREVIEWED/_ADOPT_CLICKED`). No new migration — the lookup
-   uses the existing `idx_note_collection_items_note_id` index and runs inside
-   `NoteService.mapToPublicDetail`'s existing read-only transaction.
-
-   **⚠️ Kicked off ahead of the `v0.166.0` Hikari checkpoint clearing (owner override, 2026-10-13).**
-   This item's own gate — stated at the `v0.169.0` kickoff — was two stability checkpoints:
-   `v0.165.0`'s (due 2026-10-12, closed clean via PR #1489) and `v0.166.0`'s Hikari long-hold checkpoint
-   (`[CHECKPOINT — due 2026-10-14T11:19:29Z, backstop 2026-10-21]`, `ROADMAP.md`'s Backlog Index), which
-   was **not yet due** at kickoff — roughly a day out. Codex's implementation (audited and committed as
-   `dadac05a` on `feat/v0.170.0-public-note-review-set-link` before kickoff) adds exactly one new
-   public-note-page database lookup, which is the class of load the Hikari checkpoint exists to watch
-   for. **⚠️ Not actually blocking by the time this release reaches `main`**: nothing in this change
-   deploys until `releases/v0.170.0` merges, and the checkpoint's own due date (2026-10-14T11:19:29Z) is
-   earlier than this release — a 2-item release — is likely to sign off. **Read the checkpoint at
-   signoff, before the `main` merge, not just at this kickoff** — the override may turn out to have cost
-   nothing in practice. This release owes its own `[CHECKPOINT]` row at signoff either way, reading the
-   post-merge `Apparent connection leak` trace rate for any new attribution to this lookup, distinct from
-   `v0.166.0`'s own two traced methods (`PublicProfileController`/`NoteCollectionController`).
-
-2. **Multi-goal exam support (backend + frontend). SHIPPED — PR #1491, commit `04435dde` on
-   `releases/v0.170.0`.** The owner's 5
-   direction points, recorded verbatim at the `v0.169.0` kickoff (2026-10-10):
-
-   1. **Storage — a normalized join table**, one row per (user, exam goal), with one goal flagged
-      active per user. No redundant active-state storage. Existing single `studyGoal` values migrate
-      losslessly; current users keep their existing goal, now active.
-   2. **Dashboard & nudges — the active goal only** drives general dashboard nudges; other goals stay
-      visible/accessible but don't compete for nudge real estate. **Exception:** post-session next
-      steps must reflect the actual session/Study Journey context even when it differs from the active
-      goal.
-   3. **EXAM/SUBJECT exclusivity — unchanged.** Multiple exam goals may coexist with each other; a
-      subject focus still can't coexist with any exam goal. Profile-preference rule only, never a
-      Note/Study Plan access restriction.
-   4. **Exam-hub signup intent — add and activate**, never silently replace other exam goals. Clear
-      disclosure before the intent flow overwrites an existing subject focus. Signing up via an Exam
-      Hub must NOT auto-adopt any Review Set.
-   5. **Picker — a real goal-management surface** in Profile's Study Focus (add/remove/set-active).
-      Removing a goal must never delete adopted content or assessment history.
-
-   **Validated feasible against current code before any Codex prompt**, per the owner's own
-   instruction recorded above: `docs/claude-plans/2026-10-12-multi-goal-exam-support-feasibility-validation.md`
-   (Feature Planner, 2026-10-12). Technical verdict: every point is buildable, no blocking
-   contradiction found. **4 follow-up decisions made 2026-10-13, at this scope expansion, resolving the
-   validation document's §8 open questions:**
-   - Adding an additional exam goal while one is active: the new goal becomes the **sole** active goal
-     (deactivates the previous one) — reads point 1's "one goal flagged active" literally.
-   - Removing the currently-active goal when other adopted goals exist: **auto-promotes** another
-     adopted goal to active (mirrors `NoteCollectionService.reassertPrimaryInvariant`'s existing
-     pattern for Study Plan adoption — same shape, not the same code, since that operates on
-     `NoteCollectionEntity` not exam slugs). **Tie-breaker when more than one goal is eligible for
-     promotion: the most recently added remaining goal, then lowest `id`.**
-   - Disclosure before a silent goal-clearing write is required in **both** directions — not just
-     "exam-intent flow overwrites a subject focus" (point 4's literal wording) but also "setting a
-     subject focus clears every adopted exam goal" (the reverse, previously unaddressed). Reuses the
-     existing `AppModal`/`ProfileTypeSwitchModal` confirm-modal pattern; no new UI primitive.
-   - **Bundled into this same work, not deferred:** `GoalPromptBanner`'s confirmed-live defect (gates
-     only on `studyGoal`, never checks `focusSubjects`, so a user with subject focus sees "no goal yet"
-     and one click silently wipes their `focusSubjects` with zero disclosure — verified against
-     production, 1 of 426 real users is in exactly this state today) and its separate dismissal-state
-     bug (component-local, re-shows on reload). PR #1488 (which had backlogged this defect for a future
-     release) is closed unmerged as superseded — fixing it now, not later.
-
-   **Applied defaults, per the validation document's own recommendation (low-stakes, argued well
-   there, not re-litigated here):** the 3 legacy free-text `studyGoal` rows are left untouched (adding
-   any active exam goal still clears the legacy value, closing the exclusivity gap this would
-   otherwise open); "SUBJECT focus" in point 4 means `focusSubjects`, not legacy free-text; a single
-   shared "resolve active exam goal(s)" method is introduced, consolidating 4 call sites
-   (`AuthService`, `ProgressReportService` ×3, `PostSessionNextStepService`) that currently each
-   independently re-derive "is this an EXAM goal" — closing a drift risk `ExamGoalConfig.java:38-43`'s
-   own comment already documents one prior incident of.
-
-   **⚠️ Kicked off ahead of the `[CHECKPOINT — due 2026-12-07]` population gate clearing — explicit
-   owner override, 2026-10-13.** That checkpoint's own stated trigger ("re-open only if the
-   ≥2-distinct-goal population grows past a handful") has **not** been met: still 2 of 426 users,
-   unchanged since 2026-10-09, re-confirmed 2026-10-12. This is a deliberate reversal of three prior
-   owner decisions (2026-10-08, -09, -10) that each declined to build this on the same number. **This
-   release owes its own `[CHECKPOINT]`** at signoff, tracking whether the population actually grows now
-   that the capability exists — the original checkpoint measured whether to build it; this one measures
-   whether building it mattered.
-
-   **Verification note:** this item adds a data-mutating migration, changes API/export response
-   shapes, and touches profile, dashboard, post-session, exam-hub, and GDPR-export code — clears the
-   bar for at least one scoped cold falsification agent at signoff per the pressure-test gate, and is a
-   candidate for the full 3-agent pressure test given the permission-adjacent (goal/content exclusivity)
-   surface. **Decided at signoff:** one scoped cold agent (fresh context, `opus`, read-only, instructed
-   to falsify 7 named claims), not the full 3-agent test — `git diff --name-only` on both PRs found no
-   shared Java method between PR #1490 and PR #1491 (3 shared files, disjoint lines each), and the
-   goal/content exclusivity surface is a profile-preference rule, never an access-control boundary (no
-   cross-user read, no money/quota change), so the full-test trigger does not fire. Findings below.
-
-   **Audited before commit** against the Codex prompt's full acceptance-criteria list: migration
-   backfill replay test against seeded (non-empty) data; a real-Postgres `@SpringBootTest` +
-   `@Testcontainers` test proving the partial unique index exists and the actual Hibernate flush order
-   holds under add/remove/idempotent-re-add (not H2, which has no such index); `AccountPurgeService`
-   deletes `user_exam_goals` rows rather than sentinel-reassigning (the table enforces per-user
-   uniqueness); GDPR export (schema 1.3) includes every adopted goal, not just the active one; the
-   pre-existing `PUT /users/profile/goal` endpoint kept its request/response contract unchanged for
-   un-upgraded clients; `EXAM_GOAL_ADDED/ACTIVATED/REMOVED` confirmed firing from real user actions (not
-   just enum membership), verified by a test asserting the call. One false-positive raised and reverted
-   during audit: "CELE" in `progress-focus-guide.tsx` is the correct, pre-existing Civil Engineering
-   exam acronym (`ExamGoalConfig.java`), not a typo. Backend: 2,672 tests/0 failures (incl. the
-   Testcontainers native-query and real-Postgres flush-order harnesses). Frontend: 231/231 suites,
-   2,642/2,643 tests (1 pre-existing unrelated skip), `tsc --noEmit` clean, `npm run lint` clean.
-
-Anti-drift: no `ProfileType` change, no recommendation-engine change, no Degree Journey/Academic
-Term/ConceptHealth change, no change to `resolvePlanPremiumExamMode`/`EXAM_MODES.md`, no change to
-`UserEntity.examDate`'s existing single-valuedness (a known, separate, out-of-scope gap).
-
-**Explicitly excluded, unaffected by either override above:** the Degree Journey catalog (Phase C) —
-its own dependency (≥2 published Years) is a content-authoring gap no decision overrides; exactly one
-BSCS Year exists, unpublished — and Phase D (learner curriculum customization), not yet scoped, deferred
-pending real adopters. Neither is "Study Journey" work this release can close by deciding to.
-
-### Shipped
-
-- **Public Note → Official Review Set link** (PR #1490, commit `dadac05a`). Backend: new
-  `NoteCollectionItemRepository.findOfficialReviewSetRootForNote` native query (admin-owned,
-  top-level, true-source root; a PUBLIC root collection is never filtered on `published_at`, a child
-  collection and its item both require one — matching `listPublic`/`getPublic` exactly), wired into
-  `NoteService.mapToPublicDetail`; `PublicNoteDetailResponse` gains `officialReviewSetId`/
-  `officialReviewSetTitle`; 3 new `AnalyticsEventType` values. Frontend: `PublicNoteOfficialSetLink`
-  callout on the public note detail page linking to `/collections/published?highlight={id}`;
-  `PublicStudyPlanCard` widened with a `discoverySource: "public_note"` branch and a
-  `defaultPreviewOpen` prop; `PublishedPlansPageClient`'s "Browse All" grid reads `?highlight=` to
-  scroll to and auto-expand the matching card; `discovery-intent.ts`'s signed-out return-path
-  allowlist widened (`isDiscoveryReturnPath`, renamed from `isExplorePath`) to accept
-  `/collections/published` paths, with an adversarial test (`/collections/published-evil`).
-  Audited before commit: fixed a misplaced code comment and generic "Collection" copy corrected to
-  "Review Set" (`getCollectionLabels(null)` default was wrong here — this is a fixed product concept,
-  not a viewer-varying one). **Known limitation, non-blocking:** the "Recommended" grid on
-  `/collections/published` (course/program-filtered, authenticated-only) doesn't receive the
-  highlight/`defaultPreviewOpen` wiring that the "Browse All" grid does — acceptance criteria are
-  still met since Browse All is always the unfiltered superset and always renders the target plan.
-  Backend: 2,659 tests/0 failures (incl. the Testcontainers native-query Postgres harness, 46 queries
-  now PREPAREd). Frontend: 230/230 suites, 2,634/2,635 tests (1 pre-existing unrelated skip).
-
-- **Multi-goal exam support.** V155 moves valid scalar exam slugs
-  into `user_exam_goals`, preserving legacy free-text values; Profile can add, remove, and activate
-  goals, and Dashboard uses the active goal while post-session nudges follow the completed note's
-  adopted-goal context. Subject focus and exam goals remain exclusive with confirmation before
-  either direction clears existing preferences. The goal prompt now respects subject focus and
-  persists generic dismissal. Account data export schema 1.3 includes every goal. **Frontend and backend must deploy
-  together.** After V155 runs, rolling the backend back to v0.169.0 is **not safe for the 16 migrated
-  users**: their scalar `studyGoal` is empty and that backend cannot read the retained rows in
-  `user_exam_goals`. At signoff, add a post-ship population checkpoint to measure whether the
-  ≥2-distinct-goal cohort grows beyond the 2-of-426 baseline; this release shipped ahead of that
-  evidence gate by owner decision. Audited before commit against the Codex prompt's acceptance
-  criteria: migration backfill replay test, real-Postgres flush-order test (partial unique index
-  verified present), purge deletes rows (not sentinel-reassigned), GDPR export includes every
-  adopted goal, `PUT /users/profile/goal` kept contract-compatible for un-upgraded clients, and new
-  `EXAM_GOAL_*` analytics events confirmed firing (not just enum members) via frontend tests.
-  Backend: 2,672 tests/0 failures (incl. the Testcontainers native-query Postgres harness).
-  Frontend: 231/231 suites, 2,642/2,643 tests (1 pre-existing unrelated skip), `tsc --noEmit` clean,
-  lint clean. **Known limitations, found by the pre-signoff falsification agent, none blocking:**
-  (1) `PUT /users/profile/goal`'s `studyGoal: null` branch now also empties `focusSubjects`
-  (`AuthService.java:605-621`) — a deliberate "full reset" per the Codex prompt, but a genuine
-  behavior change from `v0.169.0` (null used to leave `focusSubjects` untouched); an un-upgraded
-  client sending `null` during the brief deploy-rollover window sees this new behavior before its own
-  UI catches up. (2) V155 does not special-case a legacy row holding both a valid exam-slug
-  `studyGoal` and non-empty `focusSubjects` — confirmed via a read-only production query at signoff
-  (2026-10-13) that 0 of 426 users are in that state today, so the gap is theoretical, not live; if it
-  ever becomes non-zero, such a migrated row would hold an active goal and focus subjects
-  simultaneously, violating the new exclusivity invariant. (3) The migration's SQL `trim()` is
-  whitespace-only, narrower than `ExamGoalConfig`'s Java-side slug normalization — a value like
-  `"ale\n"` would not migrate and falls back harmlessly to legacy scalar handling via the resolver.
-  (4) The Official Review Set predicate (Item 1) does not exclude a `PENDING_DELETION` admin
-  account's collection until the account is actually purged. (5) During the deploy rollover, an old
-  backend instance can still write a stale scalar `studyGoal` for a user who already has an active
-  `user_exam_goals` row; the resolver prefers the row, so the stale write is silently ignored rather
-  than losing data, and the window closes once rollover completes.
-
-- **Two carried-along process/doc fixes (PR #1487, PR #1489).** Both had been open against `main`
-  since before this release and were blocked there by the same `require_extra_approval_for_unattributed_changes`
-  ruleset rule as this release's own signoff PR; retargeted to `releases/v0.170.0` and merged here so
-  they ride to `main` with the rest of this release rather than sitting blocked indefinitely.
-  **PR #1489** closes the `v0.165.0` discovery-rail checkpoint on its due date: zero `server_failed`
-  restarts in the full 7-day post-deploy window (down from a ~7/week baseline) — the fix worked. This
-  is the checkpoint Item 1's own kickoff text above cites as "closed clean via PR #1489"; that claim
-  is accurate as of this merge, not before it. **PR #1487** documents a `check-deploys.sh`
-  false-positive mode found during `v0.169.0`'s deploy: a real, successful Vercel deployment that
-  never appeared in GitHub's Deployments API, so a future Vercel "DRIFT" verdict from that script
-  should be cross-checked against the actual Vercel dashboard before anyone acts on it. Comment-only
-  change to the script; no logic changed.
-
-## Archived releases
-
-- `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
-- `v0.162.0 — Say the Value` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
-- `v0.160.0 — Study Plans by Semester` (Released) — Degree Study Journeys Phase A0/A: academic-term placement on Subject Plans, Year-page term grouping, compact Subject cards, and the curriculum-pipeline `academic_term` column; moved at the `v0.166.0` kickoff.
-- `v0.161.0 — Scannable Study Plans` (Released) — Degree Study Journeys Phase B: Study Plan Sections collapsed by default, an `Expand all`/`Collapse all` toggle, `Not started` wording at Section and plan grain; plus a pre-signoff pressure-test fix making `adoptGoal` adopt every published-but-private child instead of requiring `PUBLIC`. Moved at the `v0.167.0` kickoff.
-- `v0.164.0 — Computing` (Released) — ratified `Computing` as a 13th Domain Context (ADR-001 amendment), shipped the enum/frontend value, swept the context/spec docs; carries a `[CHECKPOINT — due when BSCS Year 1 Computing authoring reaches 10+ classified notes, backstop 2026-12-29]`. Moved at the `v0.170.0` kickoff.
-- `v0.165.0 — Bounded Discovery` (Released) — closed the public-note discovery-rail DB-saturation restart mechanism (Leg B) and shipped three R4-pilot generation-quality fixes (G1, G2b, G5); carries its own now-closed `[CHECKPOINT — due 2026-10-12T15:24:27Z]` (fix worked, 0 restarts). Moved at the `v0.171.0` kickoff.
-- `v0.166.0 — Measured Twice` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.172.0` kickoff.
-- `v0.167.0 — Study Journey Purpose` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.173.0` kickoff.
-- `v0.168.0 — Free Quota, Fairly Metered` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.174.0` kickoff.
-- `v0.169.0 — Study Journey, Continued` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.175.0` kickoff.
