@@ -36,7 +36,7 @@ impossible.
 
 **NoteLib** (rebranded from StudySnap — db/package names still use `studysnap`) is a notes-first study workspace. Users capture notes, generate AI-powered Study Packs, and practice with quizzes. Database schema uses the old name; do not rename unless explicitly asked.
 
-Current version: **v0.176.0 — Challenge Quiz Quality** (In Progress, kicked off 2026-10-27 on `releases/v0.176.0`, cut from `main` at `06a09f7c` after `v0.175.0` merged as #1533.)
+Current version: **v0.176.0 — Challenge Quiz Quality** (Released 2026-10-28 on `releases/v0.176.0`, **NOT merged to `main`; deploy on HOLD**; kicked off 2026-10-27, cut from `main` at `06a09f7c` after `v0.175.0` merged as #1533.) **Result: the owner-run blind evaluation was HOLD (Sol fails G2, G3 and G5), so the Challenge prompt is UNCHANGED, no measurement log was built and nothing is deployed; the release delivers the evaluation harness and a full pre-registered record. Report: `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md`. The next release is cut from this branch.**
 
 **Scope:** improve newly generated Challenge Quiz questions with a fixed cognitive-demand standard, realistic distractors and source-grounded explanations in `challenge-quiz-developer.txt` (Feature Planner's approved Phase 1), **gated by an owner-run blind evaluation under a $4 generation cap** whose gates G1–G8 judge Luna and Sol separately; plus a test-scope evaluation harness and a privacy-safe measurement log. Item list, gates, tiers and the readiness checklist: `RELEASES.md` v0.176.0 and `docs/claude-plans/2026-10-26-challenge-quiz-quality-scope.md` (proposal: `docs/claude-plans/2026-10-26-challenge-quiz-quality-phase1-proposal.md`).
 

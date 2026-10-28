@@ -3,7 +3,7 @@
 **Outcome under the signed rubric: HOLD.** The proposed prompt wording is **not** shipped, no production prompt changed, and nothing is deployed. Specification: `docs/claude-plans/2026-10-27-challenge-quiz-quality-scoring-rubric.md` (signed 2026-10-27). Record of every fixed value, deviation and hash: `docs/claude-plans/2026-10-27-challenge-quiz-quality-preregistration.md`. This report **recommends**; it authorizes no change.
 
 ## 1. What was tested
-The prompt the owner approved on 2026-10-27 (Changes A, B and C, one file, `challenge-quiz-developer.txt`) against today's production prompt. 20 Official notes (10 `COLLEGE`, 10 `BOARD_EXAM_REVIEW` by each note's own level, 12 strata, 4 quantitative), 15 `hard` questions per start, one start per note per arm, five generation arms (current prompt on `gpt-4.1-mini`, Luna and Sol; proposed prompt on Luna and Sol) plus about 100 stock template questions. 1,600 questions, blind: Codex scored all of them against the generator's inputs and the full note; cold Opus reviewers re-scored every flagged item plus a stratified sample of unflagged items (497 items); 144 disagreements were adjudicated by two fresh reviewers. Spend about $3.03 by the meter, under the $4 cap.
+The prompt the owner approved on 2026-10-27 (Changes A, B and C, one file, `challenge-quiz-developer.txt`) against today's production prompt. 20 Official notes (10 `COLLEGE`, 10 `BOARD_EXAM_REVIEW` by each note's own level, 12 strata by label, two of which, the two mathematics notes, differ only by letter case; 4 quantitative), 15 `hard` questions per start, one start per note per arm, five generation arms (current prompt on `gpt-4.1-mini`, Luna and Sol; proposed prompt on Luna and Sol) plus about 100 stock template questions. 1,600 questions, blind: Codex scored all of them against the generator's inputs and the full note; cold Opus reviewers re-scored every flagged item plus a stratified sample of unflagged items (497 items); 144 disagreements were adjudicated by two fresh reviewers. Spend about $3.03 by the meter, under the $4 cap.
 
 ## 2. Result: Sol (the premium model), proposed against current prompt, 20 paired notes
 
@@ -13,8 +13,8 @@ The prompt the owner approved on 2026-10-27 (Changes A, B and C, one file, `chal
 | G2 distractor plausibility | mean ≥ 4.0 and +0.3 | 3.59 | 3.75 | **FAIL** (went down) |
 | G3 mode alignment | mean ≥ 4.0 | 3.81 | 4.23 | **FAIL** |
 | G4 serious giveaways | estimate ≤ 5%, no recurring pattern | 2.7% (upper limit 7.3%) | 4.5% with a recurring `ABSOLUTE_WORDS` pattern | PASS for B3 |
-| G5 formats | no format below 3.5 | MCQ cognitive demand 2.98 | TRUE_FALSE 3.48 and 2.48 | **FAIL** |
-| G6 collateral, G7, G8 | within tolerance, 15 of 20 paired | within tolerance, 20 of 20 | | PASS |
+| G5 formats | no format with 20+ items below 3.5 on any dimension | MCQ cognitive demand 2.98 | (not gated for the current arm; TRUE_FALSE sits at 3.48 and 2.48) | **FAIL** |
+| G6 collateral, G7, G8 | G6 and G7 within tolerance; G8 at least 15 of 20 paired notes | within tolerance; 20 of 20 paired | | PASS |
 
 - **What moved:** the proposed prompt removed the recurring absolute-word giveaway pattern and lowered the giveaway estimate. But reviewers scored its questions **easier and less demanding**: cognitive demand fell from 3.47 to 2.90 and mode alignment from 4.23 to 3.81, and distractors did not improve. That is the opposite of what the prompt was meant to do.
 - **Per level (descriptive only, 10 notes each):** `BOARD_EXAM_REVIEW` distractors -0.14 and mode alignment -0.34; `COLLEGE` mode alignment 3.75 against 4.25. No level shows a hidden gain.
@@ -37,7 +37,7 @@ The learner's feedback ("distractors are easily spotted", "too easy") matches th
 ## 4. Limits, stated plainly
 - **Small sample.** 20 notes, one start per arm. A few notes can move a mean; per-level reads (10 notes) are descriptive only. The gates are thresholds, not proof.
 - **Reviewers are models.** Codex scored everything; Opus re-scored 497 items; there was no human review. Reviewers agreed on only about 71% of re-scored items by the harness's own disagreement rule (144 of 497 needed adjudication).
-- **G5 is harsh by construction.** It fails if any format with 20 or more items scores under 3.5 on any dimension, including the descriptive cognitive demand; short true/false items score low on it by nature, so the **current** Sol prompt also fails G5. G2 and G3 failed independently, so the verdict does not depend on G5, but the rule should be revisited before any rerun.
+- **G5 is harsh by construction.** It fails if any format with 20 or more items scores under 3.5 on any dimension, including the descriptive cognitive demand, which G3 itself does not gate. Short true/false items score low on it by nature: the current Sol arm's TRUE_FALSE items (25) sit at 3.48 mode alignment and 2.48 cognitive demand, below the same line, although the calculator applies G5 to the proposed arm only, so that is an observation and not a gate result. G2 and G3 failed independently, so the verdict does not depend on G5, but the rule should be revisited before any rerun.
 - **The test cannot attribute the drop.** It compared the whole of Changes A, B and C together with one prompt, so it cannot say which change made questions easier.
 - **Luna's proposed arm is uninterpreted** (see section 2), and the `gpt-4.1-mini` arm is incompletely scored (two rows, see below) and is no gate's arm.
 
