@@ -127,7 +127,8 @@ describe("ExamHubPage", () => {
       "Teacher Certification",
     ]);
     expect(EXAM_HUBS.cpale.coursePrograms).toEqual(["Accountancy"]);
-    expect(generateStaticParams()).toEqual([{ slug: "ale" }, { slug: "pnle" }, { slug: "let" }, { slug: "cpale" }, { slug: "ce" }]);
+    // v0.178.0 Step 0: empty on purpose, so a production build does not fetch every exam program's catalog.
+    expect(generateStaticParams()).toEqual([]);
   });
 
   it.each([

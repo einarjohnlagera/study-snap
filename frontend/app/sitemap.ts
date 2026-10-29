@@ -5,6 +5,11 @@ import { learnGuides } from "@/lib/learn-guides";
 import { getPublicSubjectEntries, getServerPublicNotes, SUBJECT_PAGE_INDEX_THRESHOLD } from "@/lib/server-public-notes";
 import { absoluteUrl } from "@/lib/site-metadata";
 
+// ⚠️ DYNAMIC ON PURPOSE (v0.178.0 Step 0): a statically generated sitemap walks the whole public catalog (about 41
+// pages of 50 notes) against the production API at every build. Rendered on request, the walk is bounded by the
+// fetch cache (`revalidate: 300` in server-public-notes.ts) instead.
+export const dynamic = "force-dynamic";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let publicNotes: Awaited<ReturnType<typeof getServerPublicNotes>>;
   try {
