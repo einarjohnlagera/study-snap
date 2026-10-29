@@ -37,11 +37,11 @@ The More Filters sheet includes a `Study Pack Ready` boolean toggle. Applied sta
 
 ## Temporary public API diagnostics (v0.178.0)
 
-The backend records one `PUBLIC_API_DIAGNOSTICS` line per non-empty UTC minute for public GET/HEAD traffic, plus an OPTIONS count. The aggregate includes request and anonymous/authenticated counts, exact status and path-group histograms, query **names** with counts, top user agents and normalized listing tag slugs, distinct anonymous /24 or /48 client networks, and the X-Forwarded-For entry-count distribution (0, 1, 2, 3+) and presence counts for True-Client-IP and CF-Connecting-IP. A request with any Authorization header contributes only to the total and status histogram. The client key is truncated True-Client-IP when present, otherwise truncated **leftmost** X-Forwarded-For; this key is possibly forgeable. The correct client-address header behind Render is still unverified.
+The backend records one `PUBLIC_API_DIAGNOSTICS` line per non-empty UTC minute for public GET/HEAD traffic, plus an OPTIONS count. The aggregate includes request and anonymous/authenticated counts, exact status and path-group histograms, query **names** with counts, top user agents and normalized listing tag slugs, distinct anonymous /24 or /48 client networks, and the X-Forwarded-For entry-count distribution (0, 1, 2, 3+) and presence counts for True-Client-IP and CF-Connecting-IP. A request with any Authorization header contributes only to the total, the status histogram and the per-minute rate that gates sampling. The client key is truncated True-Client-IP when present, otherwise truncated **leftmost** X-Forwarded-For; this key is possibly forgeable. The correct client-address header behind Render is still unverified.
 
-Only above 30 public GET/HEAD requests in a minute, at most 20 anonymous `PUBLIC_API_SAMPLE` lines contain the path group, sorted query names, a sanitized user agent, status, and labelled truncated True-Client-IP, first and last X-Forwarded-For entries, and remote address. IPv4 is truncated to /24 and IPv6 to /48. Truncated addresses are **still personal data**. No raw query, search or other free-text value, token, cookie, request body, or full address is logged. Address truncation is done by string parsing only: a header value is never passed to a resolver, because a value like `x.attacker.example:1` is a host name to the JDK and would trigger a blocking DNS lookup. Every caller-controlled value in a line (user agent, parameter names, tag slugs) is sanitised and then double-quoted with escaping, so it cannot add or overwrite a field. Caller-controlled strings have control characters removed and fixed length limits (user agent 120, tag slug and query name 60).
+Only above 30 public GET/HEAD requests in a minute, at most 20 anonymous `PUBLIC_API_SAMPLE` lines contain the path group, sorted query names, a sanitized user agent, status, and labelled truncated True-Client-IP, first and last X-Forwarded-For entries, and remote address. IPv4 is truncated to /24 and IPv6 to /48 (an IPv4-mapped IPv6 address is reported as its IPv4 /24). Truncated addresses are **still personal data**. No raw query, search or other free-text value, token, cookie, request body, or full address is logged. Address truncation is done by string parsing only: a header value is never passed to a resolver, because a value like `x.attacker.example:1` is a host name to the JDK and would trigger a blocking DNS lookup. Every caller-controlled value in a line (user agent, parameter names, tag slugs) is sanitised and then double-quoted with escaping, so it cannot add or overwrite a field. Caller-controlled strings have control characters removed and fixed length limits (user agent 120, tag slug and query name 60).
 
-The hard per-minute bounds are 5,000 distinct client keys, 500 user-agent keys, 500 tag-slug keys, top 10 entries per reported map, and 20 samples. Excess clients report `>=cap`; excess agents and tags count under `<other>`. The diagnostic defaults to enabled and has a **2026-11-12 review-by date**; that date is a reminder, not an automatic switch. Turning it off requires a redeploy. Render service-log retention is 7, 14 or 30 days according to workspace plan; the workspace's current plan has not been verified, and the logs are not copied elsewhere. Access is limited to Render workspace members and Render MCP read tools. Remove this temporary diagnostic in the release after its client-address and caller-pattern question is answered.
+The hard per-minute bounds are 5,000 distinct client keys, 500 user-agent keys, 500 tag-slug keys, 100 query-parameter-name keys, top 10 entries per reported map, and 20 samples. Excess clients report `>=cap`; excess agents and tags count under `<other>`. The diagnostic defaults to enabled and has a **2026-11-12 review-by date**; that date is a reminder, not an automatic switch. Turning it off (`PUBLIC_API_DIAGNOSTICS_ENABLED=false`) requires a redeploy. Render service-log retention is 7, 14 or 30 days according to workspace plan; the workspace's current plan has not been verified, and the logs are not copied elsewhere. Access is limited to Render workspace members and Render MCP read tools. Remove this temporary diagnostic in the release after its client-address and caller-pattern question is answered.
 
 ## Key Files
 
@@ -716,17 +716,20 @@ creator-impact retain their existing queries.
 
 The snapshot refreshes asynchronously after 300 seconds; publish, unpublish and tag edits do not
 invalidate it. A newly published or retagged note may
-take up to five minutes to enter a tag-filtered ranked list, and engagement rank inputs may lag the
-same amount during normal refresh. A failed refresh keeps the last good generation for at most 900
+take about five minutes to enter a tag-filtered ranked list under steady traffic, and engagement rank inputs
+lag the same amount. The refresh starts when a request finds the snapshot older than 300 seconds, but that
+request is still served the old one, so after a quiet period the first requests can see data up to about 15
+minutes old (the 900-second ceiling). A failed refresh keeps the last good generation for at most 900
 seconds total, so those inputs can lag longer during a failure; after that ceiling, requests use the
-original SQL. A cold request waits at most 3 seconds for the single build. Fallback allows two
+original SQL. A cold request waits at most 3 seconds for the single build. A build that hangs (for example on a dead socket, which the 50 s transaction timeout cannot cancel) is released after 55 seconds so the single-flight slot is not held forever. A new instance builds one generation at startup (`warm-up-on-startup`, default on; tests switch it off so a background build does not hold a pooled connection during connection-counting tests). Non-hit outcomes are logged at most once a minute. Fallback allows two
 concurrent ranked requests and immediately returns HTTP 503 with `Retry-After: 3` to further callers.
 Setting `studysnap.public-library-ranking-snapshot.ttl-seconds` to `0` bypasses the snapshot and its
 bulkhead. Builds refuse more than 50,000 public notes, 50,000 entries per metric map or 250,000
 tag entries (about 25 times today's catalog; the build holds every row in memory), and refuse a suspicious empty generation.
 
-Tag-ID queries pin `force_custom_plan` within the request transaction. PostgreSQL otherwise may
-reuse a generic prepared plan after the driver's fifth execution; the measured 66–74-ID tag case
-took 8–10 ms with that plan versus about 1 ms with a custom plan. This setting is transaction-local,
+EVERY snapshot statement, tagged or not, pins `force_custom_plan` within the request transaction.
+PostgreSQL otherwise may reuse a generic prepared plan after the driver's fifth execution, which cannot size
+the array-bound joins; the measured 66–74-ID tag case took 8–10 ms with that plan versus about 1 ms with a
+custom plan, and two PostgreSQL tests (tagged and untagged) fail if the pin is removed. This setting is transaction-local,
 not a datasource-wide driver change; it also applies to the remaining statements of that request's
 transaction (for example the listing projections), which only costs a little extra planning time.
