@@ -105,3 +105,25 @@ Recorded before any item was read or scored. Hashes only; no item content was op
 
 **Next (not yet started):** the review batches, then independent Opus review of the review-order sample and every flagged or invalid item, adjudication, and a whole-arm re-review of a proposed arm on its trigger (Section 3).
 
+## 9. Addendum C: independent review record (2026-10-29, after the independent review, before any adjudicator or re-reviewer runs)
+
+**Method.** Five Opus reviewers ran in parallel under the `v0.176.0` mechanism (Amendment 3 there): fresh general-purpose agents of model Opus, one per batch, each in its own scratch folder outside the repository (`~/quality-review-v0177/r1` to `r5`) holding only its batch file and `notes.jsonl` (hash-verified byte copies; a forbidden-name scan of all five folders found nothing). Prompt: the frozen scorer instructions, sections 1 to 6 verbatim (prompt-body SHA-256 `b9ab123d58e30ac423eb11537a2838a5f7ceaed4fc4ff0657682637f5fdeece4`) plus delivery lines (read only the two files, write the answer to `review-00N.txt`, create no other file, list every file opened or written in the final message). Reviewer ids `opus-1` to `opus-5`, round `INDEPENDENT_REVIEW`.
+
+**Receipt.** Each report named only its own batch, `notes.jsonl` and its own output file; each folder held exactly those three files after the run, and every batch and notes hash was unchanged. Every pass was accepted with the harness's own validator (`QualityScoreFiles.validate` with the key's choice flag, on every row, with the expected round, reviewer id and exact batch ids): `opus-1` 100 of 100, `opus-2` 100 of 100, `opus-3` 100 of 100, `opus-4` 100 of 100, `opus-5` 65 of 65, no problems, none unparseable. No pass was void. **Observation, not a violation:** reviewer `opus-4`'s run recorded 7 tool uses against 6 for the other four; no extra file exists anywhere under the review root and its own report lists only permitted files. Reported token use per reviewer was about 126k to 143k.
+
+| Pass | Batch | Raw output SHA-256 |
+|---|---|---|
+| `opus-1` | `opus-batch-001.jsonl` (100 items) | `9f3e8e3e0c072bbce14b4da40773c1de337abb9099088daa45de6ee8e8d8ae0f` |
+| `opus-2` | `opus-batch-002.jsonl` (100 items) | `acf8d828bddb0a825db628c044c86c019b3da88c801d2fad3b4e5bd540cbffad` |
+| `opus-3` | `opus-batch-003.jsonl` (100 items) | `cb8097411b485a6e7aced926516827c26892aa853f79598a68c8fd4b2215e2a3` |
+| `opus-4` | `opus-batch-004.jsonl` (100 items) | `b2ad3fa99e6caf80931d1f743b075c802046904001e07228999ecfef64dd1205` |
+| `opus-5` | `opus-batch-005.jsonl` (65 items) | `6a59d69fcc0a943bf4f96d82a8bdfa0e463293d38bd587a4c629868e01dc4fb6` |
+
+Combined file `reviews-opus.jsonl`: 465 rows, each of the 465 batch items exactly once, round `INDEPENDENT_REVIEW`, SHA-256 `b74364f02120b3527500c5ea5b20c051d42b2f344fd1e368a1918589d689d0e7`.
+
+**Mechanical counts that follow from the harness's rules** (process counts only; no arm comparison has been read). Using the harness's own `Item.disagreement` (called by reflection, not re-implemented): the primary and independent rows differ on `critical`, on `seriousGiveaway`, or by 2 or more points on any score. **Disagreements needing adjudication: 129 of 465 reviewed items** (A1 51, A2 14, A3 17, B2 20, B3 8, stock 19; reviewed per arm A1 115, A2 69, A3 75, B2 71, B3 61, stock 74). Id list SHA-256 `66512f9a9056e06226332f58f4acb4e4a4a2ad7f0039812a9a261ca4c51bbb1e` (sorted ids, one per line). An unresolved disagreement makes that arm unable to pass.
+
+**The missed-defect escalation is triggered for B3.** The rubric's trigger is a critical defect found by an independent reviewer that the primary scorer did not flag, in a proposed-prompt arm. Items found: B3 1, stock 1, none in A1, A2, A3 or B2. The stock item does not trigger (not a proposed arm). **The entire B3 arm (300 items) therefore needs a separate independent re-review by a fresh cold reviewer before its gates are interpreted**, and under Section 3 above there is no cost-based skip. B2 has no trigger.
+
+**Next (not yet started).** (1) Adjudication of the 129 items by fresh adjudicators on the `v0.176.0` design (Amendment 4a there: seeded shuffle into batches, two earlier judgements labelled `reviewer1` and `reviewer2` in a seeded per-item order, fresh ids, scratch folders, receipt checks). (2) The whole-arm B3 re-review: all 300 items, one fresh reviewer identity, the same isolation mechanism and receipt checks. (3) Adjudication of any new disagreements the re-review produces. (4) The gate report under rubric `v2`. The owner is told the agent count and cost before each batch starts.
+
