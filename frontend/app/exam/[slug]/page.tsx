@@ -9,7 +9,7 @@ import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import type { NoteListItemResponse } from "@/lib/api";
-import { EXAM_HUB_SLUGS, getExamHubConfig, type ExamHubConfig } from "@/lib/exam-hub-config";
+import { getExamHubConfig, type ExamHubConfig } from "@/lib/exam-hub-config";
 import { buildLearnCategoryPath } from "@/lib/learn-guides";
 import {
   type BrowseSubjectEntry,
@@ -168,8 +168,11 @@ function BrowseSubjectsSection({ subjects }: Readonly<{ subjects: BrowseSubjectE
   );
 }
 
-export function generateStaticParams() {
-  return EXAM_HUB_SLUGS.map((slug) => ({ slug }));
+// ⚠️ DELIBERATELY EMPTY (v0.178.0 Step 0): prerendering the exam hubs fetched every exam program's catalog pages at
+// build time against the production API (about 125 requests). Hubs render on the first request and are cached by
+// `revalidate` above; an unknown slug still reaches `notFound()` below.
+export function generateStaticParams(): Array<{ slug: string }> {
+  return [];
 }
 
 export async function generateMetadata({ params }: ExamHubPageProps): Promise<Metadata> {

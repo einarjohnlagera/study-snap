@@ -75,7 +75,7 @@ a bounded ranked query per subject, which is not built.
 **Frontend**
 - `frontend/components/notes/public-library-page-client.tsx` — main public library client; filter state; discovery/filter mode switching; section rendering (Featured / Popular / Recent)
 - `frontend/app/public/library/page.tsx` — server component entry; passes `searchParams` to client
-- `frontend/app/public/library/[subject]/page.tsx` — SEO subject landing page (server-rendered, ISR 300s, `generateStaticParams`)
+- `frontend/app/public/library/[subject]/page.tsx` — SEO subject landing page (server-rendered on first request, ISR 300s; **`generateStaticParams` returns `[]` since `v0.178.0`**, so a production build does not prerender subjects or call the production API)
 - `frontend/lib/public-library-url.ts` — canonical URL model: `PublicLibraryUrlFilters` type, `buildPublicLibraryUrl()`, `parsePublicLibraryFilters()`; single source of truth for public library URL construction
 - `frontend/lib/public-library-discovery.ts` — frontend discovery scoring and section deduplication helpers
 - `frontend/lib/api.ts` — `listPublicNotes(params?)`, `getPublicNote(id)`, `togglePublicNoteLike(id)`
@@ -663,7 +663,7 @@ A non-interactive "More ways to study when you copy this note" block showing Cha
 
 ### J — Subject landing pages (shipped in v0.14.0)
 
-The `/public/library/[subject]` route is now a server-rendered subject landing page instead of a redirect. It ships with per-subject metadata, CollectionPage structured data, ISR at `300` seconds, and `generateStaticParams()` from `getServerPublicSubjects()`.
+The `/public/library/[subject]` route is now a server-rendered subject landing page instead of a redirect. It ships with per-subject metadata, CollectionPage structured data, ISR at `300` seconds, and `generateStaticParams()` from `getServerPublicSubjects()` (**superseded in `v0.178.0` Step 0: it now returns `[]`; see "Build-time catalog walks" below**).
 
 Final implementation:
 
@@ -685,3 +685,13 @@ When a user hits their Study Pack limit, the limit modal should offer the Public
   - Dynamic upgrade CTA from `getUpgradeCtas(currentPlan)` — navigates to `/settings?section=plans`.
 
 This fallback turns the limit hit into a *content-discovery* moment rather than a hard wall, especially valuable for Free users early in their study journey.
+
+## Build-time catalog walks (v0.178.0 Step 0)
+
+A Vercel production build calls the production API, and the prerender hooks used to walk the catalog while a deploy was in progress (measured on a counting mock backend: **393 backend requests per `next build`** to **1**). Three deliberate settings stop that, and each is pinned by a test:
+
+- `generateStaticParams` on `/public/library/[subject]` returns `[]` (`app/public/library/[subject]/page.tsx`).
+- `generateStaticParams` on `/exam/[slug]` returns `[]` (`app/exam/[slug]/page.tsx`); the five hub slugs render on first request and an unknown slug still reaches `notFound()`.
+- `app/sitemap.ts` exports `dynamic = "force-dynamic"`, so the sitemap is rendered on request; its catalog walk (about 41 pages of 50 notes) is bounded by the fetch cache (`revalidate: 300`), not by the build.
+
+Behavior is otherwise unchanged: same URLs, titles, canonicals, robots and sitemap URL set (checked on 8 URLs and a 2,274-URL sitemap). The first **cold** request (after a deploy, or when nothing is cached) pays the walk synchronously and sequentially, inside a Vercel function with a time limit (the project's limit is unverified; see `RELEASES.md` v0.178.0); after the fetch cache expires (300 s) the stale value is served while it refreshes. A cold sitemap, the `general` subject page and the exam hubs are the long walks (about 41 pages of 50 notes for the sitemap), always with `sort=recent`. Do not restore the slug lists without reading `docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md`; `getServerPublicSubjectSlugs` in `lib/server-public-notes.ts` is now unused by production code and is kept for a future cleanup.

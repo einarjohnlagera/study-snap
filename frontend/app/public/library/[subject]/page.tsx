@@ -19,7 +19,6 @@ import {
 } from "@/lib/public-note-path";
 import {
   getServerPublicNotesBySubjectSlug,
-  getServerPublicSubjectSlugs,
   SUBJECT_PAGE_INDEX_THRESHOLD,
 } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
@@ -129,16 +128,13 @@ function SubjectSection({ title, description, notes, subjectPath }: Readonly<Sub
   );
 }
 
-export async function generateStaticParams() {
-  try {
-    // Slugs come from GET /subjects?scope=public rather than from the whole note catalog. Deriving them
-    // from every public note is what made this run one of ~250 unbounded 2.5MB fetches in a single build.
-    const subjectSlugs = await getServerPublicSubjectSlugs();
-    return subjectSlugs.map((slug) => ({ subject: slug }));
-  } catch {
-    // Backend unreachable at build time (e.g. Vercel build); ISR will generate pages on first request.
-    return [];
-  }
+// ⚠️ DELIBERATELY EMPTY (v0.178.0 Step 0). Prerendering every public subject made each production build walk the
+// catalog against the PRODUCTION API (about 250 requests, the `general` subject walking the whole catalog), at the
+// same moment as a deploy, on a 0.1 CPU database. Pages now render on the first request and are cached by
+// `revalidate` above; `dynamicParams` defaults to true, so an unknown slug resolves or 404s exactly as before.
+// Do not restore the slug list without reading docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md.
+export function generateStaticParams(): Array<{ subject: string }> {
+  return [];
 }
 
 export async function generateMetadata({ params }: SubjectLandingPageProps): Promise<Metadata> {
