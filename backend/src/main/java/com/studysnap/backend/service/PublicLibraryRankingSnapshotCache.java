@@ -78,7 +78,7 @@ public class PublicLibraryRankingSnapshotCache {
 
     @EventListener(ApplicationReadyEvent.class)
     public void warmUp() {
-        if (settings.getTtlSeconds() > 0) {
+        if (settings.getTtlSeconds() > 0 && settings.isWarmUpOnStartup()) {
             startLoad();
         }
     }

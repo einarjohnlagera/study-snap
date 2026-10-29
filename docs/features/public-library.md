@@ -35,6 +35,14 @@ The generic filtered no-results state offers both `Clear filters` and `Remove la
 
 The More Filters sheet includes a `Study Pack Ready` boolean toggle. Applied state is sent as `readyOnly=true` to the paginated public-note endpoint, so readiness filtering happens before page selection and can be switched off to restore the full server-filtered list.
 
+## Temporary public API diagnostics (v0.178.0)
+
+The backend records one `PUBLIC_API_DIAGNOSTICS` line per non-empty UTC minute for public GET/HEAD traffic, plus an OPTIONS count. The aggregate includes request and anonymous/authenticated counts, exact status and path-group histograms, query **names** with counts, top user agents and normalized listing tag slugs, distinct anonymous /24 or /48 client networks, and the X-Forwarded-For entry-count distribution (0, 1, 2, 3+) and presence counts for True-Client-IP and CF-Connecting-IP. A request with any Authorization header contributes only to the total and status histogram. The client key is truncated True-Client-IP when present, otherwise truncated **leftmost** X-Forwarded-For; this key is possibly forgeable. The correct client-address header behind Render is still unverified.
+
+Only above 30 public GET/HEAD requests in a minute, at most 20 anonymous `PUBLIC_API_SAMPLE` lines contain the path group, sorted query names, a sanitized user agent, status, and labelled truncated True-Client-IP, first and last X-Forwarded-For entries, and remote address. IPv4 is truncated to /24 and IPv6 to /48. Truncated addresses are **still personal data**. No raw query, search or other free-text value, token, cookie, request body, or full address is logged. Address truncation is done by string parsing only: a header value is never passed to a resolver, because a value like `x.attacker.example:1` is a host name to the JDK and would trigger a blocking DNS lookup. Every caller-controlled value in a line (user agent, parameter names, tag slugs) is sanitised and then double-quoted with escaping, so it cannot add or overwrite a field. Caller-controlled strings have control characters removed and fixed length limits (user agent 120, tag slug and query name 60).
+
+The hard per-minute bounds are 5,000 distinct client keys, 500 user-agent keys, 500 tag-slug keys, top 10 entries per reported map, and 20 samples. Excess clients report `>=cap`; excess agents and tags count under `<other>`. The diagnostic defaults to enabled and has a **2026-11-12 review-by date**; that date is a reminder, not an automatic switch. Turning it off requires a redeploy. Render service-log retention is 7, 14 or 30 days according to workspace plan; the workspace's current plan has not been verified, and the logs are not copied elsewhere. Access is limited to Render workspace members and Render MCP read tools. Remove this temporary diagnostic in the release after its client-address and caller-pattern question is answered.
+
 ## Key Files
 
 **Backend**
