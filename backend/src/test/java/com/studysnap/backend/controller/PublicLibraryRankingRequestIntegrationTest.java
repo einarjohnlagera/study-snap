@@ -64,6 +64,6 @@ class PublicLibraryRankingRequestIntegrationTest {
                 .andExpect(header().string("Retry-After", "3"))
                 .andExpect(jsonPath("$.error.code").value("PUBLIC_LIBRARY_RANKING_BUSY"))
                 .andExpect(jsonPath("$.error.message")
-                        .value("Explore is a little busy right now. Please try again in a moment."));
+                        .value("This page is a little busy right now. Please try again in a moment."));
     }
 }

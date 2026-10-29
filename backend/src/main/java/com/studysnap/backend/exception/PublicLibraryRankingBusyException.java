@@ -5,7 +5,7 @@ import org.springframework.http.HttpStatus;
 public class PublicLibraryRankingBusyException extends AppException {
     public PublicLibraryRankingBusyException() {
         super("PUBLIC_LIBRARY_RANKING_BUSY",
-                "Explore is a little busy right now. Please try again in a moment.",
+                "This page is a little busy right now. Please try again in a moment.",
                 HttpStatus.SERVICE_UNAVAILABLE);
     }
 }
