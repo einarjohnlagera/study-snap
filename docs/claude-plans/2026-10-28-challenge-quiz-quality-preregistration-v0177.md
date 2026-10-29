@@ -147,3 +147,17 @@ Combined file `reviews-opus.jsonl`: 465 rows, each of the 465 batch items exactl
 
 **Next (not yet started).** One more adjudication round for the 30 new disagreements, by one fresh adjudicator `adj-3` on the same design (the two conflicting judgements being the re-review row and the item's earlier independent or primary row, in a seeded per-item order), with the same isolation and receipt checks; then the gate report under rubric `v2`. The owner is told the count before it starts.
 
+## 11. Addendum E: second adjudication round and the final scoring inputs (2026-10-29, before the gate report)
+
+**Round 2.** The 30 new disagreements of Addendum D (B3 re-review rows against the primary row; none of the 30 had an independent review, so every item showed the primary row against the re-review row) were adjudicated by one fresh Opus agent, `adj-3`, round `ADJUDICATION`, on the same design as round 1: seeded shuffle (seed `177 XOR 0xAD27`, 44438), the two earlier judgements labelled `reviewer1` and `reviewer2` in a seeded per-item order (scoring fields only, no reviewer id, round or arm; private assignment map SHA-256 `c3b887bb8d97699cd0bc264709d6da30abead32b161919d2a8ad071a7d5a0ce2`), scratch folder `~/quality-adjudication2-v0177/a3` holding only the batch and `notes.jsonl`, frozen scorer sections 1 to 6 verbatim plus the "both earlier judgements may be wrong" line, same delivery lines. Batch SHA-256 `553f3bbc44d509499b17d9f24f6fb52575f83abaed8f35e0a95839cda24b4540`; raw output SHA-256 `145f73cdac14f4f4b921f432fbfe27a15981381ce608c3616564f831fdb8c446`. The report named only its three permitted files, the folder held exactly those, the input hashes were unchanged, and the harness validator accepted all 30 rows (`adj-3`, round `ADJUDICATION`): no problems, none unparseable. Reported use: 5 tool uses, about 113k tokens. A leak scan of the scratch folder found nothing.
+
+**Result of the process.** The 159 adjudication rows (`adj-1` 65, `adj-2` 64, `adj-3` 30) are distinct and cover exactly the 129 items of Addendum C plus the 30 of Addendum D. Using the harness's own disagreement rule by reflection: every one of the 34 re-reviewed B3 items that disagrees with its earlier judgement now carries an adjudication, and no disagreement among the 465 independent reviews is unadjudicated, so **no item is unresolved**.
+
+**Final inputs to the gate report (frozen as of this entry).**
+- `scores-codex.jsonl` (1,540 primary rows), SHA-256 `0563c8571a560c759de9cefa893d0ab0d557f9a064ff0538e90d2b44b95e6f7b`.
+- `reviews-opus.jsonl` (465 independent plus 300 `ARM_RE_REVIEW` rows, one fresh re-reviewer), SHA-256 `c9edf759430da056d9d721252a255fe1cdeae39cd3a92f48a571a71a1c341116`.
+- `adjudications.jsonl` (159 rows), SHA-256 `7bbec7bf67e968cee26ea62e68d241eae4868634e023a23ee8d7cb4eaf7fc022`. The 129-row round-1 file is kept unchanged as `adjudications-round1-129.jsonl`, SHA-256 `f279f3ea8407242d2a9913bf7eeaac615f718298dc10a89cd4a59d197bd924f6`.
+- Round-2 id list (`adjudication-round2-needed-ids.txt`) SHA-256 `77b42f394992147f1164016e442422e68c4e691e4145811dd2a131ef07b13c38`.
+
+**Next.** The gate report under rubric `v2`, run once with these inputs, writing to a new folder (`target/llm-benchmark-v0177/quality-gates`) and never to the `v0.176.0` folder. No rule, threshold or input changes after this entry. The report and its caveats (Amendment 1's limitations, the observations above) go to the owner as a decision packet.
+
