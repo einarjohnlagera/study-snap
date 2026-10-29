@@ -2499,7 +2499,7 @@ class NativeQueryPostgresIntegrationTest {
                 1, 100_000, 1_000_000);
         UUID deleted = com.studysnap.backend.service.AccountPurgeService.DELETED_USER_ID;
         List<PublicLibraryFilterCriteria> shapes = List.of(
-                new PublicLibraryFilterCriteria(viewer, deleted, "%a%", null, List.of("filter-tag"),
+                new PublicLibraryFilterCriteria(viewer, deleted, "%a%", "science-lab", List.of("filter-tag"),
                         null, null, null, true, List.of(com.studysnap.backend.model.PublicLibrarySource.OFFICIAL,
                         com.studysnap.backend.model.PublicLibrarySource.COMMUNITY)),
                 new PublicLibraryFilterCriteria(viewer, deleted, null, "science-lab", List.of(),
@@ -2524,26 +2524,37 @@ class NativeQueryPostgresIntegrationTest {
             }
         }
         assertThat(sawRows).as("the comparison must not be vacuously empty").isTrue();
-        // ⚠️ A subject filter directly followed by a tag filter cannot be compared with today's SQL: its tag
-        // clause starts "and exists (" with no leading space (a Java text block strips the indentation), so
-        // Hibernate reads `:subjectSlugand` and throws. The snapshot statements append their tag predicate with a
-        // leading space and handle the combination; assert it against the two single-filter results instead.
-        PublicLibraryFilterCriteria subjectOnly = new PublicLibraryFilterCriteria(null, deleted, null,
-                "science-lab", List.of(), null, null, null, false, List.of());
-        PublicLibraryFilterCriteria tagOnly = rankingCriteriaWithTags(List.of("filter-tag"));
+    }
+
+    /**
+     * Regression: the tag clause is a Java text block that closes on its last token, so it started with no
+     * space and a preceding subject filter (`= :subjectSlug`) was read as the parameter `:subjectSlugand`,
+     * throwing for every sort and for the plain count. Today's statements must accept the combination.
+     */
+    @Test
+    void subjectAndTagFiltersTogetherAreAcceptedByTodaysStatements() {
+        RankingFixture fixture = seedRankingFixture("subject-and-tag");
+        jdbcTemplate.update("update notes set subject = 'Science Lab', tags = ? where id in (?, ?)",
+                new String[] {"Mixed Tag"}, fixture.alpha(), fixture.bravo());
+        jdbcTemplate.update("update notes set subject = 'Other Subject', tags = ? where id = ?",
+                new String[] {"Mixed Tag"}, fixture.charlie());
+        UUID deleted = com.studysnap.backend.service.AccountPurgeService.DELETED_USER_ID;
         PublicLibraryFilterCriteria both = new PublicLibraryFilterCriteria(null, deleted, null, "science-lab",
-                List.of("filter-tag"), null, null, null, false, List.of());
-        Set<UUID> inSubject = new java.util.HashSet<>(publicLibraryRepository.findPublicLibraryRankedPageIds(
-                subjectOnly, PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), List.of(), 0, 1000));
-        List<UUID> expected = publicLibraryRepository.findPublicLibraryRankedPageIds(
-                tagOnly, PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), List.of(), 0, 1000)
-                .stream().filter(inSubject::contains).toList();
-        assertThat(expected).isNotEmpty();
-        assertThat(publicLibraryRepository.findPublicLibraryRankedSnapshotPageIds(both,
-                PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), 0, 1000, snapshot))
-                .containsExactlyElementsOf(expected);
-        assertThat(publicLibraryRepository.countPublicLibraryRankedSnapshotMatches(
-                both, PublicLibrarySort.RECOMMENDED, snapshot)).isEqualTo(expected.size());
+                List.of("mixed-tag"), null, null, null, false, List.of());
+        for (PublicLibrarySort sort : List.of(PublicLibrarySort.RECOMMENDED, PublicLibrarySort.POPULAR,
+                PublicLibrarySort.MOST_COPIED)) {
+            assertThat(publicLibraryRepository.findPublicLibraryRankedPageIds(
+                    both, sort, fixture.rankedAt(), List.of(), 0, 100))
+                    .as("ranked page %s", sort)
+                    .allMatch(id -> id.equals(fixture.alpha()) || id.equals(fixture.bravo()))
+                    .doesNotContain(fixture.charlie());
+            assertThat(publicLibraryRepository.countPublicLibraryRankedMatches(both, sort))
+                    .as("ranked count %s", sort).isLessThanOrEqualTo(2L);
+        }
+        assertThat(publicLibraryRepository.countPublicLibraryMatches(both)).isEqualTo(2L);
+        assertThat(publicLibraryRepository.findPublicLibraryPage(both, PublicLibrarySort.RECENT, 0, 100))
+                .extracting(NoteListItemProjection::getId)
+                .containsExactlyInAnyOrder(fixture.alpha(), fixture.bravo());
     }
 
     private PublicLibraryFilterCriteria rankingCriteriaWithTags(List<String> tags) {

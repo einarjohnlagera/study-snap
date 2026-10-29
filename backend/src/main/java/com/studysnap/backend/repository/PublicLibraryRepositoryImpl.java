@@ -724,7 +724,11 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     ) {
         if (isPostgres()) {
             String placeholders = bindValues("publicTagSlug", tagSlugs, parameters);
-            where.append("""
+            // ⚠️ The explicit space is REQUIRED. This text block closes on the same line as its last token, so Java
+            // strips ALL its leading whitespace ("and exists (" starts at column 0), and a preceding clause that ends
+            // in a bare named parameter (the subject filter, `= :subjectSlug`) was read by Hibernate as the single
+            // parameter `:subjectSlugand`, failing the request. The learner-level clause carries the same guard.
+            where.append(" ").append("""
                      and exists (
                          select 1 from unnest(n.tags) as public_filter_tag(value)
                          where""")
