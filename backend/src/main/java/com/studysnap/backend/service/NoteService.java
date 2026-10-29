@@ -1091,13 +1091,13 @@ public class NoteService {
             return List.of();
         }
         return values.stream()
-                .map(this::normalizePublicLibraryFilterSlug)
+                .map(NoteService::normalizePublicLibraryFilterSlug)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
     }
 
-    private String normalizePublicLibraryFilterSlug(String value) {
+    public static String normalizePublicLibraryFilterSlug(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }

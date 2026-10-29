@@ -160,6 +160,15 @@ management:
 
 studysnap:
   app-name: NoteLib
+  public-api-diagnostics:
+    enabled: ${PUBLIC_API_DIAGNOSTICS_ENABLED:true}
+    review-by: 2026-11-12
+    sample-threshold-per-minute: 30
+    sample-max-per-minute: 20
+    distinct-client-cap: 5000
+    user-agent-cap: 500
+    tag-slug-cap: 500
+    top-n: 10
   public-library-ranking-snapshot:
     ttl-seconds: 300
     max-age-seconds: 900

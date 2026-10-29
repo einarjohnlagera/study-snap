@@ -55,7 +55,7 @@ class PublicLibraryRankingSnapshotHttpConnectionTest {
         doReturn(List.of()).when(repository)
                 .findPublicLibraryRankedSnapshotPageIds(any(), any(), any(), anyInt(), anyInt(), any());
         cache.invalidateAllForTest();
-        // The spy also recorded the application-start warm-up build; the assertion below is about this request burst.
+        // Defensive: the spy must only count builds caused by this request burst (startup warm-up is off in tests).
         clearInvocations(repository);
         RestClient client = RestClient.create("http://localhost:" + port);
         try (ExecutorService callers = Executors.newFixedThreadPool(CALLERS)) {
