@@ -695,3 +695,30 @@ A Vercel production build calls the production API, and the prerender hooks used
 - `app/sitemap.ts` exports `dynamic = "force-dynamic"`, so the sitemap is rendered on request; its catalog walk (about 41 pages of 50 notes) is bounded by the fetch cache (`revalidate: 300`), not by the build.
 
 Behavior is otherwise unchanged: same URLs, titles, canonicals, robots and sitemap URL set (checked on 8 URLs and a 2,274-URL sitemap). The first **cold** request (after a deploy, or when nothing is cached) pays the walk synchronously and sequentially, inside a Vercel function with a time limit (the project's limit is unverified; see `RELEASES.md` v0.178.0); after the fetch cache expires (300 s) the stale value is served while it refreshes. A cold sitemap, the `general` subject page and the exam hubs are the long walks (about 41 pages of 50 notes for the sitemap), always with `sort=recent`. Do not restore the slug lists without reading `docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md`; `getServerPublicSubjectSlugs` in `lib/server-public-notes.ts` is now unused by production code and is kept for a future cleanup.
+
+## Ranked listing snapshot (v0.178.0 Release 1)
+
+Only the paginated ranked `GET /notes/public` path uses a process-local snapshot: the copy, like and
+view count maps, and a normalized-tag slug to public-note-ID index. PostgreSQL applies the existing
+slug normalization when building the index. The six ranked sorts are Recommended, Featured, Popular,
+Copied, Views and Most Copied. The paired count and page use one generation; visibility and the other
+filters remain live in SQL, so making a note private excludes it immediately. The SQL-orderable
+Recent and Title sorts, the legacy unpaginated caller, discovery ranking, facets, projections and
+creator-impact retain their existing queries.
+
+The snapshot refreshes asynchronously after 300 seconds; publish, unpublish and tag edits do not
+invalidate it. A newly published or retagged note may
+take up to five minutes to enter a tag-filtered ranked list, and engagement rank inputs may lag the
+same amount during normal refresh. A failed refresh keeps the last good generation for at most 900
+seconds total, so those inputs can lag longer during a failure; after that ceiling, requests use the
+original SQL. A cold request waits at most 3 seconds for the single build. Fallback allows two
+concurrent ranked requests and immediately returns HTTP 503 with `Retry-After: 3` to further callers.
+Setting `studysnap.public-library-ranking-snapshot.ttl-seconds` to `0` bypasses the snapshot and its
+bulkhead. Builds refuse more than 50,000 public notes, 50,000 entries per metric map or 250,000
+tag entries (about 25 times today's catalog; the build holds every row in memory), and refuse a suspicious empty generation.
+
+Tag-ID queries pin `force_custom_plan` within the request transaction. PostgreSQL otherwise may
+reuse a generic prepared plan after the driver's fifth execution; the measured 66–74-ID tag case
+took 8–10 ms with that plan versus about 1 ms with a custom plan. This setting is transaction-local,
+not a datasource-wide driver change; it also applies to the remaining statements of that request's
+transaction (for example the listing projections), which only costs a little extra planning time.

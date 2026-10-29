@@ -37,7 +37,11 @@ public class GlobalExceptionHandler {
 				ex.getStatus().value(),
 				ex.getMessage()
 		);
-		return ResponseEntity.status(ex.getStatus()).body(
+		ResponseEntity.BodyBuilder response = ResponseEntity.status(ex.getStatus());
+		if (ex instanceof PublicLibraryRankingBusyException) {
+			response.header("Retry-After", "3");
+		}
+		return response.body(
 				new ApiErrorResponse(requestId, new ApiErrorResponse.ApiError(
 						ex.getCode(),
 						ex.getMessage(),

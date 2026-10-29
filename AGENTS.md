@@ -1,5 +1,10 @@
 # AGENTS.md - NoteLib
 
+Acquire the public-library ranking snapshot before entering `NoteService.listPublic`'s read-only
+transaction. The count and page must receive the same generation. Never wait for a cold build while
+holding a JDBC connection; an expired or unavailable snapshot uses the bounded fallback, while
+`ttl=0` uses the original SQL without that bulkhead.
+
 Never use Note generation lifecycle (`NoteStatus`, or the `studyPackStatus` string derived from it) as a proxy for learning artifact availability. Derive capability from the Study Pack's own artifacts (`quiz`, `keyConcepts`, `status`) via `StudyPackArtifactFacts`.
 
 When presenting a Collection as an exam Review Set, resolve its exam slug from its root ancestor's `courseProgram` through `course_programs.exam_goal_slug`, and require the root's own `learnerLevel == BOARD_EXAM_REVIEW`. Child Subject Plans often have no `courseProgram`; a catalog slug alone can also belong to an academic Journey. Keep library-wide navigation and exam-mode availability keyed to the viewer's `ProfileType`.
