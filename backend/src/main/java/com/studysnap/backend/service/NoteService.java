@@ -64,6 +64,7 @@ import com.studysnap.backend.repository.NoteLibrarySubjectProjection;
 import com.studysnap.backend.repository.NoteLibrarySubjectView;
 import com.studysnap.backend.repository.NoteLibraryValueCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.PublicLibraryRankingSnapshot;
 import com.studysnap.backend.repository.NoteShareRepository;
 import com.studysnap.backend.repository.NoteStatusProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
@@ -774,6 +775,27 @@ public class NoteService {
             boolean readyOnly,
             List<String> sourceValues
     ) {
+        return listPublic(viewerUserId, search, sort, subject, tags, courseProgram, creator,
+                learnerLevel, size, page, pageSize, readyOnly, sourceValues, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PublicNoteListResponse listPublic(
+            UUID viewerUserId,
+            String search,
+            String sort,
+            String subject,
+            List<String> tags,
+            String courseProgram,
+            String creator,
+            LearnerLevel learnerLevel,
+            Integer size,
+            Integer page,
+            Integer pageSize,
+            boolean readyOnly,
+            List<String> sourceValues,
+            PublicLibraryRankingSnapshot rankingSnapshot
+    ) {
         List<PublicLibrarySource> sources = parsePublicLibrarySources(sourceValues);
         if (page == null && pageSize == null) {
             return listPublicLegacy(
@@ -824,16 +846,21 @@ public class NoteService {
             // pooled connection for the whole of it, on an anonymous endpoint. Six of the eight
             // sorts take this branch, including the DEFAULT `recommended`, so a request with no
             // `sort` was unbounded even when paginated. The database now orders and limits.
-            totalMatching = noteRepository.countPublicLibraryRankedMatches(criteria, publicSort);
+            totalMatching = rankingSnapshot == null
+                    ? noteRepository.countPublicLibraryRankedMatches(criteria, publicSort)
+                    : noteRepository.countPublicLibraryRankedSnapshotMatches(criteria, publicSort, rankingSnapshot);
             List<UUID> pageIds = offset > Integer.MAX_VALUE
                     ? List.of()
-                    : noteRepository.findPublicLibraryRankedPageIds(
+                    : rankingSnapshot == null ? noteRepository.findPublicLibraryRankedPageIds(
                             criteria,
                             publicSort,
                             OffsetDateTime.now(),
                             List.of(),
                             (int) offset,
                             resolvedPageSize
+                    ) : noteRepository.findPublicLibraryRankedSnapshotPageIds(
+                            criteria, publicSort, OffsetDateTime.now(), (int) offset,
+                            resolvedPageSize, rankingSnapshot
                     );
             pageProjections = orderListItemProjections(
                     noteRepository.findPublicLibraryListItemProjectionsByIdIn(pageIds),

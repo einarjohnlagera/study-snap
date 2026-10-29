@@ -160,6 +160,14 @@ management:
 
 studysnap:
   app-name: NoteLib
+  public-library-ranking-snapshot:
+    ttl-seconds: 300
+    max-age-seconds: 900
+    cold-start-wait-ms: 3000
+    refresh-backoff-seconds: 30
+    bulkhead-max-concurrent: 2
+    max-notes: 50000
+    max-tag-entries: 250000
   challenge-quiz:
     statement-pair-legacy-cutoff: ${CHALLENGE_QUIZ_STATEMENT_PAIR_LEGACY_CUTOFF:}
     # Owner-approved policy (2026-10-21). Changing these in production requires owner approval.

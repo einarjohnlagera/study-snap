@@ -2343,6 +2343,214 @@ class NativeQueryPostgresIntegrationTest {
                 publicRankingCriteria(), null)).isEqualTo(12);
     }
 
+    @Test
+    void rankingSnapshotMatchesFullOrderedIdsAndCountsAcrossSortsAndTagUnions() {
+        RankingFixture fixture = seedRankingFixture("snapshot-parity");
+        jdbcTemplate.update("update notes set tags = ? where id = ?",
+                new String[] {"Alpha & Beta", "Common Tag", "Medium Tag"}, fixture.alpha());
+        jdbcTemplate.update("update notes set tags = ? where id = ?",
+                new String[] {"Common Tag", "Medium Tag"}, fixture.bravo());
+        jdbcTemplate.update("update notes set tags = ? where id = ?",
+                new String[] {"Common Tag", "Rare Tag"}, fixture.charlie());
+        jdbcTemplate.update("update notes set tags = ? where id = ?",
+                new String[] {"Common Tag"}, fixture.kilo());
+        for (int index = 0; index < 74; index++) {
+            UUID id = seedRankedNote(seedUser("snapshot-tag-owner-" + index), UUID.randomUUID(),
+                    "Large tag " + index, fixture.rankedAt(), 0);
+            jdbcTemplate.update("update notes set tags = ? where id = ?", new String[] {"Big Tag"}, id);
+        }
+        UUID privateId = seedRankedNote(seedUser("snapshot-private-owner"), UUID.randomUUID(),
+                "Private", fixture.rankedAt(), 0);
+        jdbcTemplate.update("update notes set tags = ?, visibility = 'PRIVATE' where id = ?",
+                new String[] {"Common Tag"}, privateId);
+        PublicLibraryRankingSnapshot snapshot = publicLibraryRepository.buildPublicLibraryRankingSnapshot(
+                1, 100_000, 1_000_000);
+        List<List<String>> tagShapes = List.of(
+                List.of(), List.of("common-tag"), List.of("medium-tag"), List.of("rare-tag"),
+                List.of("not-a-tag"), List.of("common-tag", "rare-tag"),
+                List.of("common-tag", "medium-tag", "rare-tag"), List.of("big-tag"),
+                List.of("alpha-beta"));
+        for (PublicLibrarySort sort : List.of(PublicLibrarySort.RECOMMENDED, PublicLibrarySort.FEATURED,
+                PublicLibrarySort.POPULAR, PublicLibrarySort.COPIED, PublicLibrarySort.VIEWS,
+                PublicLibrarySort.MOST_COPIED)) {
+            for (List<String> tags : tagShapes) {
+                PublicLibraryFilterCriteria criteria = rankingCriteriaWithTags(tags);
+                assertThat(publicLibraryRepository.findPublicLibraryRankedSnapshotPageIds(
+                        criteria, sort, fixture.rankedAt(), 0, 1000, snapshot))
+                        .as("ordered ids sort=%s tags=%s", sort, tags)
+                        .containsExactlyElementsOf(publicLibraryRepository.findPublicLibraryRankedPageIds(
+                                criteria, sort, fixture.rankedAt(), List.of(), 0, 1000));
+                assertThat(publicLibraryRepository.countPublicLibraryRankedSnapshotMatches(criteria, sort, snapshot))
+                        .as("count sort=%s tags=%s", sort, tags)
+                        .isEqualTo(publicLibraryRepository.countPublicLibraryRankedMatches(criteria, sort));
+            }
+        }
+    }
+
+    @Test
+    void rankingSnapshotKeepsPublicationAndPrivacyLiveWhileTagMembershipRefreshes() {
+        RankingFixture fixture = seedRankingFixture("snapshot-privacy");
+        jdbcTemplate.update("update notes set tags = ? where id = ?", new String[] {"Safety Tag"}, fixture.alpha());
+        PublicLibraryRankingSnapshot old = publicLibraryRepository.buildPublicLibraryRankingSnapshot(
+                1, 100_000, 1_000_000);
+        PublicLibraryFilterCriteria criteria = rankingCriteriaWithTags(List.of("safety-tag"));
+        jdbcTemplate.update("update notes set visibility = 'PRIVATE' where id = ?", fixture.alpha());
+        assertThat(publicLibraryRepository.findPublicLibraryRankedSnapshotPageIds(criteria,
+                PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), 0, 100, old)).doesNotContain(fixture.alpha());
+        assertThat(publicLibraryRepository.countPublicLibraryRankedSnapshotMatches(
+                criteria, PublicLibrarySort.RECOMMENDED, old)).isZero();
+        jdbcTemplate.update("update notes set tags = ? where id = ?", new String[] {"Safety Tag"}, fixture.bravo());
+        assertThat(publicLibraryRepository.findPublicLibraryRankedSnapshotPageIds(criteria,
+                PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), 0, 100, old)).doesNotContain(fixture.bravo());
+        UUID newlyPublished = seedRankedNote(seedUser("snapshot-new-public-owner"), UUID.randomUUID(),
+                "Published after snapshot", fixture.rankedAt(), 0);
+        jdbcTemplate.update("update notes set tags = ? where id = ?",
+                new String[] {"Safety Tag"}, newlyPublished);
+        assertThat(publicLibraryRepository.findPublicLibraryRankedSnapshotPageIds(criteria,
+                PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), 0, 100, old))
+                .doesNotContain(newlyPublished);
+        assertThat(publicLibraryRepository.countPublicLibraryRankedSnapshotMatches(
+                criteria, PublicLibrarySort.RECOMMENDED, old)).isZero();
+        PublicLibraryRankingSnapshot refreshed = publicLibraryRepository.buildPublicLibraryRankingSnapshot(
+                2, 100_000, 1_000_000);
+        assertThat(publicLibraryRepository.findPublicLibraryRankedSnapshotPageIds(criteria,
+                PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), 0, 100, refreshed))
+                .contains(fixture.bravo(), newlyPublished);
+        assertThat(publicLibraryRepository.countPublicLibraryRankedSnapshotMatches(
+                criteria, PublicLibrarySort.RECOMMENDED, refreshed)).isEqualTo(2);
+    }
+
+    @Test
+    void rankingSnapshotRefusesNoteAndTagCapsOnRealRows() {
+        RankingFixture fixture = seedRankingFixture("snapshot-caps");
+        jdbcTemplate.update("update notes set tags = ? where id = ?",
+                new String[] {"Cap Tag"}, fixture.alpha());
+        assertThatThrownBy(() -> publicLibraryRepository.buildPublicLibraryRankingSnapshot(1, 1, 100))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("note cap exceeded");
+        assertThatThrownBy(() -> publicLibraryRepository.buildPublicLibraryRankingSnapshot(2, 100, 0))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("tag entry cap exceeded");
+    }
+
+    @Test
+    void tagIdStatementPinsCustomPlanOnDefaultDriverAfterEightExecutions() {
+        RankingFixture fixture = seedRankingFixture("snapshot-plan");
+        for (int index = 0; index < 74; index++) {
+            UUID id = seedRankedNote(seedUser("snapshot-plan-owner-" + index), UUID.randomUUID(),
+                    "Plan tag " + index, fixture.rankedAt(), 0);
+            jdbcTemplate.update("update notes set tags = ? where id = ?", new String[] {"Plan Tag"}, id);
+        }
+        PublicLibraryRankingSnapshot snapshot = publicLibraryRepository.buildPublicLibraryRankingSnapshot(
+                1, 100_000, 1_000_000);
+        PublicLibraryFilterCriteria criteria = rankingCriteriaWithTags(List.of("plan-tag"));
+        // Keep the application's default driver threshold. Force an adversarial server mode locally:
+        // the production statement must override it in this transaction, so deleting the pin fails.
+        jdbcTemplate.queryForObject("select set_config('plan_cache_mode', 'force_generic_plan', true)",
+                String.class);
+        for (int index = 0; index < 8; index++) {
+            assertThat(publicLibraryRepository.findPublicLibraryRankedSnapshotPageIds(criteria,
+                    PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), 0, 100, snapshot)).hasSize(74);
+        }
+        Long prepared = jdbcTemplate.queryForObject("select count(*) from pg_prepared_statements"
+                + " where statement like '%n.id = any(%'", Long.class);
+        Long genericPlans = jdbcTemplate.queryForObject("select coalesce(sum(generic_plans), 0)"
+                + " from pg_prepared_statements where statement like '%n.id = any(%'", Long.class);
+        assertThat(prepared).isPositive();
+        assertThat(genericPlans).isZero();
+    }
+
+    /**
+     * The untagged default view runs the array-bound metric joins too. Without the pin a generic plan cannot
+     * size those arrays, and the driver switches to one after its fifth execution on a connection.
+     */
+    @Test
+    void untaggedStatementPinsCustomPlanOnDefaultDriverAfterEightExecutions() {
+        RankingFixture fixture = seedRankingFixture("snapshot-untagged-plan");
+        PublicLibraryRankingSnapshot snapshot = publicLibraryRepository.buildPublicLibraryRankingSnapshot(
+                1, 100_000, 1_000_000);
+        PublicLibraryFilterCriteria criteria = rankingCriteriaWithTags(List.of());
+        jdbcTemplate.queryForObject("select set_config('plan_cache_mode', 'force_generic_plan', true)",
+                String.class);
+        for (int index = 0; index < 8; index++) {
+            assertThat(publicLibraryRepository.findPublicLibraryRankedSnapshotPageIds(criteria,
+                    PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), 0, 100, snapshot)).isNotEmpty();
+        }
+        String untagged = "statement like '%as t(note_id, metric)%' and statement not like '%n.id = any(%'";
+        Long prepared = jdbcTemplate.queryForObject(
+                "select count(*) from pg_prepared_statements where " + untagged, Long.class);
+        Long genericPlans = jdbcTemplate.queryForObject("select coalesce(sum(generic_plans), 0)"
+                + " from pg_prepared_statements where " + untagged, Long.class);
+        assertThat(prepared).isPositive();
+        assertThat(genericPlans).isZero();
+    }
+
+    /**
+     * The snapshot statements bind through raw JDBC, not Hibernate, so every filter parameter type the
+     * production listing sends (viewer and deleted-user UUIDs, search and subject strings, the official
+     * author email behind the source filter, tag-id and metric arrays, the rank timestamp) must be
+     * proven against real PostgreSQL, not assumed.
+     */
+    @Test
+    void rankingSnapshotMatchesTodaysSqlWithEveryBoundFilterParameter() {
+        RankingFixture fixture = seedRankingFixture("snapshot-filters");
+        UUID viewer = seedUser("snapshot-filters-viewer");
+        jdbcTemplate.update("update notes set subject = 'Science Lab', tags = ? where id in (?, ?, ?)",
+                new String[] {"Filter Tag"}, fixture.alpha(), fixture.bravo(), fixture.echo());
+        PublicLibraryRankingSnapshot snapshot = publicLibraryRepository.buildPublicLibraryRankingSnapshot(
+                1, 100_000, 1_000_000);
+        UUID deleted = com.studysnap.backend.service.AccountPurgeService.DELETED_USER_ID;
+        List<PublicLibraryFilterCriteria> shapes = List.of(
+                new PublicLibraryFilterCriteria(viewer, deleted, "%a%", null, List.of("filter-tag"),
+                        null, null, null, true, List.of(com.studysnap.backend.model.PublicLibrarySource.OFFICIAL,
+                        com.studysnap.backend.model.PublicLibrarySource.COMMUNITY)),
+                new PublicLibraryFilterCriteria(viewer, deleted, null, "science-lab", List.of(),
+                        null, null, null, false, List.of(com.studysnap.backend.model.PublicLibrarySource.BY_YOU)),
+                new PublicLibraryFilterCriteria(null, deleted, "%o%", "science-lab", List.of(),
+                        null, null, null, false, List.of()));
+        boolean sawRows = false;
+        for (PublicLibrarySort sort : List.of(PublicLibrarySort.RECOMMENDED, PublicLibrarySort.FEATURED,
+                PublicLibrarySort.POPULAR, PublicLibrarySort.COPIED, PublicLibrarySort.VIEWS,
+                PublicLibrarySort.MOST_COPIED)) {
+            for (PublicLibraryFilterCriteria criteria : shapes) {
+                List<UUID> today = publicLibraryRepository.findPublicLibraryRankedPageIds(
+                        criteria, sort, fixture.rankedAt(), List.of(), 0, 1000);
+                sawRows |= !today.isEmpty();
+                assertThat(publicLibraryRepository.findPublicLibraryRankedSnapshotPageIds(
+                        criteria, sort, fixture.rankedAt(), 0, 1000, snapshot))
+                        .as("ordered ids sort=%s criteria=%s", sort, criteria)
+                        .containsExactlyElementsOf(today);
+                assertThat(publicLibraryRepository.countPublicLibraryRankedSnapshotMatches(criteria, sort, snapshot))
+                        .as("count sort=%s criteria=%s", sort, criteria)
+                        .isEqualTo(publicLibraryRepository.countPublicLibraryRankedMatches(criteria, sort));
+            }
+        }
+        assertThat(sawRows).as("the comparison must not be vacuously empty").isTrue();
+        // ⚠️ A subject filter directly followed by a tag filter cannot be compared with today's SQL: its tag
+        // clause starts "and exists (" with no leading space (a Java text block strips the indentation), so
+        // Hibernate reads `:subjectSlugand` and throws. The snapshot statements append their tag predicate with a
+        // leading space and handle the combination; assert it against the two single-filter results instead.
+        PublicLibraryFilterCriteria subjectOnly = new PublicLibraryFilterCriteria(null, deleted, null,
+                "science-lab", List.of(), null, null, null, false, List.of());
+        PublicLibraryFilterCriteria tagOnly = rankingCriteriaWithTags(List.of("filter-tag"));
+        PublicLibraryFilterCriteria both = new PublicLibraryFilterCriteria(null, deleted, null, "science-lab",
+                List.of("filter-tag"), null, null, null, false, List.of());
+        Set<UUID> inSubject = new java.util.HashSet<>(publicLibraryRepository.findPublicLibraryRankedPageIds(
+                subjectOnly, PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), List.of(), 0, 1000));
+        List<UUID> expected = publicLibraryRepository.findPublicLibraryRankedPageIds(
+                tagOnly, PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), List.of(), 0, 1000)
+                .stream().filter(inSubject::contains).toList();
+        assertThat(expected).isNotEmpty();
+        assertThat(publicLibraryRepository.findPublicLibraryRankedSnapshotPageIds(both,
+                PublicLibrarySort.RECOMMENDED, fixture.rankedAt(), 0, 1000, snapshot))
+                .containsExactlyElementsOf(expected);
+        assertThat(publicLibraryRepository.countPublicLibraryRankedSnapshotMatches(
+                both, PublicLibrarySort.RECOMMENDED, snapshot)).isEqualTo(expected.size());
+    }
+
+    private PublicLibraryFilterCriteria rankingCriteriaWithTags(List<String> tags) {
+        return new PublicLibraryFilterCriteria(null, null, null, null, tags, null, null, null,
+                false, List.of());
+    }
+
     /**
      * The discovery sections keep their three lists mutually exclusive by excluding ids already used.
      * The Java version filtered the ranked list and then took six; excluding inside the query that

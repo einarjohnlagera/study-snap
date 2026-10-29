@@ -48,6 +48,21 @@ public class StudySnapProperties {
     private final GoalAdoption goalAdoption = new GoalAdoption();
     private final Notifications notifications = new Notifications();
     private final CurationCostAlert curationCostAlert = new CurationCostAlert();
+    private final PublicLibraryRankingSnapshot publicLibraryRankingSnapshot = new PublicLibraryRankingSnapshot();
+
+    @Getter
+    @Setter
+    public static class PublicLibraryRankingSnapshot {
+        private int ttlSeconds = 300;
+        private int maxAgeSeconds = 900;
+        private int coldStartWaitMs = 3000;
+        private int refreshBackoffSeconds = 30;
+        private int bulkheadMaxConcurrent = 2;
+        // About 25x today's catalog. The build holds every row in memory (rows, sets and the immutable copies),
+        // so a larger cap is a memory decision for the instance, not a free number.
+        private int maxNotes = 50_000;
+        private int maxTagEntries = 250_000;
+    }
 
     @Getter
     @Setter

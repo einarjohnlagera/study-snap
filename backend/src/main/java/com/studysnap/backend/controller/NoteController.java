@@ -54,6 +54,7 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteRegenerationScope;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.model.PublicLibrarySort;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.exception.GenerationRecoveryNotEligibleException;
 import com.studysnap.backend.exception.SharedNoteNotFoundException;
@@ -68,6 +69,7 @@ import com.studysnap.backend.service.NoteBulkRegenerationService;
 import com.studysnap.backend.service.NoteBulkRegenerationReceiptService;
 import com.studysnap.backend.service.NoteRegenerationPreflightService;
 import com.studysnap.backend.service.NoteService;
+import com.studysnap.backend.service.PublicLibraryRankingSnapshotCache;
 import com.studysnap.backend.service.NoteShareService;
 import com.studysnap.backend.service.NoteGenerationService;
 import com.studysnap.backend.service.NoteTextExtractionService;
@@ -156,6 +158,7 @@ public class NoteController {
     private final QuizSessionHistoryService quizSessionHistoryService;
     private final NoteRepository noteRepository;
     private final StudySnapProperties properties;
+    private final PublicLibraryRankingSnapshotCache rankingSnapshotCache;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
@@ -839,7 +842,19 @@ public class NoteController {
     ) {
         UUID viewerUserId = user == null ? null : user.userId();
         boolean paginated = page != null || pageSize != null;
-        return noteService.listPublic(
+        if (rankingSnapshotCache == null || !paginated || !isRankedPublicSort(sort)) {
+            return noteService.listPublic(
+                viewerUserId, search, sort, subject, tags, courseProgram, creator,
+                LearnerLevel.fromSlug(level),
+                size == null ? null : Math.clamp(size, PUBLIC_NOTES_MIN_SIZE, PUBLIC_NOTES_MAX_SIZE),
+                paginated ? Math.clamp(page == null ? PUBLIC_LIBRARY_DEFAULT_PAGE : page,
+                        LIBRARY_MIN_PAGE, LIBRARY_MAX_PAGE) : null,
+                paginated ? Math.clamp(pageSize == null ? PUBLIC_LIBRARY_DEFAULT_PAGE_SIZE : pageSize,
+                        PUBLIC_NOTES_MIN_SIZE, PUBLIC_NOTES_MAX_SIZE) : null,
+                readyOnly, sources);
+        }
+        try (PublicLibraryRankingSnapshotCache.Resolution resolution = rankingSnapshotCache.resolve()) {
+            return noteService.listPublic(
                 viewerUserId,
                 search,
                 sort,
@@ -864,8 +879,21 @@ public class NoteController {
                         )
                         : null,
                 readyOnly,
-                sources
+                sources,
+                resolution.snapshot()
         );
+        }
+    }
+
+    private boolean isRankedPublicSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return true;
+        }
+        try {
+            return !PublicLibrarySort.valueOf(sort.trim().toUpperCase(java.util.Locale.ROOT)).isSqlOrderable();
+        } catch (IllegalArgumentException invalidSort) {
+            return false; // Let NoteService preserve its existing invalid-sort response.
+        }
     }
 
     @GetMapping("/public/discovery-sections")

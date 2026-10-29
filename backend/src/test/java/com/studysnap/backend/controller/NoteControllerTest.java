@@ -178,7 +178,8 @@ class NoteControllerTest {
                 generatedQuizService,
                 quizSessionHistoryService,
                 noteRepository,
-                properties
+                properties,
+                null
         );
     }
 
