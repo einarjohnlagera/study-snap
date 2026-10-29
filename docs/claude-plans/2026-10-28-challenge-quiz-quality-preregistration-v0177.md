@@ -161,3 +161,7 @@ Combined file `reviews-opus.jsonl`: 465 rows, each of the 465 batch items exactl
 
 **Next.** The gate report under rubric `v2`, run once with these inputs, writing to a new folder (`target/llm-benchmark-v0177/quality-gates`) and never to the `v0.176.0` folder. No rule, threshold or input changes after this entry. The report and its caveats (Amendment 1's limitations, the observations above) go to the owner as a decision packet.
 
+## 12. Addendum F: gate report (2026-10-29)
+
+Run once, after Addendum E was committed (`785874ee`), under rubric `v2` (`-Dllm.benchmark.rubricVersion=v2`) with the Addendum E inputs, into `target/llm-benchmark-v0177/quality-gates` (a new folder; the `v0.176.0` folder passed the `diff -rq` guard unchanged). `gates.json` SHA-256 `cd0c440322a098d8612b1a9e140ae3bf6fa363544807bd9bc04c9b2b736257ca`; `gates.md` `1eed42461c18dfba0583d7b9e37236ff6ce2cbbc2375c7ff4fc2b7ccde526ed5`. **Overall verdict: HOLD.** Luna fails G1, G2, G3, G4, G6 and G7; Sol fails G2, G3, G6 and G7 and carries the G5 owner-review flag (TRUE_FALSE, 22 current and 18 G+ items, NOT_EVALUATED). G8 passes for both; the B3 escalation was required and its whole-arm re-review was complete; B2 had none. The full table, the baselines against `v0.176.0`, the limitations and the options are in `docs/claude-plans/2026-10-29-challenge-quiz-quality-v0177-evaluation-report.md`. No rule, threshold or input changed after Addendum E. The production prompt is unchanged and no deployment is authorized.
+
