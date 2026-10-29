@@ -74,3 +74,22 @@ This is a dated amendment to a frozen pre-registration. Per its own rule it is a
 **Disclosed limitations.** The run order and time of day differ from the frozen sheet (the original Sol starts, the re-runs and note 1 are separated in time), which can affect the latency comparison in G6; note 1 is generated after notes 2 to 20; the A3 arm mixes starts from two sittings. The report states all of these. No gate threshold, rubric text or scorer instruction changes.
 
 **Still frozen:** the rubric v2 (`3e52c815…`), scorer instructions, the G+ resource, the benchmark tree, the seeds and the input files.
+
+## 7. Addendum A: generation record, blind export and review plan (2026-10-29, after generation, before any scoring)
+
+Recorded before any item was read or scored. Hashes only; no item content was opened.
+
+**Generation is complete and inside the ceiling.** Smoke pass (note 1, all five arms) ran as frozen on 2026-10-29: five of five starts delivered 15 of 15, each arm on its mapped model and prompt (A arms `5bf4a8e9…`, B arms `019c5bdf…`). The two Sol re-runs under Amendment 1 completed (A3 notes 5 to 20, 16 of 16; B3 notes 2 to 20, 19 of 19). Effective starts per arm: A1 20 (16 ok, 4 parse failures that stand), A2 20, A3 20, B2 20, B3 20, 100 starts in all, every arm covering notes 1 to 20 exactly once. Metered spend $3.1271 of the $4.00 ceiling; the OpenAI dashboard (owner's screenshot, filters NoteLib-Prod and notelib-local-backend, 10/28 to 10/29) showed $2.53, below the meter as expected (list-price metering overstates cached input), inside the 20% rule. The five original `results.jsonl` fingerprints are unchanged (A1 `887110ec`, A2 `b5e32f3e`, A3 `bdcc655c`, B2 `d6d24f66`, B3 `c4ac7364`) and the `v0.176.0` data passed the `diff -rq` guard.
+
+**Disclosed timing.** The A3 re-run finished at 00:16 and the B3 re-run at 08:49 on 2026-10-29, about 8.5 hours apart, not back to back; the original Sol starts ran on the evening of 2026-10-28; note 1 was generated last. These affect only the G6 latency comparison and are reported there.
+
+**Effective folders (Amendment 1, built by the addendum script).** `quality-effective-A3/results.jsonl` SHA-256 `2b2b3ce738009a41171980b78dffee84a3fde4488591f86b730e315331db46c5` (3 original rows plus 16 re-run rows); `quality-effective-B3/results.jsonl` SHA-256 `0e16acda905774352c53b84780a200cc9c47173dc19ea26e0e0ff70e504ffae8` (19 re-run rows plus the smoke row in `quality-smoke-B3`). Void rows left behind: A3 notes 5 to 20 and B3 notes 2 to 20 in the original folders.
+
+**Blind export** (seed 177, chunks of 100): 1,540 items (A1 240, A2 300, A3 300, B2 300, B3 300, stock 100) in 16 chunks. `blind-key.jsonl` SHA-256 `d0638e6bf258af397ba34713f07143eeed2e2aa06db05be32daf9420da2d6a49`; `notes.jsonl` `c1ded9ebc3cc22426bc670d4dfe55f8306cb07cf530de23d7ce5b5313e866cd0`; `blind-manifest.json` `7c4ad5b08482dc2e74bc50f3a2c96dc20c1ee5aae37773128611bb3229a25a72`; combined hash of the 16 chunk files (SHA-256 of their sorted per-file SHA-256 list) `6ed84364a17856f13c1279f6cf5555c830f20162521a21cdf11af4c9dd6fa731`.
+
+**Descriptors.** `descriptors.json` SHA-256 `418bf24b01b1d41b123db80f99cdcd760030565de9735b47728dfb994708702b`. Mechanical missingness verdicts: **A2/B2 CLEAR** and **A3/B3 CLEAR** (20 paired notes each, no failed or missing pair sides).
+
+**Review plan** (`-Dllm.benchmark.reviewSeed=177`): `review-order.jsonl` has 1,412 rows; the manifest `sha256` (the hash of `review-order.jsonl`) is **`d0ce31e1473e8d8484e94caec84cc17b94cf30f6276d8d471536b26c9b7982c2`**. This is the value the run sheet requires to be recorded before primary scoring. It uses no scores. Never give `review-order.jsonl` or either manifest to a scorer.
+
+**Next (not yet started):** blind primary scoring by Codex (about 16 sessions of about 100 items) under the frozen scorer instructions, then independent Opus review, adjudication, and the whole-arm re-review of a proposed arm on its trigger (Section 3), then the gate report under rubric `v2`. The owner is told the count and cost of each large batch before it starts.
+
