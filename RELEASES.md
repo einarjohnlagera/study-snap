@@ -1,5 +1,36 @@
 # RELEASES.md - NoteLib
 
+## v0.178.0 - Production Stabilization
+
+**Status: In Progress** (kicked off 2026-10-29 on `releases/v0.178.0`, **cut from `main` at `06a09f7c` (`v0.175.0`), NOT from `releases/v0.177.0`**. Owner decisions, 2026-10-29: approve the final scope of `docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md`, take **Option B** (metrics plus tag-id snapshot, accepting up to 5 minutes of tag-membership lag in tag-filtered ranked listings), and cut from `main`.)
+
+Theme: the public catalog stops being able to starve the production database. The single-tag ranked listing, about 42% of database time in the quiet-period read and CPU-bound on a 0.1 CPU database, gets a bounded in-process snapshot, and a deploy stops triggering a build-time walk of the whole catalog. The release exists because two finished releases (`v0.176.0`, `v0.177.0`) are held behind the operational gate (Postgres signal-9 kills), and the owner allowed one narrow stability release as an exception to that hold.
+
+### Planned Scope
+
+Order matters: **item 1 must be live and settled for 24 hours before item 2 is deployed** (a backend-only push also triggers a Vercel build, so item 2's own deploy would otherwise carry a 393-request build walk against the same database).
+
+1. **Step 0: stop the build-time catalog walks (a frontend change).** `generateStaticParams` on `/public/library/[subject]` and on `/exam/[slug]` return `[]`, and `frontend/app/sitemap.ts` becomes `export const dynamic = "force-dynamic"`. Measured locally on Next 16.1.6: backend requests during `next build` 393 to 1, with identical status, title, canonical, robots and h1 on 8 URLs and an identical 2,274-URL sitemap set. About 20 lines, done inline. Plan section 4.1. **Correction to the plan's premise:** the plan calls this a deploy with no pool overlap, but this kickoff bumps `backend/pom.xml`, and Render redeploys on any change under `backend/` (the plan's own section 1 says so). **Merging this release to `main` therefore redeploys the backend too, with the 3-minute pool overlap, even if Step 0 is the only code on the branch.** Nothing enforces the 7-location version sync except the manual `/version-check` (no script or workflow reads it), so the alternative is to hold the `pom.xml` bump until the release that carries backend code. **Default taken in this kickoff: keep the sync and accept the deploy**, which makes the Step 0 merge a behaviour-neutral backend deploy under the full section 5 checklist (and a clean test of whether pool overlap alone triggers a kill, which reverses the earlier "no canary needed" call, so the owner is told). Owner decision, recorded here when made.
+2. **Release 1: the ranked listing (backend, no migration) — planned follow-on release, see "Delivery split".** A single in-process snapshot, rebuilt at most every 300 s with single-flight (the `PublicLibraryDiscoveryRankingCache` pattern), holding the three metric maps (copies, likes, views) bound into the existing ranked SQL as arrays under the same aliases, **and a normalized-tag to public-note-id index** that replaces the per-note regexp tag clause with `n.id = any(...)`. The id page and its paired count read the same snapshot generation; `visibility = 'PUBLIC'` and every other filter stay live in SQL. **The statement must run with a pinned custom plan** (measured: at the driver's default `prepareThreshold` the tag-id statement flips to a generic plan and is slower than today). Failure behaviour is a hard requirement: single-flight, failures never cached or published, last-known-good for at most 15 minutes then the current SQL behind a bulkhead of 2 with a fast calm error for the rest, empty-snapshot rejection, a memory cap. Codex brief, Tier H. Plan section 4.2.
+3. **Minimal temporary diagnostics (backend).** Per-minute aggregate log line for anonymous public-library API requests (parameter names, status histogram, top user agents as capped strings) plus capped sampled lines, and the raw `X-Forwarded-For` entry count and `True-Client-IP` presence (no values) to identify the real client-address header. No cookies, tokens or free-text values. Plan section 5.
+4. **Tests and docs.** Query parity on real PostgreSQL (ordered full id lists and ranked counts for every ranked sort, single-tag and multi-tag unions, FEATURED with Study Packs), snapshot lifecycle, privacy, plan-stability, a `MockMvc` real request, Step 0 SEO and public-route regression; the public-library feature doc and the SQL goldens from #1498 updated deliberately.
+
+**Deployment gates (all owner-run or owner-approved):** each deploy is separately approved and follows the plan's section 5 checklist: verified backup, **restore rehearsal into an isolated database**, off-peak window, current-health read, no deploy within 24 hours of a non-deploy kill. Gates A (optimization success), B (72 hours with zero signal-9 kills, organic traffic only) and C (one controlled deploy plus 24 hours) are in plan section 7; a fixed share of SQL time is never the sole measure. No artificial production traffic and no load test against production. The upgrade (about $13 a month) stays deferred with the triggers in plan section 8.
+
+**Delivery split (recommended default, awaiting owner confirmation):** `v0.178.0` ships **item 1 only**. Items 2 to 4 are built and shipped as a follow-on release cut from `main` **after item 1 has been live and settled for 24 hours** (`v0.178.1` or `v0.179.0`, the owner picks the number), because any Release 1 branch merged into `releases/v0.178.0` would ride the same release PR and break the settle rule. Items 2 to 4 are listed above as planned scope of the stabilization effort; they are NOT part of this release's merge unless the owner chooses otherwise. This entry and the scope list are made to match the owner's answer.
+
+Anti-drift: **no HikariCP or pool change; no migration; no prompt, evaluation-gate or Challenge Quiz change; no Render environment-variable or deploy action by Claude (the Render MCP's env-var update is never called); no limiter, no facet, projection or creator-impact work, no `/explore` migration (all separate later releases); no normalized-tag index or generated column (needs a migration, a later option); no pricing, quota or entitlement change; no artificial production load.** Release 1 does not change what a learner sees except that a tag-filtered ranked listing may lag a newly published or retagged note by up to 5 minutes; copy is unchanged.
+
+**Held releases and the merge consequence:** `v0.176.0` and `v0.177.0` stay **Released on their own branches, unmerged, deploy on HOLD**; their `RELEASES.md`, `ROADMAP.md` and `CLAUDE.md` entries and their `0.176.0` and `0.177.0` version numbers are **not** on this branch, so merging them after `v0.178.0` will conflict on those files and on `package.json` and `pom.xml` (version ordering on `main` becomes 0.178 before 0.176 and 0.177). Resolve by merging `main` forward into each at that time; their diffs are tests, docs and versions only (no production code), so no behaviour conflict is expected. The gate that releases them is plan section 7.
+
+Verification tier: **one scoped cold agent framed as falsification** (the release changes what data a public listing is computed from), plus `advisor()` on the Codex brief before it is sent and on the diff before commit; the parity and plan-stability tests are the standing guards. Not the full three-agent test.
+
+Kickoff notes: the Backlog Index scan (checklist steps 8 and 9) was **not performed in full** at this kickoff, and `Last reviewed` was **not advanced** on any row (a stamp without a re-read defeats the next scan). A crude count finds 117 `CHECKPOINT` rows on this branch's `ROADMAP.md`, 91 with a due date before 2026-10-29 (many already closed or struck through); that read is carried, not done. The operational-gate row was added (it was written on `releases/v0.177.0`). The Prod Investigator files `docs/claude-findings/2026-10-28-db-signal9-kills-crawler-shaped-public-traffic.md` and `docs/claude-plans/2026-10-28-db-signal9-traffic-mitigation-options.md` are cited by the plan but are not committed on this branch; they need a Backlog row when they are.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.175.0 - Quiz Ready
 
 **Status: Released** (kicked off 2026-10-20, signed off 2026-10-25 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
@@ -1531,208 +1562,6 @@ endpoint. `payer_email` is read-only existing data, not collected anew.
   THIRD long-hold mechanism `v0.166.0` did not catch** — see `ROADMAP.md`'s Backlog Index for the full
   read and the new row it produced. Not in this release's scope; flagged to the owner as a candidate.
 
-## v0.170.0 - Study Journey, Closed
-
-**Status: Released**
-
-Theme: close out the Study Journey Purpose / Learner Goal architecture — the last discovery item
-(Public Note → Official Review Set) plus multi-goal exam support, both shipping on explicit owner
-overrides of their own evidence gates rather than waiting for either to clear naturally. **Renamed
-same-day from "Public Note → Official Review Set Discovery"** when the owner expanded scope to include
-item 2 below; nothing had deployed yet.
-
-### Planned Scope
-
-1. **Public Note → Official Review Set link (RC-5, backend + frontend). SHIPPED — see below.** On the
-   public note detail page (`/public/library/[subject]/[slug]`), when the note sits in a qualifying
-   Official Review Set — top-level, a true source (not an adopted copy), owned by a `UserRole.ADMIN`
-   account — show a callout linking to `/collections/published?highlight={id}`, which scrolls to and
-   expands that set's existing `PublicStudyPlanCard`. Reuses the existing signed-out intent-cookie
-   handoff (`discovery-intent.ts`), widened to accept this new return path. 3 new analytics events
-   (`PUBLIC_NOTE_OFFICIAL_SET_LINK_CLICKED/_PREVIEWED/_ADOPT_CLICKED`). No new migration — the lookup
-   uses the existing `idx_note_collection_items_note_id` index and runs inside
-   `NoteService.mapToPublicDetail`'s existing read-only transaction.
-
-   **⚠️ Kicked off ahead of the `v0.166.0` Hikari checkpoint clearing (owner override, 2026-10-13).**
-   This item's own gate — stated at the `v0.169.0` kickoff — was two stability checkpoints:
-   `v0.165.0`'s (due 2026-10-12, closed clean via PR #1489) and `v0.166.0`'s Hikari long-hold checkpoint
-   (`[CHECKPOINT — due 2026-10-14T11:19:29Z, backstop 2026-10-21]`, `ROADMAP.md`'s Backlog Index), which
-   was **not yet due** at kickoff — roughly a day out. Codex's implementation (audited and committed as
-   `dadac05a` on `feat/v0.170.0-public-note-review-set-link` before kickoff) adds exactly one new
-   public-note-page database lookup, which is the class of load the Hikari checkpoint exists to watch
-   for. **⚠️ Not actually blocking by the time this release reaches `main`**: nothing in this change
-   deploys until `releases/v0.170.0` merges, and the checkpoint's own due date (2026-10-14T11:19:29Z) is
-   earlier than this release — a 2-item release — is likely to sign off. **Read the checkpoint at
-   signoff, before the `main` merge, not just at this kickoff** — the override may turn out to have cost
-   nothing in practice. This release owes its own `[CHECKPOINT]` row at signoff either way, reading the
-   post-merge `Apparent connection leak` trace rate for any new attribution to this lookup, distinct from
-   `v0.166.0`'s own two traced methods (`PublicProfileController`/`NoteCollectionController`).
-
-2. **Multi-goal exam support (backend + frontend). SHIPPED — PR #1491, commit `04435dde` on
-   `releases/v0.170.0`.** The owner's 5
-   direction points, recorded verbatim at the `v0.169.0` kickoff (2026-10-10):
-
-   1. **Storage — a normalized join table**, one row per (user, exam goal), with one goal flagged
-      active per user. No redundant active-state storage. Existing single `studyGoal` values migrate
-      losslessly; current users keep their existing goal, now active.
-   2. **Dashboard & nudges — the active goal only** drives general dashboard nudges; other goals stay
-      visible/accessible but don't compete for nudge real estate. **Exception:** post-session next
-      steps must reflect the actual session/Study Journey context even when it differs from the active
-      goal.
-   3. **EXAM/SUBJECT exclusivity — unchanged.** Multiple exam goals may coexist with each other; a
-      subject focus still can't coexist with any exam goal. Profile-preference rule only, never a
-      Note/Study Plan access restriction.
-   4. **Exam-hub signup intent — add and activate**, never silently replace other exam goals. Clear
-      disclosure before the intent flow overwrites an existing subject focus. Signing up via an Exam
-      Hub must NOT auto-adopt any Review Set.
-   5. **Picker — a real goal-management surface** in Profile's Study Focus (add/remove/set-active).
-      Removing a goal must never delete adopted content or assessment history.
-
-   **Validated feasible against current code before any Codex prompt**, per the owner's own
-   instruction recorded above: `docs/claude-plans/2026-10-12-multi-goal-exam-support-feasibility-validation.md`
-   (Feature Planner, 2026-10-12). Technical verdict: every point is buildable, no blocking
-   contradiction found. **4 follow-up decisions made 2026-10-13, at this scope expansion, resolving the
-   validation document's §8 open questions:**
-   - Adding an additional exam goal while one is active: the new goal becomes the **sole** active goal
-     (deactivates the previous one) — reads point 1's "one goal flagged active" literally.
-   - Removing the currently-active goal when other adopted goals exist: **auto-promotes** another
-     adopted goal to active (mirrors `NoteCollectionService.reassertPrimaryInvariant`'s existing
-     pattern for Study Plan adoption — same shape, not the same code, since that operates on
-     `NoteCollectionEntity` not exam slugs). **Tie-breaker when more than one goal is eligible for
-     promotion: the most recently added remaining goal, then lowest `id`.**
-   - Disclosure before a silent goal-clearing write is required in **both** directions — not just
-     "exam-intent flow overwrites a subject focus" (point 4's literal wording) but also "setting a
-     subject focus clears every adopted exam goal" (the reverse, previously unaddressed). Reuses the
-     existing `AppModal`/`ProfileTypeSwitchModal` confirm-modal pattern; no new UI primitive.
-   - **Bundled into this same work, not deferred:** `GoalPromptBanner`'s confirmed-live defect (gates
-     only on `studyGoal`, never checks `focusSubjects`, so a user with subject focus sees "no goal yet"
-     and one click silently wipes their `focusSubjects` with zero disclosure — verified against
-     production, 1 of 426 real users is in exactly this state today) and its separate dismissal-state
-     bug (component-local, re-shows on reload). PR #1488 (which had backlogged this defect for a future
-     release) is closed unmerged as superseded — fixing it now, not later.
-
-   **Applied defaults, per the validation document's own recommendation (low-stakes, argued well
-   there, not re-litigated here):** the 3 legacy free-text `studyGoal` rows are left untouched (adding
-   any active exam goal still clears the legacy value, closing the exclusivity gap this would
-   otherwise open); "SUBJECT focus" in point 4 means `focusSubjects`, not legacy free-text; a single
-   shared "resolve active exam goal(s)" method is introduced, consolidating 4 call sites
-   (`AuthService`, `ProgressReportService` ×3, `PostSessionNextStepService`) that currently each
-   independently re-derive "is this an EXAM goal" — closing a drift risk `ExamGoalConfig.java:38-43`'s
-   own comment already documents one prior incident of.
-
-   **⚠️ Kicked off ahead of the `[CHECKPOINT — due 2026-12-07]` population gate clearing — explicit
-   owner override, 2026-10-13.** That checkpoint's own stated trigger ("re-open only if the
-   ≥2-distinct-goal population grows past a handful") has **not** been met: still 2 of 426 users,
-   unchanged since 2026-10-09, re-confirmed 2026-10-12. This is a deliberate reversal of three prior
-   owner decisions (2026-10-08, -09, -10) that each declined to build this on the same number. **This
-   release owes its own `[CHECKPOINT]`** at signoff, tracking whether the population actually grows now
-   that the capability exists — the original checkpoint measured whether to build it; this one measures
-   whether building it mattered.
-
-   **Verification note:** this item adds a data-mutating migration, changes API/export response
-   shapes, and touches profile, dashboard, post-session, exam-hub, and GDPR-export code — clears the
-   bar for at least one scoped cold falsification agent at signoff per the pressure-test gate, and is a
-   candidate for the full 3-agent pressure test given the permission-adjacent (goal/content exclusivity)
-   surface. **Decided at signoff:** one scoped cold agent (fresh context, `opus`, read-only, instructed
-   to falsify 7 named claims), not the full 3-agent test — `git diff --name-only` on both PRs found no
-   shared Java method between PR #1490 and PR #1491 (3 shared files, disjoint lines each), and the
-   goal/content exclusivity surface is a profile-preference rule, never an access-control boundary (no
-   cross-user read, no money/quota change), so the full-test trigger does not fire. Findings below.
-
-   **Audited before commit** against the Codex prompt's full acceptance-criteria list: migration
-   backfill replay test against seeded (non-empty) data; a real-Postgres `@SpringBootTest` +
-   `@Testcontainers` test proving the partial unique index exists and the actual Hibernate flush order
-   holds under add/remove/idempotent-re-add (not H2, which has no such index); `AccountPurgeService`
-   deletes `user_exam_goals` rows rather than sentinel-reassigning (the table enforces per-user
-   uniqueness); GDPR export (schema 1.3) includes every adopted goal, not just the active one; the
-   pre-existing `PUT /users/profile/goal` endpoint kept its request/response contract unchanged for
-   un-upgraded clients; `EXAM_GOAL_ADDED/ACTIVATED/REMOVED` confirmed firing from real user actions (not
-   just enum membership), verified by a test asserting the call. One false-positive raised and reverted
-   during audit: "CELE" in `progress-focus-guide.tsx` is the correct, pre-existing Civil Engineering
-   exam acronym (`ExamGoalConfig.java`), not a typo. Backend: 2,672 tests/0 failures (incl. the
-   Testcontainers native-query and real-Postgres flush-order harnesses). Frontend: 231/231 suites,
-   2,642/2,643 tests (1 pre-existing unrelated skip), `tsc --noEmit` clean, `npm run lint` clean.
-
-Anti-drift: no `ProfileType` change, no recommendation-engine change, no Degree Journey/Academic
-Term/ConceptHealth change, no change to `resolvePlanPremiumExamMode`/`EXAM_MODES.md`, no change to
-`UserEntity.examDate`'s existing single-valuedness (a known, separate, out-of-scope gap).
-
-**Explicitly excluded, unaffected by either override above:** the Degree Journey catalog (Phase C) —
-its own dependency (≥2 published Years) is a content-authoring gap no decision overrides; exactly one
-BSCS Year exists, unpublished — and Phase D (learner curriculum customization), not yet scoped, deferred
-pending real adopters. Neither is "Study Journey" work this release can close by deciding to.
-
-### Shipped
-
-- **Public Note → Official Review Set link** (PR #1490, commit `dadac05a`). Backend: new
-  `NoteCollectionItemRepository.findOfficialReviewSetRootForNote` native query (admin-owned,
-  top-level, true-source root; a PUBLIC root collection is never filtered on `published_at`, a child
-  collection and its item both require one — matching `listPublic`/`getPublic` exactly), wired into
-  `NoteService.mapToPublicDetail`; `PublicNoteDetailResponse` gains `officialReviewSetId`/
-  `officialReviewSetTitle`; 3 new `AnalyticsEventType` values. Frontend: `PublicNoteOfficialSetLink`
-  callout on the public note detail page linking to `/collections/published?highlight={id}`;
-  `PublicStudyPlanCard` widened with a `discoverySource: "public_note"` branch and a
-  `defaultPreviewOpen` prop; `PublishedPlansPageClient`'s "Browse All" grid reads `?highlight=` to
-  scroll to and auto-expand the matching card; `discovery-intent.ts`'s signed-out return-path
-  allowlist widened (`isDiscoveryReturnPath`, renamed from `isExplorePath`) to accept
-  `/collections/published` paths, with an adversarial test (`/collections/published-evil`).
-  Audited before commit: fixed a misplaced code comment and generic "Collection" copy corrected to
-  "Review Set" (`getCollectionLabels(null)` default was wrong here — this is a fixed product concept,
-  not a viewer-varying one). **Known limitation, non-blocking:** the "Recommended" grid on
-  `/collections/published` (course/program-filtered, authenticated-only) doesn't receive the
-  highlight/`defaultPreviewOpen` wiring that the "Browse All" grid does — acceptance criteria are
-  still met since Browse All is always the unfiltered superset and always renders the target plan.
-  Backend: 2,659 tests/0 failures (incl. the Testcontainers native-query Postgres harness, 46 queries
-  now PREPAREd). Frontend: 230/230 suites, 2,634/2,635 tests (1 pre-existing unrelated skip).
-
-- **Multi-goal exam support.** V155 moves valid scalar exam slugs
-  into `user_exam_goals`, preserving legacy free-text values; Profile can add, remove, and activate
-  goals, and Dashboard uses the active goal while post-session nudges follow the completed note's
-  adopted-goal context. Subject focus and exam goals remain exclusive with confirmation before
-  either direction clears existing preferences. The goal prompt now respects subject focus and
-  persists generic dismissal. Account data export schema 1.3 includes every goal. **Frontend and backend must deploy
-  together.** After V155 runs, rolling the backend back to v0.169.0 is **not safe for the 16 migrated
-  users**: their scalar `studyGoal` is empty and that backend cannot read the retained rows in
-  `user_exam_goals`. At signoff, add a post-ship population checkpoint to measure whether the
-  ≥2-distinct-goal cohort grows beyond the 2-of-426 baseline; this release shipped ahead of that
-  evidence gate by owner decision. Audited before commit against the Codex prompt's acceptance
-  criteria: migration backfill replay test, real-Postgres flush-order test (partial unique index
-  verified present), purge deletes rows (not sentinel-reassigned), GDPR export includes every
-  adopted goal, `PUT /users/profile/goal` kept contract-compatible for un-upgraded clients, and new
-  `EXAM_GOAL_*` analytics events confirmed firing (not just enum members) via frontend tests.
-  Backend: 2,672 tests/0 failures (incl. the Testcontainers native-query Postgres harness).
-  Frontend: 231/231 suites, 2,642/2,643 tests (1 pre-existing unrelated skip), `tsc --noEmit` clean,
-  lint clean. **Known limitations, found by the pre-signoff falsification agent, none blocking:**
-  (1) `PUT /users/profile/goal`'s `studyGoal: null` branch now also empties `focusSubjects`
-  (`AuthService.java:605-621`) — a deliberate "full reset" per the Codex prompt, but a genuine
-  behavior change from `v0.169.0` (null used to leave `focusSubjects` untouched); an un-upgraded
-  client sending `null` during the brief deploy-rollover window sees this new behavior before its own
-  UI catches up. (2) V155 does not special-case a legacy row holding both a valid exam-slug
-  `studyGoal` and non-empty `focusSubjects` — confirmed via a read-only production query at signoff
-  (2026-10-13) that 0 of 426 users are in that state today, so the gap is theoretical, not live; if it
-  ever becomes non-zero, such a migrated row would hold an active goal and focus subjects
-  simultaneously, violating the new exclusivity invariant. (3) The migration's SQL `trim()` is
-  whitespace-only, narrower than `ExamGoalConfig`'s Java-side slug normalization — a value like
-  `"ale\n"` would not migrate and falls back harmlessly to legacy scalar handling via the resolver.
-  (4) The Official Review Set predicate (Item 1) does not exclude a `PENDING_DELETION` admin
-  account's collection until the account is actually purged. (5) During the deploy rollover, an old
-  backend instance can still write a stale scalar `studyGoal` for a user who already has an active
-  `user_exam_goals` row; the resolver prefers the row, so the stale write is silently ignored rather
-  than losing data, and the window closes once rollover completes.
-
-- **Two carried-along process/doc fixes (PR #1487, PR #1489).** Both had been open against `main`
-  since before this release and were blocked there by the same `require_extra_approval_for_unattributed_changes`
-  ruleset rule as this release's own signoff PR; retargeted to `releases/v0.170.0` and merged here so
-  they ride to `main` with the rest of this release rather than sitting blocked indefinitely.
-  **PR #1489** closes the `v0.165.0` discovery-rail checkpoint on its due date: zero `server_failed`
-  restarts in the full 7-day post-deploy window (down from a ~7/week baseline) — the fix worked. This
-  is the checkpoint Item 1's own kickoff text above cites as "closed clean via PR #1489"; that claim
-  is accurate as of this merge, not before it. **PR #1487** documents a `check-deploys.sh`
-  false-positive mode found during `v0.169.0`'s deploy: a real, successful Vercel deployment that
-  never appeared in GitHub's Deployments API, so a future Vercel "DRIFT" verdict from that script
-  should be cross-checked against the actual Vercel dashboard before anyone acts on it. Comment-only
-  change to the script; no logic changed.
-
 ## Archived releases
 
 - `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
@@ -1744,4 +1573,5 @@ pending real adopters. Neither is "Study Journey" work this release can close by
 - `v0.166.0 — Measured Twice` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.172.0` kickoff.
 - `v0.167.0 — Study Journey Purpose` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.173.0` kickoff.
 - `v0.168.0 — Free Quota, Fairly Metered` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.174.0` kickoff.
+- `v0.170.0 — Study Journey, Closed` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.178.0` kickoff.
 - `v0.169.0 — Study Journey, Continued` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.175.0` kickoff.
