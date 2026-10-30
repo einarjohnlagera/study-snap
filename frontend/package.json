@@ -1,6 +1,6 @@
 {
   "name": "notelib-frontend",
-  "version": "0.175.0",
+  "version": "0.177.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -5433,3 +5433,36 @@ any Codex prompt. **Moved to `v0.170.0`:** Public Note → Study Journey discove
 a new public-note lookup would contaminate if shipped first. **Still excluded:** Degree Journey
 catalog (Phase C) — its own dependency (≥2 published Years) is a content-authoring gap no decision
 overrides; exactly one BSCS Year exists, unpublished. Full scope in `RELEASES.md`.
+
+**Kicked off 2026-10-13, signed off 2026-10-13.** `v0.170.0 — Study Journey, Closed` is **Released**,
+built on `releases/v0.170.0`, cut from `main` after `v0.169.0` merged as #1486 and tagged. Renamed same-day from
+"Public Note → Official Review Set Discovery" when scope expanded to item 2 below. **Item 1, SHIPPED**
+(PR #1490, `dadac05a`): Public Note → Official Review Set discovery (Feature Planner's RC-5) — a link
+from a public Note's detail page into its qualifying Official Review Set (top-level, true-source,
+`UserRole.ADMIN`-owned — not merely `PUBLIC`), reusing `PublicStudyPlanCard`/the intent-cookie surface.
+**Kicked off ahead of the `v0.166.0` Hikari checkpoint clearing, owner override 2026-10-13** — roughly a
+day before its `[CHECKPOINT — due 2026-10-14T11:19:29Z, backstop 2026-10-21]` due date; owes its own
+checkpoint row at signoff. **Item 2, SHIPPED** (PR #1491, `04435dde`): multi-goal exam support —
+**also an explicit owner override, 2026-10-13**, of the `[CHECKPOINT — due 2026-12-07]` population gate
+below, which has NOT cleared (still 2 of 426 users, its stated "past a handful" trigger unmet). Design
+validated feasible first (`docs/claude-plans/2026-10-12-multi-goal-exam-support-feasibility-validation.md`);
+4 follow-up decisions (sole-active-on-add, auto-promote-on-removal with a recency-then-id tie-breaker,
+bidirectional disclosure, bundling the confirmed-live `GoalPromptBanner` defect fix) made the same day —
+full detail in `RELEASES.md`. Owes its own checkpoint at signoff tracking whether the population actually
+grows post-ship. **Excluded, unaffected by either override:** the Degree Journey catalog (Phase C) — its
+own dependency (≥2 published Years) is a content gap no decision overrides, exactly one BSCS Year exists
+and it's unpublished — and Phase D, unscoped. Full scope in `RELEASES.md`.
+
+**Kicked off 2026-10-14, signed off 2026-10-14.** `v0.171.0 — Checkout, Recovered` is **Released** on `releases/v0.171.0`,
+cut from `main` after `v0.170.0` merged as #1492. Scope: **RC-0** (checkout diagnosis) CLOSED by owner
+decision — Xendit dashboard pull done, shows plain un-engaged invoice expiry on all 16 failed
+transactions (no channel picked, no attempt), outreach step explicitly skipped; **RC-3** (checkout
+reminder) via Xendit's native invoice-reminder notification (owner enabled Settings → Checkout →
+Notifications → "Payment reminders" 2026-10-14) plus one `payer_email` field added to
+`PaymentService.createInvoice` — not the in-house reminder job originally sketched in the
+product-health plan; **unverified whether the reminder fires inside the 24h invoice window**, owed as
+a `[CHECKPOINT — due 2026-10-21]`. **RC-2** (signup entry-surface attribution) SHIPPED (PR #1496,
+commit `4e3f727e`) — a `first_touch_surface` column extending `V93`'s existing first-touch-attribution
+columns. **RC-6** deferred — conflicts with RC-5's (`v0.170.0`) still-undated adoption-read
+window. Full scope, anti-drift and the Hikari checkpoint read performed at this kickoff in
+`RELEASES.md`.

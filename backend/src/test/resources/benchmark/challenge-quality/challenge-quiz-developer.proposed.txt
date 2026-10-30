@@ -1,0 +1,82 @@
+TASK:
+Generate exactly {QUESTION_COUNT} NEW Challenge Quiz questions.
+
+RULES:
+- Base ONLY on the provided summary and key concepts.
+- Cognitive demand: write questions that test meaningful understanding and application. Prefer questions that ask the learner to apply a concept to a short situation, interpret a case, compare related ideas, or reason to a conclusion. Use recall-only questions sparingly, for terms or facts a learner must know exactly. Never create challenge through obscure trivia, trick wording, excessive complexity, or details the notes do not support. If the notes cannot support a deeper question on a concept, write a clear, fair question instead of inventing complexity.
+- Curriculum level target: {LEARNER_LEVEL}.
+- {LEARNER_LEVEL_GUIDANCE}
+- {TRUE_FALSE_GUIDANCE}
+- {COMPUTATION_GUIDANCE}
+- {TIME_EXPECTATION}
+- Questions must test understanding, not memorization.
+- Questions must be unique.
+- Do NOT repeat or rephrase existing questions.
+- Avoid similar wording.
+- When additional concepts are available, prioritize questions on concepts not yet covered.
+- Standard MCQ questions must have 4 choices.
+- Standard MCQ questions must have a fully independent set of 4 answer choices. No two MCQ questions in this quiz may share the same set of choices.
+- The independent-choice rule does not apply inside a deliberate MATCHING block.
+- Standard MCQ answers must be exactly one of: A, B, C, D.
+- Exactly 1 choice must be correct.
+- Write every incorrect choice as a plausible answer for a learner with partial understanding: base it on a realistic misconception, an incomplete idea, a common reasoning error, or a closely related concept from the same category as the correct answer.
+- Each incorrect choice must be clearly wrong to a learner who understands the material and defensibly incorrect according to the notes. Never make a choice misleading, ambiguous, or partly correct just to raise difficulty.
+- Do not use absurd, unrelated, joke, or obviously false choices. Do not use "all of the above" or "none of the above".
+- For standard MCQ and MULTI_SELECT questions, keep the choices parallel in grammar, specificity and format, so that no choice stands out by length, detail or qualification, whether correct or incorrect. Avoid absolute words such as "always" or "never" in incorrect choices unless the concept genuinely requires them. This does not apply to assertion-style items, which use the four fixed statement choices, or to MATCHING blocks, which share one option set.
+- No two choices may mean the same thing, and no two questions may test the same fact from different angles.
+- You may include 1 to 2 MULTI_SELECT questions when a concept has multiple defining attributes, clauses, properties, or category members.
+- For MULTI_SELECT questions, set "questionFormat" to "MULTI_SELECT", keep exactly 4 choices, set "correctIndices" to 2 or 3 zero-based correct choice indexes, set "acceptableAnswers" to null, and set "answer" to the letter for the first correct index as a legacy fallback.
+- Do not use MULTI_SELECT when all 4 choices are correct.
+- You may include 1 MATCHING block when the notes contain named items that can be matched to distinct labels, laws, descriptions, steps, or categories.
+- A MATCHING block must be 2 to 4 consecutive questions with the same 4 choices in the same order; each item must have a distinct correct answer.
+- For MATCHING questions, set "questionFormat" to "MATCHING", set the same short "questionGroup" id such as "group-1" on each item in the block, set "correctIndices" to null, set "acceptableAnswers" to null, and set "answer" to that item's single correct letter.
+- Do not use MATCHING unless all items in the block can share the same option set.
+- You may include 1 to 2 IDENTIFICATION questions when a concept has one precise, nameable term, definition target, formula name, law, method, component, person, place, or answer.
+- Use IDENTIFICATION for focused active recall only. Do not use it for vague, subjective, multi-part, or explanation-heavy concepts.
+- For IDENTIFICATION questions, set "questionFormat" to "IDENTIFICATION", set "choices" to an empty array, set "answer" to null, set "correctIndices" to null, set "questionGroup" to null, set "acceptableAnswerGroups" to null, and do not set "correctIndex".
+- For IDENTIFICATION questions, set "acceptableAnswers" to 2 or 3 short synonyms or variants that should be accepted after trimming, lowercasing, and collapsing whitespace. Include the primary correct answer first.
+- IDENTIFICATION answers are graded by EXACT text match after trimming, lowercasing, and collapsing whitespace. There is no mathematical, chemical, or code-aware comparison. So the answer must be a term, name, or label a learner can type unambiguously IN WORDS.
+- NEVER use IDENTIFICATION when the correct answer is a symbolic or notational form: a mathematical expression or equation, a chemical formula, a code snippet, or a value with units. These have many equally-correct renderings — "x^2 + y^2", "x² + y²" and "y² + x²" are all correct and none of them match each other as text — so they cannot be graded fairly. Use an MCQ instead, with the notation forms as the four choices.
+- This applies to every subject, not only mathematics: "Identify the chemical formula for water" and "Identify the expression that reverses a list" are just as invalid as the algebraic case.
+- A formula's NAME is a valid IDENTIFICATION answer; the formula ITSELF is not. "Which law states that force equals mass times acceleration?" → "Newton's Second Law" is valid. "Identify the equation for Newton's Second Law" → "F = ma" is NOT.
+- If the stem asks the learner to identify, give, write, or state an expression, formula, equation, or notation, the answer is notation by definition — do not emit that question as IDENTIFICATION at all.
+- "acceptableAnswers"[0] must be the exact thing the stem asks for. Restating the stem is not an answer: for "Identify the algebraic expression for the sum of the squares of x and y", the answer "sum of squares" merely repeats the question and must not be used.
+- You may include 0 to 1 ENUMERATION questions when a concept has a well-defined, countable set of 2 to 5 distinct named items — branches, steps, types, categories, causes, stages, or parts.
+- Use ENUMERATION only when every required item is independently nameable and unambiguous. Do not use it when the items overlap, when order matters, or when there are more than 5 required items.
+- For ENUMERATION questions, set "questionFormat" to "ENUMERATION", set "choices" to an empty array, set "answer" to null, set "correctIndices" to null, set "questionGroup" to null, set "acceptableAnswers" to null, and do not set "correctIndex".
+- For ENUMERATION questions, set "acceptableAnswerGroups" to one array per required item (2 to 5 arrays total). Each inner array holds 1 to 2 short synonym/variant strings for that one required item, with the primary answer first. The number of inner arrays IS the required answer count — do not add a separate count field.
+- For every non-IDENTIFICATION question, set "acceptableAnswers" to null.
+- For every non-ENUMERATION question, set "acceptableAnswerGroups" to null.
+- For standard MCQ and TRUE_FALSE questions, set "correctIndices" to null, set "acceptableAnswers" to null, and set "acceptableAnswerGroups" to null.
+- Vary question framing — do not start all questions with "Which of the following". Distribute across: positive framing (~40%), negative framing such as "Which is NOT correct?" or "All of the following are true EXCEPT..." (~25%), best-describes framing such as "Which best describes...?" (~20%), and assertion-style framing such as "Statement 1: ... Statement 2: ... Which is correct?" (~15%). In an assertion-style question, put each statement and the closing question on its OWN LINE, separated by a real newline character: "Statement 1: <text>\nStatement 2: <text>\nWhich is correct?". Without the newlines the closing question runs on from the last statement and reads as part of it. Assertion-style "Which is correct?" items are MCQ with four options ("Both statements are correct", "Only Statement 1 is correct", "Only Statement 2 is correct", "Neither statement is correct") — never TRUE_FALSE and never ["True", "False"]. For every assertion-style item, fill `statementVerdicts` before you choose the answer: judge Statement 1 on its own and Statement 2 on its own, each correct (`true`) or incorrect (`false`). Use exactly these four choice texts. The answer must be the choice that matches both verdicts: both true → "Both statements are correct"; only Statement 1 true → "Only Statement 1 is correct"; only Statement 2 true → "Only Statement 2 is correct"; both false → "Neither statement is correct". Begin the explanation by saying whether each statement is correct, and why. For every other item, set `statementVerdicts` to null.
+- Explanation is required for every question and must be accurate and grounded in the notes.
+- if this is a standard single-answer question and every choice is a short numeric or unit value (a number, measurement, or similar literal — not a phrase), explanation must state the correct choice's exact value, written exactly as it appears in choices, and must not paraphrase or round it; otherwise, keep explaining WHY the answer is correct without stating, restating, or listing any choice's text. Either way: never refer to the correct choice by letter (A, B, C, D) or with a phrase like "which is option C"; do not restate or discuss any of the other (incorrect) choices' values.
+- Concept is required for every question.
+- Use the provided excluded question list as hard constraints.
+- Return ONLY valid JSON with this structure:
+  {
+    "questions": [
+      {
+        "question": "...",
+        "choices": ["...", "...", "...", "..."],
+        "answer": "A",
+        "questionFormat": "MCQ",
+        "questionGroup": null,
+        "correctIndices": null,
+        "acceptableAnswers": null,
+        "acceptableAnswerGroups": null,
+        "explanation": "...",
+        "concept": "..."
+      }
+    ]
+  }
+- Do not include markdown, comments, or text before or after JSON.
+
+Math notation
+- Wrap EVERY mathematical expression in single dollar signs as LaTeX: $...$. This applies everywhere you write learner-facing text — questions, choices, explanations, summaries, key concepts, and working solutions alike.
+- Correct: $d = \sqrt{(x_2 - x_1)^2 + (y_2 - y_1)^2}$ and $x^2 + y^2 = 1$ and $\frac{a}{b}$ and $y = mx + c$
+- Wrong, because the app renders it as literal text with the backslashes visible: d = \sqrt{(x_2 - x_1)^2} or x^2 + y^2 = 1
+- Never use Unicode sub/superscript characters such as the subscript two or the superscript three. Write $x_1$, $x_2$, $x^3$ instead.
+- Keep prose outside the delimiters: "The slope $m$ is the rise over the run."
+- The dollar sign is reserved as a math delimiter. Do not use it as a currency symbol.
+- Shell commands, flags, file paths and code are not math: never place them inside `$...$`, and never write a shell-prompt `$` before a command.
