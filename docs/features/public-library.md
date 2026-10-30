@@ -35,6 +35,14 @@ The generic filtered no-results state offers both `Clear filters` and `Remove la
 
 The More Filters sheet includes a `Study Pack Ready` boolean toggle. Applied state is sent as `readyOnly=true` to the paginated public-note endpoint, so readiness filtering happens before page selection and can be switched off to restore the full server-filtered list.
 
+## Temporary public API diagnostics (v0.178.0)
+
+The backend records one `PUBLIC_API_DIAGNOSTICS` line per non-empty UTC minute for public GET/HEAD traffic, plus an OPTIONS count. The aggregate includes request and anonymous/authenticated counts, exact status and path-group histograms, query **names** with counts, top user agents and normalized listing tag slugs, distinct anonymous /24 or /48 client networks, and the X-Forwarded-For entry-count distribution (0, 1, 2, 3+) and presence counts for True-Client-IP and CF-Connecting-IP. A request with any Authorization header contributes only to the total, the status histogram and the per-minute rate that gates sampling. The client key is truncated True-Client-IP when present, otherwise truncated **leftmost** X-Forwarded-For; this key is possibly forgeable. The correct client-address header behind Render is still unverified.
+
+Only above 30 public GET/HEAD requests in a minute, at most 20 anonymous `PUBLIC_API_SAMPLE` lines contain the path group, sorted query names, a sanitized user agent, status, and labelled truncated True-Client-IP, first and last X-Forwarded-For entries, and remote address. IPv4 is truncated to /24 and IPv6 to /48 (an IPv4-mapped IPv6 address is reported as its IPv4 /24). Truncated addresses are **still personal data**. No raw query, search or other free-text value, token, cookie, request body, or full address is logged. Address truncation is done by string parsing only: a header value is never passed to a resolver, because a value like `x.attacker.example:1` is a host name to the JDK and would trigger a blocking DNS lookup. Every caller-controlled value in a line (user agent, parameter names, tag slugs) is sanitised and then double-quoted with escaping, so it cannot add or overwrite a field. Caller-controlled strings have control characters removed and fixed length limits (user agent 120, tag slug and query name 60).
+
+The hard per-minute bounds are 5,000 distinct client keys, 500 user-agent keys, 500 tag-slug keys, 100 query-parameter-name keys, top 10 entries per reported map, and 20 samples. Excess clients report `>=cap`; excess agents and tags count under `<other>`. The diagnostic defaults to enabled and has a **2026-11-12 review-by date**; that date is a reminder, not an automatic switch. Turning it off (`PUBLIC_API_DIAGNOSTICS_ENABLED=false`) requires a redeploy. Render service-log retention is 7, 14 or 30 days according to workspace plan; the workspace's current plan has not been verified, and the logs are not copied elsewhere. Access is limited to Render workspace members and Render MCP read tools. Remove this temporary diagnostic in the release after its client-address and caller-pattern question is answered.
+
 ## Key Files
 
 **Backend**
@@ -75,7 +83,7 @@ a bounded ranked query per subject, which is not built.
 **Frontend**
 - `frontend/components/notes/public-library-page-client.tsx` — main public library client; filter state; discovery/filter mode switching; section rendering (Featured / Popular / Recent)
 - `frontend/app/public/library/page.tsx` — server component entry; passes `searchParams` to client
-- `frontend/app/public/library/[subject]/page.tsx` — SEO subject landing page (server-rendered, ISR 300s, `generateStaticParams`)
+- `frontend/app/public/library/[subject]/page.tsx` — SEO subject landing page (server-rendered on first request, ISR 300s; **`generateStaticParams` returns `[]` since `v0.178.0`**, so a production build does not prerender subjects or call the production API)
 - `frontend/lib/public-library-url.ts` — canonical URL model: `PublicLibraryUrlFilters` type, `buildPublicLibraryUrl()`, `parsePublicLibraryFilters()`; single source of truth for public library URL construction
 - `frontend/lib/public-library-discovery.ts` — frontend discovery scoring and section deduplication helpers
 - `frontend/lib/api.ts` — `listPublicNotes(params?)`, `getPublicNote(id)`, `togglePublicNoteLike(id)`
@@ -663,7 +671,7 @@ A non-interactive "More ways to study when you copy this note" block showing Cha
 
 ### J — Subject landing pages (shipped in v0.14.0)
 
-The `/public/library/[subject]` route is now a server-rendered subject landing page instead of a redirect. It ships with per-subject metadata, CollectionPage structured data, ISR at `300` seconds, and `generateStaticParams()` from `getServerPublicSubjects()`.
+The `/public/library/[subject]` route is now a server-rendered subject landing page instead of a redirect. It ships with per-subject metadata, CollectionPage structured data, ISR at `300` seconds, and `generateStaticParams()` from `getServerPublicSubjects()` (**superseded in `v0.178.0` Step 0: it now returns `[]`; see "Build-time catalog walks" below**).
 
 Final implementation:
 
@@ -685,3 +693,43 @@ When a user hits their Study Pack limit, the limit modal should offer the Public
   - Dynamic upgrade CTA from `getUpgradeCtas(currentPlan)` — navigates to `/settings?section=plans`.
 
 This fallback turns the limit hit into a *content-discovery* moment rather than a hard wall, especially valuable for Free users early in their study journey.
+
+## Build-time catalog walks (v0.178.0 Step 0)
+
+A Vercel production build calls the production API, and the prerender hooks used to walk the catalog while a deploy was in progress (measured on a counting mock backend: **393 backend requests per `next build`** to **1**). Three deliberate settings stop that, and each is pinned by a test:
+
+- `generateStaticParams` on `/public/library/[subject]` returns `[]` (`app/public/library/[subject]/page.tsx`).
+- `generateStaticParams` on `/exam/[slug]` returns `[]` (`app/exam/[slug]/page.tsx`); the five hub slugs render on first request and an unknown slug still reaches `notFound()`.
+- `app/sitemap.ts` exports `dynamic = "force-dynamic"`, so the sitemap is rendered on request; its catalog walk (about 41 pages of 50 notes) is bounded by the fetch cache (`revalidate: 300`), not by the build.
+
+Behavior is otherwise unchanged: same URLs, titles, canonicals, robots and sitemap URL set (checked on 8 URLs and a 2,274-URL sitemap). The first **cold** request (after a deploy, or when nothing is cached) pays the walk synchronously and sequentially, inside a Vercel function with a time limit (the project's limit is unverified; see `RELEASES.md` v0.178.0); after the fetch cache expires (300 s) the stale value is served while it refreshes. A cold sitemap, the `general` subject page and the exam hubs are the long walks (about 41 pages of 50 notes for the sitemap), always with `sort=recent`. Do not restore the slug lists without reading `docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md`; `getServerPublicSubjectSlugs` in `lib/server-public-notes.ts` is now unused by production code and is kept for a future cleanup.
+
+## Ranked listing snapshot (v0.178.0 Release 1)
+
+Only the paginated ranked `GET /notes/public` path uses a process-local snapshot: the copy, like and
+view count maps, and a normalized-tag slug to public-note-ID index. PostgreSQL applies the existing
+slug normalization when building the index. The six ranked sorts are Recommended, Featured, Popular,
+Copied, Views and Most Copied. The paired count and page use one generation; visibility and the other
+filters remain live in SQL, so making a note private excludes it immediately. The SQL-orderable
+Recent and Title sorts, the legacy unpaginated caller, discovery ranking, facets, projections and
+creator-impact retain their existing queries.
+
+The snapshot refreshes asynchronously after 300 seconds; publish, unpublish and tag edits do not
+invalidate it. A newly published or retagged note may
+take about five minutes to enter a tag-filtered ranked list under steady traffic, and engagement rank inputs
+lag the same amount. The refresh starts when a request finds the snapshot older than 300 seconds, but that
+request is still served the old one, so after a quiet period the first requests can see data up to about 15
+minutes old (the 900-second ceiling). A failed refresh keeps the last good generation for at most 900
+seconds total, so those inputs can lag longer during a failure; after that ceiling, requests use the
+original SQL. A cold request waits at most 3 seconds for the single build. A build that hangs (for example on a dead socket, which the 50 s transaction timeout cannot cancel) is released after 55 seconds so the single-flight slot is not held forever. A new instance builds one generation at startup (`warm-up-on-startup`, default on; tests switch it off so a background build does not hold a pooled connection during connection-counting tests). Non-hit outcomes are logged at most once a minute. Fallback allows two
+concurrent ranked requests and immediately returns HTTP 503 with `Retry-After: 3` to further callers.
+Setting `studysnap.public-library-ranking-snapshot.ttl-seconds` to `0` bypasses the snapshot and its
+bulkhead. Builds refuse more than 50,000 public notes, 50,000 entries per metric map or 250,000
+tag entries (about 25 times today's catalog; the build holds every row in memory), and refuse a suspicious empty generation.
+
+EVERY snapshot statement, tagged or not, pins `force_custom_plan` within the request transaction.
+PostgreSQL otherwise may reuse a generic prepared plan after the driver's fifth execution, which cannot size
+the array-bound joins; the measured 66–74-ID tag case took 8–10 ms with that plan versus about 1 ms with a
+custom plan, and two PostgreSQL tests (tagged and untagged) fail if the pin is removed. This setting is transaction-local,
+not a datasource-wide driver change; it also applies to the remaining statements of that request's
+transaction (for example the listing projections), which only costs a little extra planning time.

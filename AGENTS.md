@@ -1,5 +1,10 @@
 # AGENTS.md - NoteLib
 
+Acquire the public-library ranking snapshot before entering `NoteService.listPublic`'s read-only
+transaction. The count and page must receive the same generation. Never wait for a cold build while
+holding a JDBC connection; an expired or unavailable snapshot uses the bounded fallback, while
+`ttl=0` uses the original SQL without that bulkhead.
+
 Never use Note generation lifecycle (`NoteStatus`, or the `studyPackStatus` string derived from it) as a proxy for learning artifact availability. Derive capability from the Study Pack's own artifacts (`quiz`, `keyConcepts`, `status`) via `StudyPackArtifactFacts`.
 
 When presenting a Collection as an exam Review Set, resolve its exam slug from its root ancestor's `courseProgram` through `course_programs.exam_goal_slug`, and require the root's own `learnerLevel == BOARD_EXAM_REVIEW`. Child Subject Plans often have no `courseProgram`; a catalog slug alone can also belong to an academic Journey. Keep library-wide navigation and exam-mode availability keyed to the viewer's `ProfileType`.
@@ -67,7 +72,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.175.0 - Quiz Ready` (Released; cut from `releases/v0.174.0`, merges after `v0.174.0`'s PR #1512)
+- `v0.178.0 - Production Stabilization` (Released on its branch, deploy pending, effect unproven; cut from `main` at `v0.175.0`; `v0.176.0` and `v0.177.0` are Released on their own branches, unmerged, deploy on HOLD)
 
 Implementation status: Phases 1-4 are **Released** (`v0.91.0`-`v0.94.0`), with **Phase 4 PARTIAL**: shareable invitation links and connection management shipped in `v0.94.0`; **supporter onboarding did NOT**. **⚠️ The reason it did not is an ASSUMPTION nobody has checked, found at the `v0.95.0` kickoff (2026-08-29):** `v0.94.0` blocked it on the onboarding freeze, but `[CHECKPOINT — due 2026-09-11]` is the **signup funnel read alone** (375 signups against a 62.4% completion baseline, measuring `app/onboarding/page.tsx`), **"supporter onboarding" has no definition anywhere in the plan**, and the redemption page already treats `/onboarding` as a waypoint it carries a token through rather than a surface it edits. **It is NOT claimed unblocked — it is claimed unchecked.** The discriminating test is whether the work edits the signup → verify-email → onboarding path; it needs a definition step, which is **`v0.97.0` item 3 — docs only, no code on the frozen path**. **No public people search is in Phase 4 at all.** **Phase 5 remains uncommitted and must not be stubbed.** **⚠️ An `ACCEPTED` relationship implies no access of any kind** — material, activity and progress each need their own live grant, and streaks/study days are reachable only through `ACTIVITY`.
 

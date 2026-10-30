@@ -80,22 +80,12 @@ describe("SubjectLandingPage", () => {
     window.sessionStorage.clear();
   });
 
-  // ⚠️ Slugs now come from GET /subjects?scope=public, not from every public note. Deriving them from the
-  // catalog is what made this one of ~250 unbounded 2.5MB fetches in a single build.
-  it("generates static params from the public subjects endpoint, not the note catalog", async () => {
-    (getServerPublicSubjectSlugs as jest.Mock).mockResolvedValue(["biology", "chemistry"]);
-
-    await expect(generateStaticParams()).resolves.toEqual([
-      { subject: "biology" },
-      { subject: "chemistry" },
-    ]);
-    expect(getServerPublicSubjectSlugs).toHaveBeenCalledTimes(1);
-  });
-
-  it("still falls back to ISR rather than failing the build when the subjects call rejects", async () => {
-    (getServerPublicSubjectSlugs as jest.Mock).mockRejectedValue(new Error("backend unreachable"));
-
-    await expect(generateStaticParams()).resolves.toEqual([]);
+  // ⚠️ v0.178.0 Step 0: the list is deliberately empty. Prerendering every public subject made each production build
+  // walk the catalog against the production API; pages now render on the first request and are cached.
+  it("generates no static params and makes no backend call, so a build never walks the catalog", () => {
+    expect(generateStaticParams()).toEqual([]);
+    expect(getServerPublicSubjectSlugs).not.toHaveBeenCalled();
+    expect(getServerPublicNotesBySubjectSlug).not.toHaveBeenCalled();
   });
 
   it("generates per-subject metadata from the subject label", async () => {

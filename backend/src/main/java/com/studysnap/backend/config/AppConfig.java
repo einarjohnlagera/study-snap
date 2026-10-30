@@ -45,6 +45,19 @@ public class AppConfig {
     }
 
     @Bean
+    public AsyncTaskExecutor publicLibraryRankingSnapshotExecutor(InFlightThreadRegisteringTaskDecorator taskDecorator) {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("public-ranking-snapshot-");
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(1);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setTaskDecorator(taskDecorator);
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }

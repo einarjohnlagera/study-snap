@@ -1,4 +1,4 @@
-import sitemap from "./sitemap";
+import sitemap, { dynamic } from "./sitemap";
 import { getServerPublicNotes } from "@/lib/server-public-notes";
 
 jest.mock("@/lib/server-public-notes", () => {
@@ -12,6 +12,11 @@ jest.mock("@/lib/server-public-notes", () => {
 describe("sitemap metadata route", () => {
   beforeEach(() => {
     (getServerPublicNotes as jest.Mock).mockReset();
+  });
+
+  // ⚠️ v0.178.0 Step 0: a static sitemap walks the whole public catalog at every build.
+  it("is rendered on request, not at build time", () => {
+    expect(dynamic).toBe("force-dynamic");
   });
 
   function buildScienceNote(overrides: Partial<Record<string, unknown>> = {}) {

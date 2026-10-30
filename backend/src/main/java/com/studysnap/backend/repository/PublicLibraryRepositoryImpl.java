@@ -17,6 +17,9 @@ import org.springframework.stereotype.Repository;
 
 import java.nio.ByteBuffer;
 import java.sql.Array;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -32,7 +35,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Repository
 public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
@@ -61,6 +68,11 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     /** Only Featured eligibility reads the pack's summary and quiz, so only Featured pays for it. */
     private static final String RANK_STUDY_PACK_JOIN = " left join study_packs sp on sp.note_id = n.id ";
     private static final String RANK_NOW_PARAMETER = "rankNow";
+    private static final String SNAPSHOT_TAG_IDS_PARAMETER = "rankTagIds";
+    private static final String SNAPSHOT_LIMIT_PARAMETER = "rankLimit";
+    private static final String SNAPSHOT_OFFSET_PARAMETER = "rankOffset";
+    private static final String PUBLIC_NOTES_COUNT_SQL =
+            "select count(*) from notes n where n.visibility = 'PUBLIC'";
     private static final String EXCLUDED_NOTE_ID_PARAMETER = "rankExcludedNoteId";
     private static final String DISCOVERY_LIMIT_PARAMETER = "limitPerSection";
     private static final String FEATURED_SECTION = "featured";
@@ -87,6 +99,16 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
             + " count(*) as metric from analytics_events rank_view"
             + " where rank_view.event_type = 'PUBLIC_NOTE_VIEWED' and rank_view.entity_id is not null"
             + " group by rank_view.entity_id) rank_views on rank_views.note_id = n.id ";
+    private static final String SNAPSHOT_COPIES_JOIN = " left join (select t.note_id, t.metric from"
+            + " unnest(:rankCopiesIds::uuid[], :rankCopiesValues::bigint[]) as t(note_id, metric))"
+            + " rank_copies on rank_copies.note_id = n.id ";
+    private static final String SNAPSHOT_LIKES_JOIN = " left join (select t.note_id, t.metric from"
+            + " unnest(:rankLikesIds::uuid[], :rankLikesValues::bigint[]) as t(note_id, metric))"
+            + " rank_likes on rank_likes.note_id = n.id ";
+    private static final String SNAPSHOT_VIEWS_JOIN = " left join (select t.note_id, t.metric from"
+            + " unnest(:rankViewsIds::uuid[], :rankViewsValues::bigint[]) as t(note_id, metric))"
+            + " rank_views on rank_views.note_id = n.id ";
+    private static final Pattern JDBC_PARAMETER = Pattern.compile("(?<!:):([A-Za-z][A-Za-z0-9]*)");
     /** Copies: the same predicate as {@code countCopiedPublicNotesBySourceNoteIds}. */
     private static final String RANK_COPIES = "coalesce(rank_copies.metric, 0)";
     /** Likes: the same predicate as {@code countLikesByNoteIds}. */
@@ -223,6 +245,211 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
         );
         bind(query, filter.parameters());
         return ((Number) query.getSingleResult()).longValue();
+    }
+
+    @Override
+    public PublicLibraryRankingSnapshot buildPublicLibraryRankingSnapshot(
+            long generation, int maxNotes, int maxTagEntries) {
+        long publicNotes = ((Number) entityManager.createNativeQuery(
+                PUBLIC_NOTES_COUNT_SQL).getSingleResult()).longValue();
+        if (publicNotes > maxNotes) {
+            throw new IllegalStateException("Public note cap exceeded: " + publicNotes);
+        }
+        Map<UUID, Long> copies = snapshotMetric("select copied_from_note_id, count(*) from notes"
+                + " where copied_from_public = true and copied_from_note_id is not null group by copied_from_note_id",
+                maxNotes);
+        Map<UUID, Long> likes = snapshotMetric("select note_id, count(*) from public_note_likes group by note_id",
+                maxNotes);
+        Map<UUID, Long> views = snapshotMetric("select entity_id, count(*) from analytics_events"
+                + " where event_type = 'PUBLIC_NOTE_VIEWED' and entity_id is not null group by entity_id",
+                maxNotes);
+        String tagSql = "select n.id, " + normalizedSlugSql("public_tag.value")
+                + " from notes n cross join lateral unnest(n.tags) as public_tag(value)"
+                + " where n.visibility = 'PUBLIC' limit :tagLimit";
+        @SuppressWarnings("unchecked")
+        List<Object[]> tagRows = entityManager.createNativeQuery(tagSql)
+                .setParameter("tagLimit", maxTagEntries + 1).getResultList();
+        if (tagRows.size() > maxTagEntries) {
+            throw new IllegalStateException("Public tag entry cap exceeded: " + tagRows.size());
+        }
+        Map<String, Set<UUID>> tags = new HashMap<>();
+        for (Object[] row : tagRows) {
+            tags.computeIfAbsent(String.valueOf(row[1]), ignored -> new HashSet<>()).add(toUuid(row[0]));
+        }
+        return new PublicLibraryRankingSnapshot(generation, OffsetDateTime.now(), copies, likes, views,
+                tags, publicNotes, tagRows.size());
+    }
+
+    @Override
+    public long countPublicNotesForRankingSnapshot() {
+        return ((Number) entityManager.createNativeQuery(PUBLIC_NOTES_COUNT_SQL)
+                .getSingleResult()).longValue();
+    }
+
+    private Map<UUID, Long> snapshotMetric(String sql, int maxEntries) {
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = entityManager.createNativeQuery(sql + " limit :metricLimit")
+                .setParameter("metricLimit", maxEntries + 1).getResultList();
+        if (rows.size() > maxEntries) {
+            throw new IllegalStateException("Public ranking metric cap exceeded: " + rows.size());
+        }
+        Map<UUID, Long> result = new HashMap<>();
+        for (Object[] row : rows) {
+            result.put(toUuid(row[0]), ((Number) row[1]).longValue());
+        }
+        return result;
+    }
+
+    @Override
+    public long countPublicLibraryRankedSnapshotMatches(PublicLibraryFilterCriteria criteria,
+            PublicLibrarySort sort, PublicLibraryRankingSnapshot snapshot) {
+        FilterSql filter = buildSnapshotFilter(criteria, snapshot);
+        Set<RankMetric> metrics = rankedEligibility(sort).isEmpty() ? EnumSet.noneOf(RankMetric.class)
+                : eligibilityMetrics(sort);
+        String sql = snapshotCountSql(filter, sort);
+        return snapshotJdbc(sql, filter.parameters(), metrics, snapshot,
+                statement -> {
+                    try (ResultSet rows = statement.executeQuery()) {
+                        rows.next();
+                        return rows.getLong(1);
+                    }
+                });
+    }
+
+    @Override
+    public List<UUID> findPublicLibraryRankedSnapshotPageIds(PublicLibraryFilterCriteria criteria,
+            PublicLibrarySort sort, OffsetDateTime rankedAt, int offset, int limit,
+            PublicLibraryRankingSnapshot snapshot) {
+        FilterSql filter = buildSnapshotFilter(criteria, snapshot);
+        Map<String, Object> parameters = new LinkedHashMap<>(filter.parameters());
+        if (rankedOrderBy(sort).contains(":" + RANK_NOW_PARAMETER)) {
+            parameters.put(RANK_NOW_PARAMETER, rankedAt);
+        }
+        parameters.put(SNAPSHOT_LIMIT_PARAMETER, limit);
+        parameters.put(SNAPSHOT_OFFSET_PARAMETER, offset);
+        String sql = snapshotPageSql(filter, sort);
+        return snapshotJdbc(sql, parameters, rankedMetrics(sort), snapshot,
+                statement -> {
+                    List<UUID> ids = new ArrayList<>();
+                    try (ResultSet rows = statement.executeQuery()) {
+                        while (rows.next()) {
+                            ids.add(rows.getObject(1, UUID.class));
+                        }
+                    }
+                    return ids;
+                });
+    }
+
+    String snapshotCountSql(PublicLibraryFilterCriteria criteria, PublicLibrarySort sort,
+            PublicLibraryRankingSnapshot snapshot) {
+        return snapshotCountSql(buildSnapshotFilter(criteria, snapshot), sort);
+    }
+
+    // The filter (and so the tag-id union and its array) is built ONCE per statement and passed in, not rebuilt
+    // for the SQL text and again for the parameters.
+    private String snapshotCountSql(FilterSql filter, PublicLibrarySort sort) {
+        String eligibility = rankedEligibility(sort);
+        Set<RankMetric> metrics = eligibility.isEmpty() ? EnumSet.noneOf(RankMetric.class)
+                : eligibilityMetrics(sort);
+        return "select count(*)" + snapshotRankedFrom(sort, metrics)
+                + filter.whereClause() + eligibility;
+    }
+
+    String snapshotPageSql(PublicLibraryFilterCriteria criteria, PublicLibrarySort sort,
+            PublicLibraryRankingSnapshot snapshot) {
+        return snapshotPageSql(buildSnapshotFilter(criteria, snapshot), sort);
+    }
+
+    private String snapshotPageSql(FilterSql filter, PublicLibrarySort sort) {
+        return "select n.id as id" + snapshotRankedFrom(sort, rankedMetrics(sort))
+                + filter.whereClause() + rankedEligibility(sort)
+                + rankedOrderBy(sort) + " limit :" + SNAPSHOT_LIMIT_PARAMETER
+                + " offset :" + SNAPSHOT_OFFSET_PARAMETER;
+    }
+
+    private FilterSql buildSnapshotFilter(PublicLibraryFilterCriteria criteria,
+            PublicLibraryRankingSnapshot snapshot) {
+        // Reuse every existing filter builder; only replace its tag clause with the indexed ID union.
+        PublicLibraryFilterCriteria withoutTags = new PublicLibraryFilterCriteria(criteria.viewerUserId(),
+                criteria.deletedUserId(), criteria.searchPattern(), criteria.subjectSlug(), List.of(),
+                criteria.courseProgramSlug(), criteria.creator(), criteria.learnerLevel(),
+                criteria.readyOnly(), criteria.sources());
+        FilterSql base = buildFilter(withoutTags);
+        Map<String, Object> parameters = new LinkedHashMap<>(base.parameters());
+        String where = base.whereClause();
+        if (criteria.tagSlugs() != null && !criteria.tagSlugs().isEmpty()) {
+            where += " and n.id = any(:" + SNAPSHOT_TAG_IDS_PARAMETER + "::uuid[])";
+            parameters.put(SNAPSHOT_TAG_IDS_PARAMETER, snapshot.idsFor(criteria.tagSlugs()).toArray(UUID[]::new));
+        }
+        return new FilterSql(where, parameters);
+    }
+
+    private String snapshotRankedFrom(PublicLibrarySort sort, Set<RankMetric> metrics) {
+        StringBuilder from = new StringBuilder(RANKED_FROM_BASE);
+        if (sort == PublicLibrarySort.FEATURED) {
+            from.append(RANK_STUDY_PACK_JOIN);
+        }
+        if (metrics.contains(RankMetric.COPIES)) from.append(SNAPSHOT_COPIES_JOIN);
+        if (metrics.contains(RankMetric.LIKES)) from.append(SNAPSHOT_LIKES_JOIN);
+        if (metrics.contains(RankMetric.VIEWS)) from.append(SNAPSHOT_VIEWS_JOIN);
+        return from.toString();
+    }
+
+    @FunctionalInterface
+    private interface StatementWork<T> {
+        T execute(PreparedStatement statement) throws SQLException;
+    }
+
+    private <T> T snapshotJdbc(String sql, Map<String, Object> parameters, Set<RankMetric> metrics,
+            PublicLibraryRankingSnapshot snapshot, StatementWork<T> work) {
+        Map<String, Object> values = new LinkedHashMap<>(parameters);
+        if (metrics.contains(RankMetric.COPIES)) addMetricArrays(values, "rankCopies", snapshot.copies());
+        if (metrics.contains(RankMetric.LIKES)) addMetricArrays(values, "rankLikes", snapshot.likes());
+        if (metrics.contains(RankMetric.VIEWS)) addMetricArrays(values, "rankViews", snapshot.views());
+        Matcher matcher = JDBC_PARAMETER.matcher(sql);
+        List<Object> ordered = new ArrayList<>();
+        StringBuilder jdbcSql = new StringBuilder();
+        while (matcher.find()) {
+            Object value = values.get(matcher.group(1));
+            if (value == null) throw new IllegalArgumentException("Missing SQL parameter " + matcher.group(1));
+            ordered.add(value);
+            matcher.appendReplacement(jdbcSql, "?");
+        }
+        matcher.appendTail(jdbcSql);
+        return entityManager.unwrap(Session.class).doReturningWork(connection -> {
+            // Pinned for EVERY snapshot statement, tagged or not: the array-bound joins give a generic plan no
+            // way to size the arrays, and the driver switches to a generic plan after its fifth execution.
+            // Transaction-local only. The driver is runtime-scoped, so use PostgreSQL's plan mode.
+            try (java.sql.Statement pin = connection.createStatement()) {
+                pin.execute("select set_config('plan_cache_mode', 'force_custom_plan', true)");
+            }
+            try (PreparedStatement statement = connection.prepareStatement(jdbcSql.toString())) {
+                for (int index = 0; index < ordered.size(); index++) {
+                    Object value = ordered.get(index);
+                    if (value instanceof UUID[] ids) {
+                        statement.setArray(index + 1, connection.createArrayOf("uuid", ids));
+                    } else if (value instanceof Long[] counts) {
+                        statement.setArray(index + 1, connection.createArrayOf("bigint", counts));
+                    } else {
+                        statement.setObject(index + 1, value);
+                    }
+                }
+                return work.execute(statement);
+            }
+        });
+    }
+
+    private void addMetricArrays(Map<String, Object> values, String prefix, Map<UUID, Long> metric) {
+        // One traversal fills both arrays so ids and counts can never be paired from two different orders.
+        UUID[] ids = new UUID[metric.size()];
+        Long[] counts = new Long[metric.size()];
+        int index = 0;
+        for (Map.Entry<UUID, Long> entry : metric.entrySet()) {
+            ids[index] = entry.getKey();
+            counts[index++] = entry.getValue();
+        }
+        values.put(prefix + "Ids", ids);
+        values.put(prefix + "Values", counts);
     }
 
     @Override
@@ -497,7 +724,11 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
     ) {
         if (isPostgres()) {
             String placeholders = bindValues("publicTagSlug", tagSlugs, parameters);
-            where.append("""
+            // ⚠️ The explicit space is REQUIRED. This text block closes on the same line as its last token, so Java
+            // strips ALL its leading whitespace ("and exists (" starts at column 0), and a preceding clause that ends
+            // in a bare named parameter (the subject filter, `= :subjectSlug`) was read by Hibernate as the single
+            // parameter `:subjectSlugand`, failing the request. The learner-level clause carries the same guard.
+            where.append(" ").append("""
                      and exists (
                          select 1 from unnest(n.tags) as public_filter_tag(value)
                          where""")

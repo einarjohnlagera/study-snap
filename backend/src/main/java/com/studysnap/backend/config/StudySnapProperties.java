@@ -48,6 +48,39 @@ public class StudySnapProperties {
     private final GoalAdoption goalAdoption = new GoalAdoption();
     private final Notifications notifications = new Notifications();
     private final CurationCostAlert curationCostAlert = new CurationCostAlert();
+    private final PublicLibraryRankingSnapshot publicLibraryRankingSnapshot = new PublicLibraryRankingSnapshot();
+    private final PublicApiDiagnostics publicApiDiagnostics = new PublicApiDiagnostics();
+
+    @Getter
+    @Setter
+    public static class PublicApiDiagnostics {
+        private boolean enabled = true;
+        private java.time.LocalDate reviewBy = java.time.LocalDate.of(2026, 11, 12);
+        private int sampleThresholdPerMinute = 30;
+        private int sampleMaxPerMinute = 20;
+        private int distinctClientCap = 5_000;
+        private int userAgentCap = 500;
+        private int tagSlugCap = 500;
+        private int topN = 10;
+    }
+
+    @Getter
+    @Setter
+    public static class PublicLibraryRankingSnapshot {
+        private int ttlSeconds = 300;
+        // Build one generation when the application starts so a new instance has a snapshot before real traffic
+        // needs it. Tests switch it off: a background build holds a pooled connection and made tests that count
+        // checked-out connections depend on startup timing.
+        private boolean warmUpOnStartup = true;
+        private int maxAgeSeconds = 900;
+        private int coldStartWaitMs = 3000;
+        private int refreshBackoffSeconds = 30;
+        private int bulkheadMaxConcurrent = 2;
+        // About 25x today's catalog. The build holds every row in memory (rows, sets and the immutable copies),
+        // so a larger cap is a memory decision for the instance, not a free number.
+        private int maxNotes = 50_000;
+        private int maxTagEntries = 250_000;
+    }
 
     @Getter
     @Setter
