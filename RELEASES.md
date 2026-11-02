@@ -1,8 +1,48 @@
 # RELEASES.md - NoteLib
 
+## v0.179.0 - Lighter Listings
+
+**Status: In Progress** (kicked off 2026-11-02 on `releases/v0.179.0`, **cut from `main` at `a521a667` (`v0.178.0`)**. **One release milestone, two staged merges and two separately approved deploys: Stage A (backend) first, Stage B (frontend) second.** Owner decisions 2026-11-02, taken with Product UX, are recorded in `docs/claude-plans/2026-11-01-v0178-followup-listing-projection-scope.md` (the release plan: sections A to F, the first decision round and the second round with its implementation-readiness summary).)
+
+Theme: cut the database cost of every public-catalog listing request, and stop a withdrawn note's title or excerpt lingering in cached public pages, after `v0.178.0`'s stability gate failed (non-deploy kills 2026-10-31T07:41:01Z and 2026-11-01T20:49:13Z, a backend restart 2026-10-31T14:08Z) and the owner ruled the database upgrade out for now.
+
+### Planned Scope
+
+**Stage A, backend (first deploy, merged first):**
+- **Listing projection (the primary stability fix).** A per-page programs lookup replaces the whole-catalog `note_programs` derived table in the projection FROM (keyed on `n.id`, the same public-note rule and name order, so `applicablePrograms` is byte-identical; no join to `notes` is needed because every caller already filters `n.visibility = 'PUBLIC'`), and the two SQL-orderable sorts select their page ids first, as the other six already do. No migration, no API or response change. `NoteLibraryRepositoryImpl` (the owner's own library lists) is out of scope. Local result on the 2026-10-30 production dump at 0.1 CPU: about 6x on the by-id projection and about 14x on the newest-first page, zero array mismatches over 2,164 public notes; **a local query result, not a production guarantee**.
+- **Catalog-walk attribution counter.** Request header `X-NoteLib-Catalog-Walk`, allowlist `sitemap|subject|exam-hub` (anything else `other`, absent `none`), counted in `PublicApiDiagnosticsAggregator` as one fixed array and one new field `walk=[...]` on the existing minute line; the value is never stored; client-asserted, never used for authorization, rate limiting or blocking.
+- **Tests:** old-versus-new statement parity against real PostgreSQL rows (every sort, first, deep and past-the-end pages, zero, one and many programs, name order, filters, tiebreak), a bounded-work check, counter tests, a real-request `MockMvc` test.
+
+**Stage B, frontend (second deploy; only after Stage A is stable AND the Vercel Preview verification passes; the diff touches nothing under `backend/` and carries no version bump):**
+- **Hard-TTL, single-flight, in-process cache** for the catalog walks, measured from the walk's start, bounded in entries and items, never serving expired data, no fallback on refresh failure, no partial result cached. Subject pages and exam hubs render dynamically over it with a **120 s** bound (no ISR, no fetch data cache above it); a refresh failure is a server error, never a short or `noindex` page. The sitemap uses it with a **1 h** bound, also dynamic.
+- **Canonical host** `https://www.notelib.app`: `SITE_URL` in `frontend/lib/site-metadata.ts` (feeds `metadataBase`, sitemap URLs, canonicals, structured data and the `robots.txt` sitemap line), about 58 test expectations across about 15 files, and a guard that no indexable canonical or sitemap URL uses the apex.
+- **Walker header** sent on cache-miss fetches only.
+- **Vercel Preview verification (required before any production frontend deploy):** a throw-away branch with a wall-clock-driven stub API, tests 1 to 8 in the plan's section 3, pass condition a demonstrated withdrawal exposure within 5 minutes at the 120 s target with no extra stale-serving layer.
+
+Anti-drift: no database upgrade, paid service or new infrastructure; no crawler blocking, rate limit, firewall rule, new robots or `noindex` rule; no pagination cap or sign-in wall; no HikariCP or pool change; no migration; no pricing, quota or entitlement change; no Public Library or Explore redesign; no Challenge Quiz or prompt change; the "busy" copy and Retry stay unchanged; no Render environment-variable or deploy action by Claude; `NoteLibraryRepositoryImpl` unchanged.
+
+### Evidence behind the scope (verified 2026-11-01 to 2026-11-02)
+
+- `pg_stat_statements` (reset by crash recovery at 2026-10-31T07:41:03Z) ranks the note-projection statements first, about 32% of database time; all eight top tails are the `order by n.created_at desc ... offset/fetch first` shape (`findPublicLibraryPage`).
+- **Both kills followed bursts with the same signature**: anonymous `node` requests carrying `page`, `pageSize` and `sort` only (2026-10-31T07:39Z to 07:41Z, 43 and 44 requests a minute) or with `courseProgram` too (2026-11-01T20:48Z and 20:49Z, 44 and 55 listing requests a minute, then 19 HTTP 500s and 502s). That matches the frontend's sequential catalog walks (`fetchAllPublicNotePages`, 50 notes a page), for the sitemap, the `general` subject page and the exam hubs. **Consistent with a walk; not proof, and not attributed to a crawler.**
+- The current subject-page and exam-hub caching (`revalidate = 300` over a 300 s fetch cache) does **not** meet the approved 5-minute privacy bound: a local Next.js 16.1.6 test showed stale data on the first request after any idle period, and up to about two TTLs under traffic.
+- A public note's URL slug is derived from its title, so a sitemap entry keeps a withdrawn title in slug form; the owner chose a 1-hour sitemap bound.
+- Canonicals and sitemap URLs use `https://notelib.app`, which the Vercel project redirects (308) to `https://www.notelib.app`; the homepage and `/refund` already declare `www`.
+
+### Staging and CI/CD (verified, with one open item)
+
+- Render (`rootDir = backend`, auto-deploy on `main`): two docs-only merges (2026-09-10, 2026-09-15) produced no deploy, so a merge that changes nothing under `backend/` does not redeploy the backend.
+- **Vercel behaviour on a merge that changes nothing under `frontend/` is NOT established** (history does not reach back; the Ignored Build Step setting is not readable here). The Stage A merge carries the `frontend/package.json` version bump and so will probably start a harmless Vercel rebuild of identical code.
+- **Both version references are bumped once, in this kickoff (Stage A merge).** Stage B ships as the second merge of the same milestone with no version change, so that it cannot redeploy the backend. This departs from the seven-reference sync convention for that merge and is an owner-approved exception (pending the owner's explicit OK, requested 2026-11-02).
+- **Known risk to measure after Stage A:** Stage B replaces a Vercel data cache shared across instances (300 s, stale-while-revalidate) with a per-instance cache (120 s hard TTL), so catalog walks can become more frequent than today (up to about 2.5x per instance). Stage B is gated on the Stage A measurements; Vercel's remote runtime cache (`use cache: remote` with `cacheLife({ expire })`, Next 16) is the candidate if per-instance rebuilds prove too frequent, and is not evaluated here.
+
+### Shipped
+
+_(nothing yet)_
+
 ## v0.178.0 - Production Stabilization
 
-**Status: Released** (kicked off and signed off 2026-10-29 on `releases/v0.178.0`, **cut from `main` at `06a09f7c` (`v0.175.0`), NOT from `releases/v0.177.0`; closed on its branch, DEPLOY PENDING (the release-to-`main` merge deploys both platforms and waits for the owner's checklist) and its EFFECT ON THE SIGNAL-9 KILLS IS UNPROVEN**. Owner decisions, 2026-10-29: approve the final scope of `docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md`, take **Option B** (metrics plus tag-id snapshot, accepting up to 5 minutes of tag-membership lag in tag-filtered ranked listings), and cut from `main`.)
+**Status: Released** (kicked off and signed off 2026-10-29 on `releases/v0.178.0`, **cut from `main` at `06a09f7c` (`v0.175.0`), NOT from `releases/v0.177.0`; closed on its branch, merged to `main` by PR #1546 (2026-10-30T14:48:10Z, `a521a667`) and DEPLOYED (see the Deploy record below) and its EFFECT ON THE SIGNAL-9 KILLS IS UNPROVEN**. Owner decisions, 2026-10-29: approve the final scope of `docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md`, take **Option B** (metrics plus tag-id snapshot, accepting up to 5 minutes of tag-membership lag in tag-filtered ranked listings), and cut from `main`.)
 
 Theme: the public catalog stops being able to starve the production database. The single-tag ranked listing, about 42% of database time in the quiet-period read and CPU-bound on a 0.1 CPU database, gets a bounded in-process snapshot, and a deploy stops triggering a build-time walk of the whole catalog. The release exists because two finished releases (`v0.176.0`, `v0.177.0`) are held behind the operational gate (Postgres signal-9 kills), and the owner allowed one narrow stability release as an exception to that hold.
 
@@ -41,7 +81,11 @@ Kickoff notes: the Backlog Index scan (checklist steps 8 and 9) was **not perfor
 
 ### Signoff record (2026-10-29)
 
-**What "Released" means here, and what it does not.** All five items are merged into this branch (#1541, #1542, #1543, #1544) and verified; **nothing is deployed, and nothing shows yet that the signal-9 kills stop.** The mechanism is a hypothesis (CPU-bound queries on a 0.1 CPU database queue behind each other and the memory limit is hit; the trigger of a kill was never observed). The evidence the release is built for arrives after the deploy, through the checkpoint rows below. Production, re-read 2026-10-29: newest deploy still `v0.175.0` (2026-10-26T14:58:47Z), last kill 2026-10-28T13:38:47Z, none since.
+**What "Released" means here, and what it does not.** All five items are merged into this branch (#1541, #1542, #1543, #1544) and verified; **it deployed on 2026-10-30 (see the Deploy record below), and nothing shows yet that the signal-9 kills stop.** The mechanism is a hypothesis (CPU-bound queries on a 0.1 CPU database queue behind each other and the memory limit is hit; the trigger of a kill was never observed). The evidence the release is built for arrives after the deploy, through the checkpoint rows below. Production at signoff, re-read 2026-10-29: newest deploy was `v0.175.0` (2026-10-26T14:58:47Z), last kill 2026-10-28T13:38:47Z, none since.
+
+**Deploy record, 2026-10-30 (read from Render and the database log, not from the plan).** The owner merged PR #1546 (admin merge) at 14:48:10Z, `a521a667`. Render `dep-dbiasbfb9u1s73duibkg` started building 14:48:13Z and went live 14:50:32Z (2 min 19 s; the application started in 38.2 s); Vercel `dpl_7HfqgQohCsH1AJSkvQFP1K56V1xJ` was READY; the owner ran `scripts/check-deploys.sh`: exit 0, both platforms at `a521a667`. Before the merge: a downloaded backup and a restore rehearsal into an in-memory PostgreSQL 18.4 (8 s, 58 tables, Flyway 156 all successful, counts within 2 rows of live; the dump was about 11 hours older than its filename), and a go/no-go read of database memory, traffic and 502s at 22:45 PHT after two spikes caused by the owner opening the admin page. **Emission (the 1-hour checkpoint's question, answered at +4 minutes):** `PUBLIC_API_DIAGNOSTICS_CONFIG enabled=true reviewBy=2026-11-12` at startup; `PUBLIC_LIBRARY_RANKING_SNAPSHOT computed durationMs=1911 notes=2166 tagSlugs=5683 tagEntries=11053 generation=1` from the startup warm-up; `PUBLIC_API_DIAGNOSTICS minute=` lines every minute with `diagnosticsErrors=0`. No `PUBLIC_API_SAMPLE` line was seen (its threshold is 30 anonymous requests a minute). **Database:** connections 20, then 40 from 14:51:00Z, back to 20 at 14:53:00Z (the old instance shut down gracefully at 14:52:31Z); memory 196 MB, 242 MB in the overlap, 191 MB at 14:53:00Z; 215 to 231 MB from 14:57Z; **a peak of 256.4 MB (95.5% of the 268.4 MB limit) at 15:13:30Z, over the 250 MB stop line, while authenticated requests and 13 `401`s appeared (15:13 to 15:14Z); the cause was not established**; 210 MB by 15:17:30Z and about 223 MB at 15:34Z. No `signal 9` in the database log from 14:40Z to 15:34Z, no 502s after the deploy. **What this does not show:** an earlier kill sometimes followed a deploy by hours, so about 105 quiet minutes is the start of the 24-hour and 72-hour reads, not an answer to them.
+
+**Read at 2026-11-01T00:44Z: ONE signal-9 kill, at 2026-10-31T07:41:01Z, 16 h 50 min after the deploy went live (a non-deploy kill, so gate C's hard criterion and gate B both fail).** What was recorded around it: a listing-projection `select n.id ... from notes n left join (...)` logged at 2,003 ms at 07:38:49Z; backend traffic of 2, then 43, 44 and 18 requests a minute at 07:38 to 07:41Z (about 0 a minute before), from anonymous clients on AWS-range addresses (user agent `node` and a Linux Chrome, one `X-Forwarded-For` entry each; the 43 in minute 07:39 came from one `/24`), first only `listing`, then `listing`, `collections` and `facets`; CPU 0.091 of 0.1 at 07:40Z; memory 246 MB at 07:39Z and 99 MB at 07:42Z; in minute 07:41Z, 14 of 18 requests returned 500, and 4 more were cancelled (499) in 07:42Z; traffic recovered by 07:43Z. `pg_stat_statements` was reset by the crash recovery at 07:41:03Z; since then the note-projection `select n.id ...` statements are the top consumers: one variant 43 calls at a 14.9 s mean (13.8% of database time), others 168 calls at 2.3 s, 391 at 657 ms and 238 at 938 ms, **about 32% of database time in total** (the projection reads this release did not touch). **The trigger of the kill is NOT established**; this is the first observed burst and the diagnostics now show who sent it. Memory also reached 255.5 MB and 255.7 MB (90-second samples) at 2026-10-31T20:07:30Z and 20:24:00Z without a kill. No other kill from 14:40Z on 10-30 to 00:44Z on 11-01. **Owner decision, 2026-11-01: the database upgrade is not an option at the moment, so the fallback the plan named for a failed gate C is closed for now and the work shifts to cutting load in code.**
 
 - **Scope completeness (each item is built; evidence):** item 1 Step 0 shipped (PR #1541; `generateStaticParams` returns `[]` in `app/public/library/[subject]/page.tsx` and `app/exam/[slug]/page.tsx`, `dynamic = "force-dynamic"` in `app/sitemap.ts`; `next build` on the real tree makes 1 backend request against 393). Item 2 Release 1 shipped (PR #1542; `PublicLibraryRankingSnapshotCache`, `PublicLibraryRankingSnapshot`, the additive statements in `PublicLibraryRepositoryImpl`, the controller wiring, `PublicLibraryRankingBusyException`). Item 3 diagnostics shipped (PR #1544; `PublicApiDiagnosticsFilter`, `PublicApiDiagnosticsAggregator`, `PublicApiDiagnosticsLog`). Item 4 tests and docs shipped inside the PRs. Item 5 tag-filter fix shipped (PR #1543; one explicit space in `appendTagFilter`). **Changed during the release:** the plan's "settle item 1 for 24 hours before item 2" sequencing was withdrawn by the owner (one release, one deploy, with the reasoning recorded above).
 - **NOT in this release (so nothing is claimed for it):** the 58% of quiet-period database time that lies outside the ranked listing and its count (of which listing projections 17%, facets 7%, creator-impact 6%, untagged counts 5%, the rest smaller statements; the ranked listing and count were 42%, and this release removes most but not all of that 42%); any API-host rate limit (browsers call the Render API directly, and the limiter would key on the client-address header the diagnostics are meant to identify); the deploy-time connection-pool overlap (every deploy since 2026-10-25 was followed by a kill, 4 of 4, and this release does not change that mechanism, so **the release's own deploy may be followed by a kill**); the `/explore` migration; a bot-resistant view-count design; the $13 a month database upgrade (deferred by the owner, with explicit triggers in plan section 8); Gate A on any sort except RECOMMENDED.
@@ -1506,85 +1550,6 @@ was **not** a duplicate-key violation, so it is not evidence against item 2 bein
   `cast(:learnerLevel as string)`, which is behaviour-neutral (verified on PG with a NULL level).
   Narrowing the lint to native-query blocks is a follow-up.
 
-## v0.171.0 - Checkout, Recovered
-
-**Status: Released**
-
-Theme: close the checkout-abandonment leak the product-health release plan's RC-0 diagnosis found
-(`docs/claude-plans/2026-10-09-product-health-release-plan.md`), plus signup entry-surface
-attribution from the same plan.
-
-### Planned Scope
-
-1. **RC-0 — Checkout diagnosis: CLOSED by owner decision, 2026-10-14, outreach step skipped.** The
-   Xendit dashboard pull was done directly by the owner: none of the 16 failed invoices show a
-   selected payment channel or an attempt inside the invoice — every one is a plain, un-engaged
-   expiry, not a declined payment. The one-question outreach to the 11 genuine users (why didn't you
-   finish paying?) was explicitly skipped — a deliberate call, not an oversight, accepting the plan's
-   own named risk ("building recovery for a cause RC-0 did not find"). Per-invoice table (Xendit
-   invoice IDs, emails, plan/amount) was handed to the owner out-of-band; not committed here per the
-   plan's own acceptance criteria ("no emails in any committed file").
-
-2. **RC-3 — Checkout reminder, via Xendit's native invoice notifications (not an in-house job). SHIPPED
-   (PR #1495, commit `ab8e006e` on `releases/v0.171.0`).**
-   `advisor()` caught, before any Codex prompt was written, that Xendit's Invoice API supports a
-   native payment-reminder email gated by an account-level Settings → Checkout → Notifications
-   toggle — **the owner has already enabled "Payment reminders" in the Xendit dashboard, 2026-10-14.**
-   Our own `createInvoice` call (`PaymentService.java:330-347`) sends no `payer_email` today, so
-   Xendit has never had an address to notify. The code fix is one field: add `payer_email` (the
-   checkout user's own email, already available via `userRepository.findById(userId)` in
-   `createCheckoutSession`) to the invoice-creation payload. No migration, no job, no template, no
-   `email_log` row — this supersedes the in-house reminder-job design originally sketched for RC-3 in
-   the product-health plan (kept there as historical record, not an instruction to build it).
-   **Restarts RC-4's baseline clock**: any checkout-path change lands inside the post-RC-1 baseline
-   window (started 2026-10-09), so the price test's start moves past ~2026-11-06 regardless.
-
-3. **RC-2 — Minimal funnel attribution (signup entry surface). SHIPPED (PR #1496, commit `4e3f727e`
-   on `releases/v0.171.0`).** Implemented by Codex from a Long-mode prompt, independently re-verified
-   (full backend suite including `NativeQueryPostgresIntegrationTest`: 2675/0; full frontend suite:
-   2662/0) before merging — Codex's own sandbox could not reach Docker for the Postgres-backed test.
-   Extends the existing
-   first-touch-attribution mechanism (`V93__user_first_touch_attribution.sql`'s
-   `utm_source`/`utm_medium`/`utm_campaign`/`utm_content`/`utm_term`/`referrer` columns, captured
-   client-side via `sessionStorage` and submitted once at signup) with one more column,
-   `first_touch_surface` (`V156`), classifying the first-touch pathname into `landing` / `public_note`
-   / `explore` / `exam_hub` / `other`. Resolves both halves of the plan's §8 item 9 from this existing
-   precedent rather than as fresh decisions: a `users` column (matching all 6 siblings, not the
-   `SIGNUP_COMPLETED`-metadata alternative, which covers only 311/420 historic accounts), and no new
-   anonymous-session-state risk (the capture mechanism already runs on every page today, including
-   public ones, per `app/layout.tsx:78`). Narrowed from the plan's "optionally the raw path truncated"
-   — class only. Touches both stacks (new migration + `UserEntity`/`SignupRequest`/`GoogleAuthRequest`/
-   `AuthService` + `first-touch-attribution.ts`/`lib/api.ts`).
-
-4. **RC-6 — deferred, not scoped into this release.** Raising the discovery-intent/copy-intent
-   cookie TTLs touches the same adoption-path instrumentation RC-5 (shipped `v0.170.0`, 2026-10-13) is
-   currently measuring for its own H3 pre/post read. The product-health plan says RC-6 "should not
-   land inside the RC-5 window," but RC-5 was never given a concrete window end-date at `v0.170.0`
-   signoff (a gap in itself — flagged below). Revisit once that window is explicitly dated.
-
-### Anti-drift
-
-No change to `PricingService`, voucher resolution, webhook handling, or any payment amount. No new
-endpoint. `payer_email` is read-only existing data, not collected anew.
-
-### Known gaps carried into this release
-
-- **RC-3's reminder is UNVERIFIED to actually fire inside the 24h invoice window — `[CHECKPOINT —
-  due 2026-10-21]` owed, since the outreach step that would have given independent signal on checkout
-  behavior was itself skipped (RC-0).** Xendit's per-invoice `reminder_time`/`reminder_time_unit`
-  fields were not set (only `payer_email` was added), so timing falls back to the Xendit account's own
-  Dashboard Invoice Settings default — unconfirmed, and some Xendit SDK examples pair a 1-day-before
-  reminder with a 48h invoice, not NoteLib's 24h. **Proximal check (owed, owner action): start a real
-  test checkout, leave it unpaid, confirm the reminder email arrives within 24h.** If it does not fire,
-  RC-3 has shipped a dashboard toggle with no effect, not a verified fix. Recorded in
-  `docs/features/billing.md`.
-- **RC-5 (`v0.170.0`) never got its own `[CHECKPOINT]` row for its H3 adoption read at signoff** —
-  only the Hikari leak-trace checkpoint was added. This is why RC-6's deferral above has no concrete
-  re-open date; owed as a follow-up.
-- **The `v0.166.0` Hikari checkpoint (`due 2026-10-14T11:19:29Z`) was read at this kickoff and found a
-  THIRD long-hold mechanism `v0.166.0` did not catch** — see `ROADMAP.md`'s Backlog Index for the full
-  read and the new row it produced. Not in this release's scope; flagged to the owner as a candidate.
-
 ## Archived releases
 
 - `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
@@ -1597,4 +1562,5 @@ endpoint. `payer_email` is read-only existing data, not collected anew.
 - `v0.167.0 — Study Journey Purpose` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.173.0` kickoff.
 - `v0.168.0 — Free Quota, Fairly Metered` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.174.0` kickoff.
 - `v0.170.0 — Study Journey, Closed` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.178.0` kickoff.
+- `v0.171.0 — Checkout, Recovered` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.179.0` kickoff.
 - `v0.169.0 — Study Journey, Continued` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.175.0` kickoff.
