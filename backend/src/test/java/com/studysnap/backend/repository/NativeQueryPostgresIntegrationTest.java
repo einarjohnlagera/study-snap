@@ -156,13 +156,49 @@ import static org.mockito.Mockito.verify;
  */
 @DataJpaTest(properties = {
         "spring.flyway.enabled=true",
-        "spring.jpa.hibernate.ddl-auto=none"
+        "spring.jpa.hibernate.ddl-auto=none",
+        "spring.jpa.properties.hibernate.session_factory.statement_inspector=com.studysnap.backend.testutil.SqlCaptureStatementInspector"
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
 @ExtendWith(NativeQueryPostgresIntegrationTest.DockerRequiredUnlessOptedOut.class)
 @Import(LinkedLearnerRequestExpiryWorker.class)
 class NativeQueryPostgresIntegrationTest {
+    // Frozen v0.178.0 listing projection. Keep this independent of the production select/from constants.
+    private static final String OLD_PUBLIC_LIST_SELECT = """
+            select n.id as id,
+                   n.owner_user_id as "ownerUserId",
+                   n.title as title,
+                   n.course_program as "courseProgram",
+                   note_programs.program_names as "applicablePrograms",
+                   n.domain_context as "domainContext",
+                   n.learner_level as "learnerLevel",
+                   n.subject as subject,
+                   n.tags as tags,
+                   substring(n.content, 1, 2000) as content,
+                   n.status as status,
+                   n.visibility as visibility,
+                   n.created_at as "createdAt",
+                   n.updated_at as "updatedAt",
+                   n.copied_from_note_id as "copiedFromNoteId",
+                   n.copied_from_public as "copiedFromPublic"
+            """;
+    private static final String OLD_PUBLIC_LIST_FROM = """
+             from notes n
+             left join (
+                 select ncp.note_id, array_agg(cp.name order by cp.name) as program_names
+                 from note_course_program ncp
+                 join course_programs cp on cp.id = ncp.course_program_id
+                 join notes program_note on program_note.id = ncp.note_id
+                 where program_note.visibility = 'PUBLIC'
+                 group by ncp.note_id
+             ) note_programs on note_programs.note_id = n.id
+            """;
+    // The old page statement appends buildFilter's WHERE and the frozen sort before Hibernate pagination.
+    private static final String OLD_PUBLIC_LIST_PAGE = OLD_PUBLIC_LIST_SELECT + OLD_PUBLIC_LIST_FROM;
+    private static final String OLD_PUBLIC_LIST_BY_ID = OLD_PUBLIC_LIST_SELECT + OLD_PUBLIC_LIST_FROM
+            + " where n.visibility = 'PUBLIC' and n.id in (:publicPageNoteId0, :publicPageNoteId1,"
+            + " :publicPageNoteId2, :publicPageNoteId3)";
     private static final String CURATION_STANDARD_MODEL = "gpt-4.1";
     private static final String CURATION_LUNA_MODEL = "gpt-6-luna";
 
@@ -2120,6 +2156,259 @@ class NativeQueryPostgresIntegrationTest {
                 id, supporterUserId, learnerUserId, status, initiatedBy
         );
         return id;
+    }
+
+    @Test
+    void publicListingPageMatchesFrozenSqlAcrossSortsFiltersAndPageBoundaries() throws Exception {
+        UUID owner = seedUser("projection-parity");
+        List<UUID> ids = seedProjectionParityNotes(owner);
+        String creator = jdbcTemplate.queryForObject("select username from users where id = ?", String.class, owner);
+        PublicLibraryFilterCriteria all = projectionCriteria(owner, null, null, List.of(), null,
+                null, null, false, List.of());
+        List<PublicLibraryFilterCriteria> filters = List.of(
+                all,
+                projectionCriteria(owner, null, "projection-parity", List.of(), null, null, null, false, List.of()),
+                projectionCriteria(owner, null, null, List.of(), "nursing", null, null, false, List.of()),
+                projectionCriteria(owner, null, null, List.of(), null, null, null, true, List.of()),
+                projectionCriteria(owner, null, null, List.of(), "nursing", null, null, true, List.of()),
+                projectionCriteria(owner, "%listing%", null, List.of(), null, null, null, false, List.of()),
+                projectionCriteria(owner, null, null, List.of("parity-tag"), null, null, null, false, List.of()),
+                projectionCriteria(owner, null, null, List.of(), null, creator, null, false, List.of()),
+                projectionCriteria(owner, null, null, List.of(), null, null,
+                        LearnerLevel.BOARD_EXAM_REVIEW, false, List.of()),
+                projectionCriteria(owner, null, null, List.of(), null, null, null, false,
+                        List.of(PublicLibrarySource.BY_YOU))
+        );
+        for (PublicLibraryFilterCriteria filter : filters) {
+            for (PublicLibrarySort sort : List.of(PublicLibrarySort.RECENT, PublicLibrarySort.TITLE)) {
+                int total = oldPublicPageWalkTotal(filter, sort);
+                assertThat(publicLibraryRepository.countPublicLibraryMatches(filter)).isEqualTo(total);
+                for (int size : List.of(50, 20)) {
+                    int last = total == 0 ? 0 : ((total - 1) / size) * size;
+                    for (int offset : List.of(0, size, last, ((total / size) + 1) * size)) {
+                        List<NoteListItemProjection> expected = oldPublicPage(filter, sort, offset, size)
+                                .stream().map(this::oldPublicProjection).toList();
+                        List<NoteListItemProjection> actual = publicLibraryRepository.findPublicLibraryPage(
+                                filter, sort, offset, size);
+                        assertThat(actual).extracting(NoteListItemProjection::getId)
+                                .as("ordered ids: %s, %s, offset %s, size %s", filter, sort, offset, size)
+                                .containsExactlyElementsOf(expected.stream().map(NoteListItemProjection::getId).toList());
+                        assertPublicProjectionRowsEqual(expected, actual);
+                    }
+                }
+            }
+        }
+        assertThat(oldPublicPage(all, PublicLibrarySort.RECENT, 0, 10000))
+                .extracting(row -> row.get("id")).containsAll(ids);
+        assertThat(publicLibraryRepository.findPublicLibraryPage(all, PublicLibrarySort.RECENT, 0, 50))
+                .allSatisfy(row -> assertThat(row.getVisibility()).isEqualTo(NoteVisibility.PUBLIC));
+        assertThat(publicLibraryRepository.findPublicLibraryListItemProjectionsByIdIn(
+                List.of(ids.get(2))).getFirst().getApplicablePrograms())
+                .containsExactly("Accountancy", "Architecture", "Nursing");
+        assertThat(publicLibraryRepository.findPublicLibraryListItemProjectionsByIdIn(
+                List.of(ids.get(0))).getFirst().getContent()).hasSize(2000);
+        assertThatThrownBy(() -> publicLibraryRepository.findPublicLibraryPage(
+                all, PublicLibrarySort.RECOMMENDED, 0, 50))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Ranked public-library sorts must use the materialized path.");
+    }
+
+    @Test
+    void publicListingByIdMatchesFrozenSqlAndExcludesPrivateRows() throws Exception {
+        UUID owner = seedUser("projection-by-id");
+        List<UUID> ids = seedProjectionParityNotes(owner);
+        UUID privateId = seedPublicNote(owner, "Private listing", new String[] {"parity-tag"});
+        jdbcTemplate.update("update notes set visibility = 'PRIVATE' where id = ?", privateId);
+        jdbcTemplate.update("insert into note_course_program (id, note_id, course_program_id) values (?, ?, ?)",
+                UUID.randomUUID(), privateId, UUID.fromString("20000000-0000-0000-0000-000000000003"));
+        UUID unknownId = UUID.randomUUID();
+        List<UUID> input = List.of(ids.get(0), ids.get(1), privateId, unknownId);
+        jakarta.persistence.Query old = entityManager.createNativeQuery(OLD_PUBLIC_LIST_BY_ID, jakarta.persistence.Tuple.class);
+        for (int index = 0; index < input.size(); index++) {
+            old.setParameter("publicPageNoteId" + index, input.get(index));
+        }
+        @SuppressWarnings("unchecked")
+        List<jakarta.persistence.Tuple> oldRows = old.getResultList();
+        List<NoteListItemProjection> expected = oldRows.stream().map(this::oldPublicProjection).toList();
+        List<NoteListItemProjection> actual = publicLibraryRepository.findPublicLibraryListItemProjectionsByIdIn(input);
+        assertThat(actual).extracting(NoteListItemProjection::getId)
+                .containsExactlyInAnyOrder(ids.get(0), ids.get(1));
+        assertPublicProjectionRowsEqual(expected.stream().sorted(java.util.Comparator.comparing(
+                        NoteListItemProjection::getId)).toList(),
+                actual.stream().sorted(java.util.Comparator.comparing(NoteListItemProjection::getId)).toList());
+        assertThat(oldRows).filteredOn(row -> row.get("id").equals(ids.get(0)))
+                .singleElement().extracting(row -> row.get("applicablePrograms")).isNull();
+        assertThat(actual.stream().filter(row -> row.getId().equals(ids.get(0))).findFirst().orElseThrow()
+                .getApplicablePrograms()).isEmpty();
+        var selectField = PublicLibraryRepositoryImpl.class.getDeclaredField("NOTE_LIST_ITEM_SELECT");
+        var fromField = PublicLibraryRepositoryImpl.class.getDeclaredField("NOTE_LIST_ITEMS_FROM");
+        selectField.setAccessible(true);
+        fromField.setAccessible(true);
+        jakarta.persistence.Tuple newRaw = (jakarta.persistence.Tuple) entityManager.createNativeQuery(
+                selectField.get(null) + " " + fromField.get(null)
+                        + " where n.visibility = 'PUBLIC' and n.id = :id", jakarta.persistence.Tuple.class)
+                .setParameter("id", ids.get(0)).getSingleResult();
+        assertThat(newRaw.get("applicablePrograms")).isNull();
+    }
+
+    @Test
+    void publicListingSqlHasIdFirstPageAndPerRowProgramsWithoutWholeCatalogJoin() {
+        UUID owner = seedUser("projection-sql-shape");
+        seedProjectionParityNotes(owner);
+        var criteria = projectionCriteria(owner, null, "projection-parity", List.of(), null,
+                null, null, false, List.of());
+        com.studysnap.backend.testutil.SqlCaptureStatementInspector.clear();
+        publicLibraryRepository.findPublicLibraryPage(criteria, PublicLibrarySort.TITLE, 20, 20);
+        publicLibraryRepository.findPublicLibraryListItemProjectionsByIdIn(List.of(UUID.randomUUID()));
+        List<String> statements = com.studysnap.backend.testutil.SqlCaptureStatementInspector.statements()
+                .stream().filter(sql -> sql.contains("\"applicablePrograms\"")).toList();
+        assertThat(statements).hasSize(2);
+        String page = statements.get(0);
+        String byId = statements.get(1);
+        assertThat(page).contains("where n.id in (select n.id from notes n")
+                .contains("where n.id in (select n.id from notes n where n.visibility = 'PUBLIC'")
+                .contains("offset ? rows fetch next ? rows only)")
+                .contains("order by lower(coalesce(n.title, 'Untitled note')) asc, n.created_at desc, n.id asc");
+        assertThat(page.split("order by lower\\(coalesce\\(n.title", -1)).hasSize(3);
+        assertThat(page.split("n.id asc", -1)).hasSize(3);
+        assertThat(page.split("offset \\? rows", -1)).hasSize(2);
+        assertThat(byId).contains("where n.visibility = 'PUBLIC' and n.id in (");
+        for (String sql : statements) {
+            assertThat(sql).doesNotContain("note_programs").contains("where ncp.note_id = n.id")
+                    .contains("array_agg(cp.name order by cp.name)");
+        }
+        // The reflective sweep sees only @Query methods. These two dynamic statements use its
+        // same PREPARE helper after replacing Hibernate's positional JDBC placeholders.
+        prepare(new NativeQueryMethod("PublicLibraryRepositoryImpl", "findPublicLibraryPage",
+                page.replace("?", ":listingParam")), 9000);
+        prepare(new NativeQueryMethod("PublicLibraryRepositoryImpl", "findPublicLibraryListItemProjectionsByIdIn",
+                byId.replace("?", ":listingParam")), 9001);
+    }
+
+    private PublicLibraryFilterCriteria projectionCriteria(UUID owner, String search, String subject,
+            List<String> tags, String program, String creator, LearnerLevel level, boolean ready,
+            List<PublicLibrarySource> sources) {
+        return new PublicLibraryFilterCriteria(owner, UUID.randomUUID(), search, subject, tags, program,
+                creator, level, ready, sources);
+    }
+
+    private List<UUID> seedProjectionParityNotes(UUID owner) {
+        List<UUID> ids = new ArrayList<>();
+        OffsetDateTime base = OffsetDateTime.parse("2030-01-01T00:00:00Z");
+        UUID architecture = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        UUID nursing = UUID.fromString("20000000-0000-0000-0000-000000000003");
+        UUID accountancy = UUID.fromString("20000000-0000-0000-0000-000000000004");
+        for (int index = 0; index < 117; index++) {
+            String title = switch (index % 4) {
+                case 0 -> "Alpha";
+                case 1 -> "alpha";
+                case 2 -> "Beta";
+                default -> "Listing " + index;
+            };
+            UUID id = seedPublicNote(owner, title, index % 2 == 0
+                    ? new String[] {"parity-tag", "second-tag"} : new String[] {});
+            ids.add(id);
+            jdbcTemplate.update("update notes set subject = 'Projection Parity', course_program = ?,"
+                            + " content = ?, status = ?, learner_level = ?, domain_context = ?,"
+                            + " copied_from_note_id = ?, copied_from_public = ?, created_at = ?, updated_at = ?"
+                            + " where id = ?",
+                    index % 4 == 3 ? "Nursing" : null,
+                    "projection body " + "x".repeat(2100) + index,
+                    index % 2 == 0 ? "GENERATED" : "DRAFT",
+                    index % 2 == 0 ? "BOARD_EXAM_REVIEW" : "COLLEGE",
+                    index % 4 == 2 ? "NURSING" : null,
+                    index == 3 ? ids.getFirst() : null, index == 3,
+                    base.plusMinutes(index / 4), base.plusMinutes(index / 4).plusSeconds(1), id);
+            if (index % 4 == 1) {
+                jdbcTemplate.update("insert into note_course_program (id, note_id, course_program_id)"
+                                + " values (?, ?, ?)", UUID.randomUUID(), id, nursing);
+            } else if (index % 4 == 2) {
+                for (UUID program : List.of(nursing, architecture, accountancy)) {
+                    jdbcTemplate.update("insert into note_course_program (id, note_id, course_program_id)"
+                                    + " values (?, ?, ?)", UUID.randomUUID(), id, program);
+                }
+            }
+        }
+        UUID privateId = seedPublicNote(owner, "Listing private", new String[] {"parity-tag"});
+        jdbcTemplate.update("update notes set visibility = 'PRIVATE', subject = 'Projection Parity',"
+                + " course_program = 'Nursing', status = 'GENERATED', created_at = ? where id = ?",
+                base.plusDays(1), privateId);
+        jdbcTemplate.update("insert into note_course_program (id, note_id, course_program_id)"
+                + " values (?, ?, ?)", UUID.randomUUID(), privateId, nursing);
+        return ids;
+    }
+
+    private List<jakarta.persistence.Tuple> oldPublicPage(PublicLibraryFilterCriteria criteria,
+            PublicLibrarySort sort, int offset, int limit) throws Exception {
+        Method buildFilter = PublicLibraryRepositoryImpl.class.getDeclaredMethod(
+                "buildFilter", PublicLibraryFilterCriteria.class);
+        buildFilter.setAccessible(true);
+        Object filter = buildFilter.invoke(publicLibraryRepository, criteria);
+        Method whereClause = filter.getClass().getDeclaredMethod("whereClause");
+        Method parameters = filter.getClass().getDeclaredMethod("parameters");
+        whereClause.setAccessible(true);
+        parameters.setAccessible(true);
+        String order = sort == PublicLibrarySort.RECENT
+                ? " order by n.created_at desc, n.id asc"
+                : " order by lower(coalesce(n.title, 'Untitled note')) asc, n.created_at desc, n.id asc";
+        jakarta.persistence.Query query = entityManager.createNativeQuery(OLD_PUBLIC_LIST_PAGE
+                + whereClause.invoke(filter) + order, jakarta.persistence.Tuple.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> values = (Map<String, Object>) parameters.invoke(filter);
+        values.forEach(query::setParameter);
+        query.setFirstResult(offset);
+        query.setMaxResults(limit);
+        @SuppressWarnings("unchecked")
+        List<jakarta.persistence.Tuple> rows = query.getResultList();
+        return rows;
+    }
+
+    private int oldPublicPageWalkTotal(PublicLibraryFilterCriteria criteria,
+            PublicLibrarySort sort) throws Exception {
+        int total = 0;
+        while (true) {
+            int pageSize = oldPublicPage(criteria, sort, total, 50).size();
+            total += pageSize;
+            if (pageSize < 50) {
+                return total;
+            }
+        }
+    }
+
+    private NoteListItemProjection oldPublicProjection(jakarta.persistence.Tuple tuple) {
+        try {
+            Method mapper = PublicLibraryRepositoryImpl.class.getDeclaredMethod(
+                    "toListItemProjection", jakarta.persistence.Tuple.class);
+            mapper.setAccessible(true);
+            return (NoteListItemProjection) mapper.invoke(publicLibraryRepository, tuple);
+        } catch (ReflectiveOperationException error) {
+            throw new IllegalStateException(error);
+        }
+    }
+
+    private void assertPublicProjectionRowsEqual(List<NoteListItemProjection> expected,
+            List<NoteListItemProjection> actual) {
+        assertThat(actual).hasSameSizeAs(expected);
+        for (int index = 0; index < expected.size(); index++) {
+            NoteListItemProjection before = expected.get(index);
+            NoteListItemProjection after = actual.get(index);
+            assertThat(after.getId()).isEqualTo(before.getId());
+            assertThat(after.getOwnerUserId()).isEqualTo(before.getOwnerUserId());
+            assertThat(after.getTitle()).isEqualTo(before.getTitle());
+            assertThat(after.getCourseProgram()).isEqualTo(before.getCourseProgram());
+            assertThat(after.getApplicablePrograms()).containsExactly(before.getApplicablePrograms());
+            assertThat(after.getDomainContext()).isEqualTo(before.getDomainContext());
+            assertThat(after.getLearnerLevel()).isEqualTo(before.getLearnerLevel());
+            assertThat(after.getSubject()).isEqualTo(before.getSubject());
+            assertThat(after.getTags()).containsExactly(before.getTags());
+            assertThat(after.getContent()).isEqualTo(before.getContent());
+            assertThat(after.getStatus()).isEqualTo(before.getStatus());
+            assertThat(after.getVisibility()).isEqualTo(before.getVisibility());
+            assertThat(after.getCreatedAt()).isEqualTo(before.getCreatedAt());
+            assertThat(after.getUpdatedAt()).isEqualTo(before.getUpdatedAt());
+            assertThat(after.getCopiedFromNoteId()).isEqualTo(before.getCopiedFromNoteId());
+            assertThat(after.getCopiedFromPublic()).isEqualTo(before.getCopiedFromPublic());
+        }
     }
 
     @Test

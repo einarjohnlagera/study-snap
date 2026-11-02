@@ -140,23 +140,16 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
                     and exists (select 1 from study_packs ready_sp where ready_sp.note_id = n.id)
                 )
             )""";
-    private static final String NOTE_LIST_ITEMS_FROM = """
-             from notes n
-             left join (
-                 select ncp.note_id, array_agg(cp.name order by cp.name) as program_names
-                 from note_course_program ncp
-                 join course_programs cp on cp.id = ncp.course_program_id
-                 join notes program_note on program_note.id = ncp.note_id
-                 where program_note.visibility = 'PUBLIC'
-                 group by ncp.note_id
-             ) note_programs on note_programs.note_id = n.id
-            """;
+    private static final String NOTE_LIST_ITEMS_FROM = " from notes n";
     private static final String NOTE_LIST_ITEM_SELECT = """
             select n.id as id,
                    n.owner_user_id as "ownerUserId",
                    n.title as title,
                    n.course_program as "courseProgram",
-                   note_programs.program_names as "applicablePrograms",
+                   (select array_agg(cp.name order by cp.name)
+                    from note_course_program ncp
+                    join course_programs cp on cp.id = ncp.course_program_id
+                    where ncp.note_id = n.id) as "applicablePrograms",
                    n.domain_context as "domainContext",
                    n.learner_level as "learnerLevel",
                    n.subject as subject,
@@ -216,12 +209,13 @@ public class PublicLibraryRepositoryImpl implements PublicLibraryRepository {
             throw new IllegalArgumentException(RANKED_SORT_PATH_REQUIRED_MESSAGE);
         }
         FilterSql filter = buildFilter(criteria);
-        Query query = createNativeQuery(
-                NOTE_LIST_ITEM_SELECT + NOTE_LIST_ITEMS_FROM + filter.whereClause() + orderBy(sort)
-        );
+        String ordering = orderBy(sort);
+        Query query = createNativeQuery(NOTE_LIST_ITEM_SELECT + NOTE_LIST_ITEMS_FROM
+                + " where n.id in (select n.id from notes n" + filter.whereClause() + ordering
+                + " offset :pageOffset rows fetch next :pageLimit rows only)" + ordering);
         bind(query, filter.parameters());
-        query.setFirstResult(offset);
-        query.setMaxResults(limit);
+        query.setParameter("pageOffset", offset);
+        query.setParameter("pageLimit", limit);
         return tuples(query).stream().map(this::toListItemProjection).toList();
     }
 
