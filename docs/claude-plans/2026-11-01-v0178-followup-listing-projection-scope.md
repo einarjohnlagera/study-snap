@@ -126,7 +126,7 @@ The Product UX note applies: **count cost, not requests.** A crawler fetching 10
 - **Legitimate-user blocking:** none proposed. Any limiter must exempt the frontend's own server-side calls or it will throttle ourselves (verified: walk traffic arrives from the frontend host).
 - **Stale exposure of a private note's excerpt** (section 3): bounded by TTL, decided by the owner before any lengthening.
 - **Cache design:** a shared fetch cache entry across callers with different TTLs may not behave as intended; test before relying on it. Single-flight is per instance, not global; it reduces repeats and does not eliminate them.
-- **Option A:** parity risk on `applicablePrograms` and the sort tiebreak, covered by the old-versus-new test against real PostgreSQL rows; rollback is the normal backend redeploy, which has its own connection overlap and the "no deploy within 24 hours of a non-deploy kill" rule (the 07:41Z 2026-10-31 kill has passed that window).
+- **Option A:** parity risk on `applicablePrograms` and the sort tiebreak, covered by the old-versus-new test against real PostgreSQL rows; rollback is the normal backend redeploy, which has its own connection overlap and the "no deploy within 24 hours of a non-deploy kill" rule (the second kill, 2026-11-01T20:49:13Z, keeps that window open until 2026-11-02T20:49Z).
 
 ## 7. Remaining owner approvals
 
@@ -263,7 +263,7 @@ A public note's URL contains a slug **derived from its title** (`/public/library
 
 ## 5. Remaining risks and rollback
 
-- **Stage A:** parity or tiebreak error (the old-versus-new test guards it); a deploy overlap with the connection pool (4 of the last 5 deploys saw a kill; the last kill was 2026-10-31T07:41Z, so the 24-hour rule is clear). **Rollback:** the owner redeploys the previous Render deploy from the dashboard (itself a deploy with an overlap) or reverts the merge; the counter change is inert.
+- **Stage A:** parity or tiebreak error (the old-versus-new test guards it); a deploy overlap with the connection pool (4 of the last 5 deploys saw a kill; the last kill is now 2026-11-01T20:49:13Z, so the 24-hour rule blocks any Stage A deploy until 2026-11-02T20:49Z, which is 04:49 PHT on 2026-11-03, and every further non-deploy kill moves it). **Rollback:** the owner redeploys the previous Render deploy from the dashboard (itself a deploy with an overlap) or reverts the merge; the counter change is inert.
 - **Stage B:** a cold rebuild blocks a visitor (about 5 s after Stage A, about a minute without it, hence the ordering); loss of CDN caching raises function invocations (Hobby duration and invocation limits not verified); rebuilds are per instance (estimate: if a crawler visits every subject and hub within one TTL, roughly 170 to 250 listing queries per 2-minute cycle, about 15 to 20% of the database's CPU after Stage A; a measurement, not a guarantee). A canonical-host change makes search engines re-evaluate canonicals for a while (no URL stops working). **Rollback:** Vercel instant rollback to the previous production deployment (an owner action).
 - **Deindexing:** guarded by the failure rule above and the tests that key surfaces are never `noindex` and never use the apex.
 
