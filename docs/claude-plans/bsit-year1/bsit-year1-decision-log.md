@@ -1,4 +1,4 @@
-Status: Phase B draft, 2026-11-03. NOT implementation-ready. Owner approvals below were given in the Phase B authorization message of 2026-11-03.
+Status: Phase B final shaping, 2026-11-03. NOT implementation-ready. Owner approvals below were given on 2026-11-03: Q1 to Q7 in the Phase B authorization, and Q8, S-1 to S-3 and S-7 in the final decisions message.
 
 # BSIT Year 1: decision log
 
@@ -20,26 +20,28 @@ Status: Phase B draft, 2026-11-03. NOT implementation-ready. Owner approvals bel
 | # | Decision | Applied how |
 |---|---|---|
 | Q1 | Reference language is the same C++17 restricted teaching subset as BSCS | All 73 programming Notes (31 N, 42 S) are Reuse placements; no duplication; no language field |
-| Q2 | Discrete Mathematics: Option B, conditionally | 31 of 34 DS I Notes are Reuse; 3 held out; IT added only where content-verified (Section D) |
+| Q2 | Discrete Mathematics: Option B, conditionally | 31 of 34 DS I Notes are Reuse; 3 held out; IT added only where content-verified and individually approved by a curator (Section D) |
 | Q3 | Prepare (not run) a metadata correction for 3 GE Notes | `bsit-year1-ge-metadata-correction.sql`; exact ids; idempotent; rollback included |
 | Q4 | Web fundamentals stays in Year 2 | No Web plan; the 4 web Notes remain in Introduction to Computing |
 | Q5 | Separate BSIT root | Fresh root; BSCS root untouched; reuse is by Note |
 | Q6 | Root title `🖥️ BS Information Technology — 1st Year` | Used verbatim as the builder title |
 | Q7 | Keep 5 plus 5; The Contemporary World stays First Semester | Documented against the 3-of-5 contrary evidence |
 
-## C. Strategist decisions requiring owner approval
+## C. Final dispositions (owner-approved 2026-11-03)
 
-| # | Proposal | Reason | Status |
-|---|---|---|---|
-| S-1 | Hold out **Strong Induction** | Proof rigor beyond a first-year IT course; ordinary induction already states it | PROPOSED |
-| S-2 | Hold out **Proving Program Correctness** | Formal verification (Hoare triples, loop variants) | PROPOSED |
-| S-3 | Hold out **Logic in Programming and Software Specifications** | First half duplicates plan Notes; second half duplicates S-2 | PROPOSED |
-| S-4 | Keep **Boolean Algebra and Digital Logic** and **Mathematical Induction** | Accessible; standard IT/Discrete Mathematics content | PROPOSED |
-| S-5 | Author one New Note, "Counting: Sum and Product Rules, Permutations and Combinations" | Likely coverage gap; BSIT has no second course to absorb it. Not in the TSV | **Owner decision (Q8)** |
-| S-6 | Plan 7 description rewritten for IT (no ALTRIG prerequisite claim, no program correctness) | Prior text was BSCS-specific | PROPOSED |
-| S-7 | Year description adapted from BSCS | Same scope statement, program name changed | PROPOSED, confirm wording |
+| # | Decision | Status |
+|---|---|---|
+| Q8 | Add exactly one New Note, "Counting: Sum and Product Rules, Permutations and Combinations" (Discrete Mathematics, COMPUTING, COLLEGE, Applicable Programs Computer Science and Information Technology, Second Semester), in a new section `Counting Principles` after Functions and Sequences. Shared computing knowledge; **not** added to the BSCS Year. An approved NoteLib curriculum choice, not a CHED requirement (MS101 outcomes unreadable; no syllabus inspected). Authoring brief only; the Note is not created | APPROVED |
+| Q8 (other) | No separate Notes for trees and basic graph terminology, recurrence relations or discrete probability. Recorded as coverage considerations, revisited only on stronger evidence | APPROVED |
+| S-1 | Strong Induction stays Excluded for BSIT Year 1; BSCS Note unchanged | APPROVED |
+| S-2 | Proving Program Correctness: Assertions and Loop Invariants stays Excluded; BSCS Note unchanged | APPROVED |
+| S-3 | Logic in Programming and Software Specifications stays Excluded; no lighter replacement without a demonstrated need; BSCS Note unchanged | APPROVED |
+| S-4 | Boolean Algebra and Digital Logic and Mathematical Induction stay in the plan | Retained (Strategist proposal, not contested) |
+| S-6/S-7 | Discrete Mathematics plan description (final): "Build the mathematical foundations of computing through propositional and predicate logic, rules of inference, Boolean algebra, sets, relations, functions, sequences, integers and divisibility, elementary counting principles, and introductory proof techniques including mathematical induction. The emphasis is on understanding discrete mathematical concepts and reasoning that support further study in information technology." | APPROVED, applied identically in TSV, workbook and journey |
+| S-7 | Year description (final): see the journey document | APPROVED |
+| Root title | Used with a space after the emoji, `🖥️ BS Information Technology — 1st Year`, matching the existing TSV and builder convention and decision Q6. The approved message wrote it without the space; no second variant was created | Recorded convention |
 
-Reversal of any of S-1 to S-3 is one TSV row each.
+The exclusions apply only to the BSIT Year 1 journey. They do not invalidate the Notes or change their canonical metadata, and they are not reinstated to improve the Reuse percentage.
 
 ## D. Metadata changes proposed (none executed)
 
@@ -47,13 +49,14 @@ Reversal of any of S-1 to S-3 is one TSV row each.
 |---|---|---|
 | + Computer Science, + Information Technology | 3 GE Notes | Owner runs the SQL after STEP 0 guards |
 | + Information Technology | 2 DS Notes fully read (Boolean Algebra and Digital Logic, Mathematical Induction) | Curator confirmation, then a separate SQL |
-| + Information Technology | 29 DS Notes screened but not fully read | **Do not add until a curator confirms bodies** |
+| + Information Technology | 29 DS Notes screened but not fully read | **No tag before individual curator approval (PASS)**. Record per `bsit-year1-curator-verification-manifest-conditional-29.tsv` |
 | none | 3 held-out DS Notes | n/a |
+| none | the new Counting Note (it is created with Computer Science and Information Technology at authoring, so it is not an update) | n/a |
 
 No existing association is removed. Domain Context and Authored Depth are not changed anywhere.
 
 ## E. Curator verification tasks
-See `bsit-year1-curator-verification-checklist.md`.
+See `bsit-year1-curator-verification-checklist.md` (includes the owner-approved rubric) and `bsit-year1-curator-verification-manifest-conditional-29.tsv` (all reviews blank; none has been performed).
 
 ## F. Technical dependencies
 1. **Language:** Q1 depends on the BSCS C++17 convention remaining the operative one (D-35). The 42 S Notes carry executable C++.

@@ -1,55 +1,68 @@
-Status: Phase B complete, awaiting owner review, 2026-11-03. NOT implementation-ready. Phase C has not begun.
+Status: Phase B final shaping complete, awaiting owner review, 2026-11-03. NOT implementation-ready. Phase C has not begun.
 
-# BSIT Year 1: Phase B owner handoff
+# BSIT Year 1: Phase B final owner handoff
 
-## Completion criteria
+All remaining curriculum decisions (Q8, S-1 to S-3, S-7) are owner-approved and incorporated. Totals below are recomputed from the final TSV and manifest.
+
+## Final validated counts
 
 | Item | Result |
 |---|---|
 | Subject Plans and terms | **10 plans: First Semester 5, Second Semester 5** |
-| Total Note placements | **210** (218 TSV rows including 8 Excluded) |
-| Metadata-ready Reuse | **176** |
-| Content-verified Reuse | **5** (full body read: 3 GE, 2 Discrete Mathematics) |
-| Conditional Reuse requiring curator verification | **29** (Discrete Mathematics, screened only) |
-| New | **0** in the TSV; **1 recommended** (Counting), pending Q8 |
-| Excluded | **8** (5 inherited, 3 BSIT-specific) |
-| Exact program-tag changes proposed | 3 GE Notes: +Computer Science, +Information Technology (6 rows, SQL prepared, not run). 2 verified DS Notes: +Information Technology. 29 conditional DS Notes: +Information Technology, only after curator verification. 34 Notes, 37 rows in all. Nothing removed |
-| Notes requiring content inspection | 29 conditional + a 20-Note spot check of the 176 + curator confirmation of the 5 |
-| Discrete Mathematics findings | Coverage of logic, sets, relations, functions, integers and proofs is complete; counting is the likely gap; 3 Notes held out as formal-verification level (`bsit-year1-discrete-mathematics-assessment.md`) |
-| Ready for final implementation shaping | **No.** Four blockers below |
+| TSV rows | **219** |
+| Total Note placements (excluding Excluded) | **211** |
+| Reuse | **210** |
+| New | **1** (Counting, approved; authoring brief only, not created) |
+| Excluded | **8** (5 inherited from BSCS, 3 BSIT-specific, final) |
+| Expected counts from your message | 219 rows / 210 Reuse / 1 New / 8 Excluded: **matches, no discrepancy** |
 
-**File names:** the TSV and workbook carry `preliminary` and `NOT-IMPLEMENTATION-READY` in their names, mirroring the BSCS convention (BSCS D-38 removed the marker only once the specification was deterministic). The 29 conditional Discrete Mathematics rows show their current production programs; the proposed `+Information Technology` is in the manifest only, so the workbook never asks you to tag a Note that no curator has confirmed.
+**Verification tiers over the 210 Reuse placements (unchanged, no new evidence):**
 
-## Key findings
-1. **BSIT Year 1 shares the BSCS Year 1 corpus almost entirely.** Every placement is an existing Note. The BSIT-specific work is the Discrete Mathematics plan.
-2. **Reuse is by exact id.** The manifest pins the BSCS-Year copy for all 210. Eight copies exist for each reused GE title; none is touched.
-3. **Verification is thin where it matters.** 5 of 210 bodies were read in full. The "100% reuse" figure is a status, not an assurance.
-4. **New production observation, worth acting on separately:** Academic Term is stored on `note_collections.term_label/term_order` and is **NULL on all ten BSCS Subject Plans**. BSIT terms must be set when its collections are built.
+| Tier | Count |
+|---|---|
+| Content-verified (full body read by this session) | 5 |
+| Metadata-ready (bodies not re-inspected for BSIT) | 176 |
+| Conditional, curator review required | 29 |
 
-## Remaining owner decisions
-1. **Q8: Counting Note.** Add one New Note, "Counting: Sum and Product Rules, Permutations and Combinations"? I recommend yes, with moderate confidence, because it rests on typical course content and not on a BSIT syllabus or the CHED outcomes.
-2. **S-1 to S-3:** approve holding out Strong Induction, Proving Program Correctness, and Logic in Programming and Software Specifications (each reversible by one row).
-3. **S-7:** confirm the Year description wording.
-4. Run, or defer, the GE metadata SQL (your action, after STEP 0 guards).
+210 Reuse rows are **not** 210 fully content-verified Notes. By status the Reuse share is 210 of 211 (99.5%).
 
-## Blockers before final implementation shaping
-1. Curator reads the 29 conditional Notes (or decides how to treat them).
-2. Q8 resolved.
-3. Canonical-id confirmation for the reused Notes (manifest).
-4. CHED MS101 outcomes or a BSIT Discrete Mathematics syllabus, if you want the coverage claim strengthened.
+## Decisions closed
+- **Q8:** one New Note, "Counting: Sum and Product Rules, Permutations and Combinations", in a `Counting Principles` section after Functions and Sequences. Shared computing knowledge; not added to the BSCS Year. Not a CHED claim (MS101 outcomes unreadable).
+- **Q8 other:** no Notes for trees, recurrence relations or discrete probability (coverage considerations only).
+- **S-1, S-2, S-3:** Strong Induction; Proving Program Correctness: Assertions and Loop Invariants; Logic in Programming and Software Specifications stay Excluded for BSIT Year 1. BSCS Notes unchanged.
+- **S-7:** the Year description and the Discrete Mathematics plan description are final and identical across the TSV, workbook, journey and decision log.
+- **Root title:** used with a space, `🖥️ BS Information Technology — 1st Year`, matching the existing TSV and builder convention and decision Q6. Your message wrote it without the space; no second variant exists. Tell me if you want the unspaced form.
 
-## Implementation dependencies
-- The BSIT collections cannot be built until the above and an explicit owner go-ahead. `term_label`/`term_order` must be set at build time.
-- The working set needs a Backlog Index row, which the Release Implementor writes. This session does not.
-- Nothing has been committed. The files are in the `docs/bsit-year1` worktree (`../study-snap-bsit`). The Release Implementor has not been told; that announcement goes through you.
+## Validation results (all run against the final files)
+- PASS headers and column order identical to the BSCS shaping TSV.
+- PASS 219 rows = 210 Reuse / 1 New / 8 Excluded.
+- PASS no new Subject or Domain Context values; Applicable Programs use catalog values, none blank, serialized alphabetically.
+- PASS one name, term and description per plan; terms 5 plus 5.
+- PASS sections contiguous and nonempty; Counting Principles sits after Functions and Sequences and before Proof Techniques; held-out section last.
+- PASS no duplicate placements; no BSIT, year or semester branding in titles.
+- PASS manifest: 219 rows, 210 unique Note ids, titles equal production titles by id (exact), and manifest and TSV agree row for row.
+- PASS only the 5 content-verified Notes differ from production programs in the TSV; the 29 conditional rows show current production programs (no Information Technology).
+- PASS BSCS files unchanged (git diff against HEAD clean).
+- PASS TSV-to-workbook parity: all 219 rows match on plan, title, status, Subject, Domain Context and Applicable Programs. Workbook regenerated by the builder, Domain Context sheet raises no flags.
+- **Exceptions:** none open. Not verifiable here: Study Pack quality; the bodies of 205 of 210 Notes; CHED MS101 outcomes.
 
-## Deliverables (all under `docs/claude-plans/bsit-year1/` unless stated)
-- `docs/curriculum/bsit-year1-preliminary-shaping.NOT-IMPLEMENTATION-READY.tsv` (source of truth) and the generated `docs/curriculum/bsit-year1-preliminary-study-plan-target-shape.NOT-IMPLEMENTATION-READY.xlsx` (regenerated by the builder, not hand-edited)
-- `bsit-year1-proposed-study-journey.md`
-- `bsit-year1-decision-log.md`
-- `bsit-year1-reuse-impact-report.md`
-- `bsit-year1-discrete-mathematics-assessment.md`
-- `bsit-year1-curator-verification-checklist.md`
-- `bsit-year1-ge-metadata-correction.sql` (prepared, not run)
-- `bsit-year1-reuse-id-manifest.tsv`
-- `bsit-year1-phase-a-research-and-reuse-audit.md` (Phase A; superseded where this handoff differs)
+## Files changed in this pass
+Updated: the TSV and generated workbook (`docs/curriculum/…NOT-IMPLEMENTATION-READY`), the proposed journey, decision log, reuse impact report, Discrete Mathematics assessment, curator checklist, reuse-ID manifest, and this handoff. New: `bsit-year1-counting-note-authoring-brief.md` and `bsit-year1-curator-verification-manifest-conditional-29.tsv` (all review columns blank; no review has been performed). Uncommitted in the `docs/bsit-year1` worktree on top of `018b4c7d`.
+
+## Remaining curator actions
+1. Full review of the 29 conditional Notes against the owner rubric, recorded per Note in the verification manifest. No Information Technology tag before individual approval.
+2. Exact-ID confirmation of reused placements (manifest ids; eight title-matching copies exist per GE title).
+3. Study Pack check: each of the 213 source Notes has exactly one Study Pack; currency and suitability are unread.
+4. Spot-check at least 20 of the 176 metadata-ready Notes, weighted to C++ Notes and computing-flavoured Mathematics in the Modern World Notes.
+
+## Remaining technical dependencies
+1. Run the GE metadata SQL (yours; guards, dry run, rollback in the file).
+2. Narrow Applicable Programs SQL for the Notes the curator passes (not drafted).
+3. Academic Term: stored on `note_collections.term_label` and `term_order`, **NULL on all ten BSCS plans**. BSIT terms must be set at build time.
+4. Official CHED MS101 outcomes, or a documented evidence limitation. Also check CHED figures against the official PDF (OCR source).
+5. Authoring the Counting Note (a later, separately authorized step) and its Study Pack.
+6. The BSCS legacy-plan cleanup observation (25-item plan beside the ten Subject Plans) is separate and is not a BSIT blocker.
+7. Backlog Index row: the Release Manager writes it.
+
+## Recommended next controlled step
+Have the curator review the 29 conditional Notes and run the GE metadata SQL, then reconvene. Authoring the Counting Note and building the collection both come after that, each with its own explicit go-ahead. Nothing here is implementation-ready.
