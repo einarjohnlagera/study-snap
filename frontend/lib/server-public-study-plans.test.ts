@@ -1,5 +1,5 @@
 import { getServerPublicStudyPlansByCoursePrograms } from "./server-public-study-plans";
-import { CatalogDeadlineError, resetCatalogCacheForTests } from "./catalog-cache";
+import { CATALOG_FAILURE_BACKOFF_MS, CatalogBackoffError, CatalogDeadlineError, resetCatalogCacheForTests } from "./catalog-cache";
 
 const originalFetch = globalThis.fetch;
 
@@ -69,7 +69,15 @@ describe("getServerPublicStudyPlansByCoursePrograms", () => {
       "Nursing",
     ])).rejects.toThrow("timeout");
     (globalThis.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => [plan("nursing", "Nursing")] });
-    await expect(getServerPublicStudyPlansByCoursePrograms(["Architecture", "Nursing"])).resolves.toHaveLength(1);
+    const callsAfterFailure = (globalThis.fetch as jest.Mock).mock.calls.length;
+    await expect(getServerPublicStudyPlansByCoursePrograms(["Architecture", "Nursing"])).rejects.toBeInstanceOf(CatalogBackoffError);
+    expect((globalThis.fetch as jest.Mock).mock.calls.length).toBe(callsAfterFailure);
+    const spy = jest.spyOn(Date, "now").mockReturnValue(Date.now() + CATALOG_FAILURE_BACKOFF_MS);
+    try {
+      await expect(getServerPublicStudyPlansByCoursePrograms(["Architecture", "Nursing"])).resolves.toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("rejects a non-OK response instead of returning no plans for the hub (l)", async () => {

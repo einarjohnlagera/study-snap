@@ -8,10 +8,15 @@ import {
   getServerPublicNotesBySubjectSlug,
   getServerPublicNotesBySubjectSlugRecent,
 } from "./server-public-notes";
-import { CatalogDeadlineError, resetCatalogCacheForTests } from "./catalog-cache";
+import { CATALOG_FAILURE_BACKOFF_MS, CatalogBackoffError, CatalogDeadlineError, resetCatalogCacheForTests } from "./catalog-cache";
 
 const originalFetch = global.fetch;
 beforeEach(resetCatalogCacheForTests);
+afterEach(() => jest.restoreAllMocks());
+// Moves the wall clock past a failed key's backoff (cumulative: each call adds one more backoff).
+const advancePastBackoff = () => {
+  jest.spyOn(Date, "now").mockReturnValue(Date.now() + CATALOG_FAILURE_BACKOFF_MS);
+};
 
 describe("getServerPublicNoteCount", () => {
   afterEach(() => {
@@ -254,8 +259,10 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [], hasMore: null }) })
       .mockResolvedValueOnce(page([], false));
     for (let index = 0; index < 3; index++) {
+      advancePastBackoff();
       await expect(getServerPublicNotes()).rejects.toThrow("Invalid public catalog response");
     }
+    advancePastBackoff();
     await expect(getServerPublicNotes()).resolves.toEqual([]);
     expect(global.fetch).toHaveBeenCalledTimes(4);
   });
@@ -366,6 +373,7 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
       .mockResolvedValueOnce({ ok: false })
       .mockResolvedValueOnce(page([{ id: "new" }], false));
     await expect(getServerPublicNotes()).rejects.toThrow("Could not load public catalog");
+    advancePastBackoff();
     await expect(getServerPublicNotes()).resolves.toEqual([{ id: "new" }]);
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });
@@ -376,7 +384,9 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
       .mockRejectedValueOnce(new Error("network"))
       .mockResolvedValueOnce(page([{ id: "healthy" }], false));
     await expect(getServerPublicNotes()).rejects.toThrow("bad JSON");
+    advancePastBackoff();
     await expect(getServerPublicNotes()).rejects.toThrow("network");
+    advancePastBackoff();
     await expect(getServerPublicNotes()).resolves.toEqual([{ id: "healthy" }]);
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });
@@ -387,8 +397,31 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ error: "unexpected shape" }) })
       .mockResolvedValueOnce(page([{ id: "healthy" }], false));
     await expect(getServerPublicNotes()).rejects.toThrow("Invalid public catalog response");
+    advancePastBackoff();
     await expect(getServerPublicNotes()).resolves.toEqual([{ id: "healthy" }]);
     expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry a failed walk for 15 s: it rejects with no fetch, then loads again", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce(page([{ id: "sitemap-class" }], false))
+      .mockResolvedValueOnce(page([{ id: "page-class" }], false));
+    await expect(getServerPublicNotes()).rejects.toThrow("Could not load public catalog");
+    await expect(getServerPublicNotes()).rejects.toBeInstanceOf(CatalogBackoffError);
+    // A different key (the sitemap class) is not blocked by the page-class failure.
+    await expect(getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" })).resolves.toEqual([{ id: "sitemap-class" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    advancePastBackoff();
+    await expect(getServerPublicNotes()).resolves.toEqual([{ id: "page-class" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("backs off the sitemap class after a failed sitemap walk and still never returns a short list", async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({ ok: false });
+    await expect(getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" })).rejects.toThrow("Could not load public catalog");
+    await expect(getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" })).rejects.toBeInstanceOf(CatalogBackoffError);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   it("sends allowlisted attribution only on walk misses, without Next fetch caching (g, i)", async () => {
@@ -639,6 +672,7 @@ describe("public note rails use the page-class hard-TTL cache", () => {
     await expect(getServerPublicNotesByCourseProgramRecent("Nursing", 4)).resolves.toEqual([{ id: "withdrawn", title: "Withdrawn title" }]);
     now = 120_000;
     await expect(getServerPublicNotesByCourseProgramRecent("Nursing", 4)).resolves.toEqual([]);
+    now = 120_000 + CATALOG_FAILURE_BACKOFF_MS;
     await expect(getServerPublicNotesByCourseProgramRecent("Nursing", 4)).resolves.toEqual([{ id: "replacement" }]);
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });
@@ -653,6 +687,7 @@ describe("public note rails use the page-class hard-TTL cache", () => {
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await expect(getServerPublicNotesBySubject("Physics")).resolves.toEqual([]);
+      now += CATALOG_FAILURE_BACKOFF_MS;
     }
     await expect(getServerPublicNotesBySubject("Physics")).resolves.toEqual([{ id: "recovered" }]);
     expect(global.fetch).toHaveBeenCalledTimes(5);
@@ -668,6 +703,7 @@ describe("public note rails use the page-class hard-TTL cache", () => {
       const result = expect(pending).resolves.toEqual([]);
       await jest.advanceTimersByTimeAsync(10_000);
       await result;
+      await jest.advanceTimersByTimeAsync(CATALOG_FAILURE_BACKOFF_MS);
       await expect(getServerPublicNotesBySubject("Biology")).resolves.toEqual([{ id: "fresh" }]);
       expect(global.fetch).toHaveBeenCalledTimes(2);
       expect(jest.getTimerCount()).toBe(0);
@@ -686,6 +722,7 @@ describe("public note rails use the page-class hard-TTL cache", () => {
       const result = expect(pending).resolves.toEqual([]);
       await jest.advanceTimersByTimeAsync(90_000);
       await result;
+      await jest.advanceTimersByTimeAsync(CATALOG_FAILURE_BACKOFF_MS);
       await expect(getServerPublicNotesBySubject("Biology")).resolves.toEqual([{ id: "fresh" }]);
       expect(warn).toHaveBeenCalledWith("CATALOG_CACHE_DEADLINE class=rail deadlineMs=90000");
       expect(global.fetch).toHaveBeenCalledTimes(2);
@@ -693,6 +730,17 @@ describe("public note rails use the page-class hard-TTL cache", () => {
       warn.mockRestore();
       jest.useRealTimers();
     }
+  });
+
+  it("returns an empty rail without calling the backend for 15 s after a failed rail read", async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce(page([{ id: "later" }]));
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([]);
+    now = CATALOG_FAILURE_BACKOFF_MS - 1;
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    now = CATALOG_FAILURE_BACKOFF_MS;
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([{ id: "later" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
   it("single-flights 10 concurrent cold rail reads", async () => {
@@ -722,6 +770,7 @@ describe("public note rails use the page-class hard-TTL cache", () => {
     expect(global.fetch).toHaveBeenCalledTimes(2);
     rejectFetch(new Error("network"));
     expect(await Promise.all(reads)).toEqual(Array(10).fill([]));
+    now = 120_000 + CATALOG_FAILURE_BACKOFF_MS;
     await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([{ id: "recovered" }]);
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });

@@ -9,6 +9,15 @@ export const CATALOG_WALK_PAGE_REQUEST_TIMEOUT_MS = 15_000;
 export const CATALOG_RAIL_REQUEST_TIMEOUT_MS = 10_000;
 export const CATALOG_PLAN_REQUEST_TIMEOUT_MS = 10_000;
 export const CATALOG_WALK_MAX_PAGES = 400;
+/** After a failed load the key rejects for this long without calling the backend (never serves data). */
+export const CATALOG_FAILURE_BACKOFF_MS = 15_000;
+
+export class CatalogBackoffError extends Error {
+  constructor() {
+    super("Public catalog is temporarily unavailable.");
+    this.name = "CatalogBackoffError";
+  }
+}
 
 export class CatalogDeadlineError extends Error {
   constructor() {
@@ -35,6 +44,8 @@ export function createRequestSignal(parent: AbortSignal, timeoutMs: number): { s
 type Entry = { value: unknown; startedAt: number; itemCount: number };
 const entries = new Map<string, Entry>();
 const inFlight = new Map<string, Promise<unknown>>();
+// key -> start of the failure, so a backwards clock cannot extend a backoff. Bounded like `entries`.
+const failures = new Map<string, number>();
 let totalItems = 0;
 
 export function catalogTtlMs(capMs: number, override: string | undefined): number {
@@ -46,6 +57,7 @@ export function catalogTtlMs(capMs: number, override: string | undefined): numbe
 export function resetCatalogCacheForTests(): void {
   entries.clear();
   inFlight.clear();
+  failures.clear();
   totalItems = 0;
 }
 
@@ -59,7 +71,13 @@ export async function getCatalogCached<T>(
   key: string,
   ttlMs: number,
   load: (signal: AbortSignal) => Promise<T>,
-  options: { now?: () => number; hardCapMs?: number; deadlineMs?: number; shouldCache?: (value: T) => boolean } = {},
+  options: {
+    now?: () => number;
+    hardCapMs?: number;
+    deadlineMs?: number;
+    shouldCache?: (value: T) => boolean;
+    failureBackoffMs?: number;
+  } = {},
 ): Promise<T> {
   const now = options.now ?? Date.now;
   const effectiveTtl = Math.min(ttlMs, options.hardCapMs ?? ttlMs);
@@ -74,6 +92,15 @@ export async function getCatalogCached<T>(
 
   const pending = inFlight.get(key);
   if (pending) return pending as Promise<T>;
+
+  const backoffMs = options.failureBackoffMs ?? 0;
+  const failedAt = failures.get(key);
+  if (failedAt !== undefined) {
+    const sinceFailure = now() - failedAt;
+    // A clock that moved backwards, or a smaller configured backoff, ends the block instead of extending it.
+    if (sinceFailure >= 0 && sinceFailure < backoffMs) throw new CatalogBackoffError();
+    failures.delete(key);
+  }
 
   const startedAt = now();
   const controller = new AbortController();
@@ -110,6 +137,11 @@ export async function getCatalogCached<T>(
       return value;
     } catch (error) {
       remove(key);
+      if (backoffMs > 0) {
+        failures.delete(key);
+        failures.set(key, now());
+        while (failures.size > CATALOG_CACHE_MAX_KEYS) failures.delete(failures.keys().next().value as string);
+      }
       throw error;
     } finally {
       globalThis.clearTimeout(timer);

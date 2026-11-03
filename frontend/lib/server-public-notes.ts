@@ -1,6 +1,6 @@
 import type { NoteListItemResponse, PublicNoteDetailResponse } from "@/lib/api";
 import { getPublicSubjectSlug } from "@/lib/public-note-path";
-import { CATALOG_PAGE_TTL_CAP_MS, CATALOG_SITEMAP_TTL_CAP_MS, CATALOG_PAGE_WALK_DEADLINE_MS, CATALOG_SITEMAP_WALK_DEADLINE_MS, CATALOG_WALK_PAGE_REQUEST_TIMEOUT_MS, CATALOG_RAIL_REQUEST_TIMEOUT_MS, CATALOG_WALK_MAX_PAGES, catalogTtlMs, createRequestSignal, getCatalogCached } from "@/lib/catalog-cache";
+import { CATALOG_PAGE_TTL_CAP_MS, CATALOG_SITEMAP_TTL_CAP_MS, CATALOG_PAGE_WALK_DEADLINE_MS, CATALOG_SITEMAP_WALK_DEADLINE_MS, CATALOG_WALK_PAGE_REQUEST_TIMEOUT_MS, CATALOG_RAIL_REQUEST_TIMEOUT_MS, CATALOG_WALK_MAX_PAGES, CATALOG_FAILURE_BACKOFF_MS, catalogTtlMs, createRequestSignal, getCatalogCached } from "@/lib/catalog-cache";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 
@@ -62,7 +62,7 @@ async function fetchPublicNotes(path: string): Promise<NoteListItemResponse[]> {
           request.clear();
         }
       },
-      { hardCapMs: CATALOG_PAGE_TTL_CAP_MS, deadlineMs: CATALOG_PAGE_WALK_DEADLINE_MS },
+      { hardCapMs: CATALOG_PAGE_TTL_CAP_MS, deadlineMs: CATALOG_PAGE_WALK_DEADLINE_MS, failureBackoffMs: CATALOG_FAILURE_BACKOFF_MS },
     );
   } catch {
     return [];
@@ -168,6 +168,7 @@ async function fetchAllPublicNotePages(
     hardCapMs: cap,
     deadlineMs: ttlClass === "sitemap" ? CATALOG_SITEMAP_WALK_DEADLINE_MS : CATALOG_PAGE_WALK_DEADLINE_MS,
     shouldCache,
+    failureBackoffMs: CATALOG_FAILURE_BACKOFF_MS,
   });
 }
 

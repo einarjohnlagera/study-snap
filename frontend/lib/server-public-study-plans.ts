@@ -1,5 +1,5 @@
 import type { NoteCollectionSummary } from "@/lib/api";
-import { CATALOG_PAGE_TTL_CAP_MS, CATALOG_PAGE_WALK_DEADLINE_MS, CATALOG_PLAN_REQUEST_TIMEOUT_MS, catalogTtlMs, createRequestSignal, getCatalogCached } from "@/lib/catalog-cache";
+import { CATALOG_FAILURE_BACKOFF_MS, CATALOG_PAGE_TTL_CAP_MS, CATALOG_PAGE_WALK_DEADLINE_MS, CATALOG_PLAN_REQUEST_TIMEOUT_MS, catalogTtlMs, createRequestSignal, getCatalogCached } from "@/lib/catalog-cache";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 
@@ -42,6 +42,6 @@ export async function getServerPublicStudyPlansByCoursePrograms(
       results.flat().forEach((plan) => plansById.set(plan.id, plan));
       return Array.from(plansById.values());
     },
-    { hardCapMs: CATALOG_PAGE_TTL_CAP_MS, deadlineMs: CATALOG_PAGE_WALK_DEADLINE_MS },
+    { hardCapMs: CATALOG_PAGE_TTL_CAP_MS, deadlineMs: CATALOG_PAGE_WALK_DEADLINE_MS, failureBackoffMs: CATALOG_FAILURE_BACKOFF_MS },
   );
 }

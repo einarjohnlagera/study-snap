@@ -10,6 +10,8 @@ import {
   CATALOG_WALK_MAX_PAGES,
   CATALOG_SITEMAP_TTL_CAP_MS,
   catalogTtlMs,
+  CATALOG_FAILURE_BACKOFF_MS,
+  CatalogBackoffError,
   CatalogDeadlineError,
   createRequestSignal,
   getCatalogCached,
@@ -222,6 +224,88 @@ describe("hard-TTL catalog cache", () => {
       expect(inherited.signal.aborted).toBe(true);
       inherited.clear();
       expect(jest.getTimerCount()).toBe(0);
+    });
+  });
+  describe("failure backoff", () => {
+    let clock = 0;
+    const opts = { now: () => clock, failureBackoffMs: 1_000 };
+    beforeEach(() => { clock = 0; });
+
+    it("rejects without calling the loader inside the backoff and loads again exactly at its end", async () => {
+      const load = jest.fn().mockRejectedValueOnce(new Error("upstream")).mockResolvedValueOnce("recovered");
+      await expect(getCatalogCached("walk:page:a", 100_000, load, opts)).rejects.toThrow("upstream");
+      clock = 999;
+      await expect(getCatalogCached("walk:page:a", 100_000, load, opts)).rejects.toBeInstanceOf(CatalogBackoffError);
+      expect(load).toHaveBeenCalledTimes(1);
+      clock = 1_000;
+      await expect(getCatalogCached("walk:page:a", 100_000, load, opts)).resolves.toBe("recovered");
+      expect(load).toHaveBeenCalledTimes(2);
+    });
+
+    it("backs off after a deadline too, and never serves the expired entry during the backoff", async () => {
+      jest.useFakeTimers();
+      jest.spyOn(console, "warn").mockImplementation();
+      try {
+        const fresh = jest.fn().mockResolvedValueOnce("old");
+        await getCatalogCached("rail:b", 100, fresh, { now: () => Date.now(), failureBackoffMs: 1_000 });
+        await jest.advanceTimersByTimeAsync(100);
+        const hung = jest.fn().mockImplementation(() => new Promise<string>(() => undefined));
+        const pending = expect(getCatalogCached("rail:b", 100, hung, { now: () => Date.now(), failureBackoffMs: 1_000 })).rejects.toBeInstanceOf(CatalogDeadlineError);
+        await jest.advanceTimersByTimeAsync(100);
+        await pending;
+        await expect(getCatalogCached("rail:b", 100, hung, { now: () => Date.now(), failureBackoffMs: 1_000 })).rejects.toBeInstanceOf(CatalogBackoffError);
+        expect(hung).toHaveBeenCalledTimes(1);
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+        jest.restoreAllMocks();
+      }
+    });
+
+    it("rejects ten concurrent callers during the backoff with a single earlier load", async () => {
+      const load = jest.fn().mockRejectedValue(new Error("upstream"));
+      await expect(getCatalogCached("plans:c", 100_000, load, opts)).rejects.toThrow("upstream");
+      clock = 10;
+      const results = await Promise.allSettled(Array.from({ length: 10 }, () => getCatalogCached("plans:c", 100_000, load, opts)));
+      expect(results.every((result) => result.status === "rejected" && result.reason instanceof CatalogBackoffError)).toBe(true);
+      expect(load).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps today's immediate retry when no backoff is configured", async () => {
+      const load = jest.fn().mockRejectedValueOnce(new Error("upstream")).mockResolvedValueOnce("ok");
+      await expect(getCatalogCached("walk:page:d", 100_000, load, { now: () => clock })).rejects.toThrow("upstream");
+      await expect(getCatalogCached("walk:page:d", 100_000, load, { now: () => clock })).resolves.toBe("ok");
+    });
+
+    it("ends the backoff when the clock moves backwards instead of extending it", async () => {
+      clock = 5_000;
+      const load = jest.fn().mockRejectedValueOnce(new Error("upstream")).mockResolvedValueOnce("ok");
+      await expect(getCatalogCached("walk:page:e", 100_000, load, opts)).rejects.toThrow("upstream");
+      clock = 4_000;
+      await expect(getCatalogCached("walk:page:e", 100_000, load, opts)).resolves.toBe("ok");
+    });
+
+    it("bounds the failure records: after 1,100 distinct failing keys the oldest is no longer blocked", async () => {
+      const load = jest.fn().mockRejectedValue(new Error("upstream"));
+      for (let index = 0; index < CATALOG_CACHE_MAX_KEYS + 76; index += 1) {
+        await expect(getCatalogCached(`walk:page:f${index}`, 100_000, load, opts)).rejects.toThrow("upstream");
+      }
+      const calls = load.mock.calls.length;
+      await expect(getCatalogCached("walk:page:f0", 100_000, load, opts)).rejects.toThrow("upstream");
+      expect(load.mock.calls.length).toBe(calls + 1);
+      await expect(getCatalogCached(`walk:page:f${CATALOG_CACHE_MAX_KEYS + 75}`, 100_000, load, opts)).rejects.toBeInstanceOf(CatalogBackoffError);
+      expect(load.mock.calls.length).toBe(calls + 1);
+    });
+
+    it("a reset clears the failure records", async () => {
+      const load = jest.fn().mockRejectedValueOnce(new Error("upstream")).mockResolvedValueOnce("ok");
+      await expect(getCatalogCached("walk:page:g", 100_000, load, opts)).rejects.toThrow("upstream");
+      resetCatalogCacheForTests();
+      await expect(getCatalogCached("walk:page:g", 100_000, load, opts)).resolves.toBe("ok");
+    });
+
+    it("exports a 15 s production backoff", () => {
+      expect(CATALOG_FAILURE_BACKOFF_MS).toBe(15_000);
     });
   });
 });
