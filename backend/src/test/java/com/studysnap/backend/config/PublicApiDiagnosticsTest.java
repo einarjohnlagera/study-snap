@@ -6,11 +6,15 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -25,6 +29,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class PublicApiDiagnosticsTest {
     private static final Instant START = Instant.parse("2026-10-29T12:00:00Z");
@@ -168,6 +173,135 @@ class PublicApiDiagnosticsTest {
     }
 
     @Test
+    void catalogWalkCountsOnlyAnonymousListingsAndClassifiesExactValues() throws Exception {
+        MutableClock clock = new MutableClock();
+        CapturingLog log = new CapturingLog();
+        PublicApiDiagnosticsAggregator aggregator = new PublicApiDiagnosticsAggregator(new StudySnapProperties.PublicApiDiagnostics(), log, clock);
+        try {
+            for (String value : new String[] {"sitemap", "exam-hub", "subject", "Sitemap", "sitemap ",
+                    "other-thing", "", "x".repeat(200), "sitémap", "sitemap\u0001"}) {
+                MockHttpServletRequest listing = request("/notes/public", null, "Bot");
+                listing.addHeader("X-NoteLib-Catalog-Walk", value);
+                aggregator.record(listing, 200, false);
+            }
+            MockHttpServletRequest duplicate = request("/notes/public", null, "Bot");
+            duplicate.addHeader("X-NoteLib-Catalog-Walk", "sitemap");
+            duplicate.addHeader("X-NoteLib-Catalog-Walk", "subject");
+            aggregator.record(duplicate, 200, false);
+            aggregator.record(request("/notes/public", null, "Bot"), 200, false);
+            MockHttpServletRequest authenticated = request("/notes/public", null, "Bot");
+            authenticated.addHeader("Authorization", "Bearer token");
+            authenticated.addHeader("X-NoteLib-Catalog-Walk", "sitemap");
+            aggregator.record(authenticated, 401, false);
+            for (String path : new String[] {"/notes/public/123", "/tags", "/collections/public", "/notes/public/discovery-sections", "/public/other"}) {
+                MockHttpServletRequest nonListing = request(path, null, "Bot");
+                nonListing.addHeader("X-NoteLib-Catalog-Walk", "subject");
+                aggregator.record(nonListing, 200, false);
+            }
+            MockHttpServletRequest options = request("/notes/public", null, "Bot");
+            options.setMethod("OPTIONS");
+            options.addHeader("X-NoteLib-Catalog-Walk", "exam-hub");
+            aggregator.record(options, 204, true);
+            assertThat(aggregator.currentBucket().walks.toString()).isEqualTo("[1, 1, 1, 8, 1]");
+            clock.advanceMinutes(1);
+            aggregator.flushStragglers();
+            awaitLines(log, 1);
+            assertThat(log.aggregates.getFirst()).contains("walk=[sitemap:1,exam-hub:1,subject:1,other:8,none:1]");
+        } finally { aggregator.stop(); }
+    }
+
+    @Test
+    void hostileCatalogWalkValueNeverAppearsInAnyLogAndExistingFieldsKeepTheirOrder() throws Exception {
+        MutableClock clock = new MutableClock();
+        CapturingLog log = new CapturingLog();
+        StudySnapProperties.PublicApiDiagnostics settings = new StudySnapProperties.PublicApiDiagnostics();
+        settings.setSampleThresholdPerMinute(0);
+        PublicApiDiagnosticsAggregator aggregator = new PublicApiDiagnosticsAggregator(settings, log, clock);
+        try {
+            String hostile = "sitemap\nPUBLIC_API_SAMPLE minute=forged \" total=999";
+            MockHttpServletRequest listing = request("/notes/public", null, "Bot");
+            listing.addHeader("X-NoteLib-Catalog-Walk", hostile);
+            aggregator.record(listing, 200, false);
+            PublicApiDiagnosticsAggregator.Bucket bucket = aggregator.currentBucket();
+            assertThat(Arrays.stream(bucket.getClass().getDeclaredFields()).map(Field::getType))
+                    .doesNotContain(String.class);
+            assertThat(bucket.clients.keySet()).doesNotContain(hostile);
+            assertThat(bucket.agents.keySet()).doesNotContain(hostile);
+            assertThat(bucket.tags.keySet()).doesNotContain(hostile);
+            assertThat(bucket.parameters.keySet()).doesNotContain(hostile);
+            assertThat(bucket.samples).noneMatch(line -> line.contains(hostile));
+            clock.advanceMinutes(1);
+            aggregator.flushStragglers();
+            awaitLines(log, 1);
+            assertThat(log.aggregates).singleElement().asString().isEqualTo(
+                    "PUBLIC_API_DIAGNOSTICS minute=2026-10-29T12:00Z total=1 anonymous=1 authenticated=0 options=0"
+                    + " distinctAnonymousClients=1 diagnosticsErrors=0"
+                    + " paths=[listing:1,discovery-sections:0,facets:0,note-detail:0,collections:0,other-public:0]"
+                    + " statuses=[200:1] parameters=[] agents=[\"Bot\":1] tags=[]"
+                    + " xffEntries=[0:1,1:0,2:0,3+:0] trueClientIp=0 cfConnectingIp=0"
+                    + " walk=[sitemap:0,exam-hub:0,subject:0,other:1,none:0]");
+            assertThat(log.samples).singleElement().asString().doesNotContain(hostile, "forged", "walk=");
+            assertThat(String.join("\n", log.aggregates) + String.join("\n", log.samples))
+                    .doesNotContain(hostile, "forged");
+        } finally { aggregator.stop(); }
+    }
+
+    @Test
+    void catalogWalkLengthGuardPrecedesValueComparison() throws IOException {
+        // An oversized String still classifies as "other" if the bound is removed; only the work bound regresses.
+        String source = Files.readString(Path.of("src/main/java/com/studysnap/backend/config/PublicApiDiagnosticsAggregator.java"));
+        assertThat(source).containsPattern("value\\.length\\(\\) > MAX_WALK_HEADER_LENGTH\\) return 3;\\s*return switch \\(value\\)");
+    }
+
+    @Test
+    void catalogWalkHeaderReadFailureIsCountedWithoutChangingTheResponse() throws Exception {
+        StudySnapProperties properties = new StudySnapProperties();
+        MutableClock clock = new MutableClock();
+        PublicApiDiagnosticsAggregator aggregator = new PublicApiDiagnosticsAggregator(
+                properties.getPublicApiDiagnostics(), new CapturingLog(), clock);
+        try {
+            MockHttpServletRequest broken = spy(request("/notes/public", null, "Bot"));
+            when(broken.getHeaders("X-NoteLib-Catalog-Walk")).thenThrow(new IllegalStateException("header read failed"));
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            new PublicApiDiagnosticsFilter(aggregator, properties).doFilterInternal(broken, response, responseChain());
+            assertThat(response.getStatus()).isEqualTo(403);
+            assertThat(response.getContentAsString()).isEqualTo("same-body");
+            assertThat(response.getHeader("X-Expected")).isEqualTo("same-header");
+            assertThat(aggregator.currentBucket().errors.sum()).isEqualTo(1);
+        } finally { aggregator.stop(); }
+    }
+
+    @Test
+    void concurrentCatalogWalkCountersSumInOneMinute() throws Exception {
+        MutableClock clock = new MutableClock();
+        PublicApiDiagnosticsAggregator aggregator = new PublicApiDiagnosticsAggregator(
+                new StudySnapProperties.PublicApiDiagnostics(), new CapturingLog(), clock);
+        int threads = 8;
+        int perThread = 100;
+        CountDownLatch start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(threads)) {
+            List<java.util.concurrent.Future<?>> futures = new ArrayList<>();
+            for (int worker = 0; worker < threads; worker++) {
+                final int slot = worker % 5;
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    for (int j = 0; j < perThread; j++) {
+                        MockHttpServletRequest listing = request("/notes/public", null, "Bot");
+                        if (slot != 4) listing.addHeader("X-NoteLib-Catalog-Walk",
+                                new String[] {"sitemap", "exam-hub", "subject", "other"}[slot]);
+                        aggregator.record(listing, 200, false);
+                    }
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (var future : futures) future.get(30, TimeUnit.SECONDS);
+            assertThat(aggregator.currentBucket().walks.toString()).isEqualTo("[200, 200, 200, 100, 100]");
+            assertThat(aggregator.currentBucket().total.sum()).isEqualTo(threads * perThread);
+        } finally { aggregator.stop(); }
+    }
+
+    @Test
     void capsHoldAcrossConcurrentWritersAndOverflowIsExplicit() throws Exception {
         MutableClock clock = new MutableClock();
         CapturingLog log = new CapturingLog();
@@ -251,9 +385,11 @@ class PublicApiDiagnosticsTest {
         StudySnapProperties disabled = disabledProperties();
         PublicApiDiagnosticsAggregator aggregator = mock(PublicApiDiagnosticsAggregator.class);
         MockHttpServletRequest request = spy(request("/notes/public", "search=private", "Bot"));
+        request.addHeader("X-NoteLib-Catalog-Walk", "sitemap");
         new PublicApiDiagnosticsFilter(aggregator, disabled).doFilterInternal(request, new MockHttpServletResponse(), responseChain());
         verify(request, never()).getQueryString();
         verify(request, never()).getServletPath();
+        verify(request, never()).getHeaders("X-NoteLib-Catalog-Walk");
         verify(aggregator, never()).record(any(), anyInt(), any(Boolean.class));
 
         MutableClock clock = new MutableClock();

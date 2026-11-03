@@ -16,6 +16,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -44,6 +45,9 @@ public class PublicApiDiagnosticsAggregator {
     static final int MAX_AGENT_LENGTH = 120;
     static final int MAX_SLUG_LENGTH = 60;
     private static final int MAX_HEADER_LENGTH = 2_048;
+    private static final int MAX_WALK_HEADER_LENGTH = 32;
+    private static final String WALK_HEADER = "X-NoteLib-Catalog-Walk";
+    private static final String[] WALKS = {"sitemap", "exam-hub", "subject", "other", "none"};
     private static final String OTHER = "<other>";
     private static final String[] GROUPS = {"listing", "discovery-sections", "facets", "note-detail", "collections", "other-public"};
     private static final DateTimeFormatter MINUTE_FORMAT = DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm'Z'").withZone(ZoneOffset.UTC);
@@ -112,7 +116,9 @@ public class PublicApiDiagnosticsAggregator {
                 return;
             }
             bucket.anonymous.increment();
-            bucket.groups.incrementAndGet(group(request.getServletPath()));
+            int group = group(request.getServletPath());
+            bucket.groups.incrementAndGet(group);
+            if (group == 0) bucket.walks.incrementAndGet(walk(request));
             QueryFacts query = parseQuery(request.getQueryString());
             for (String name : query.names) count(bucket.parameters, bucket.parameterSlots, name, 100);
             for (String tag : query.tags) count(bucket.tags, bucket.tagSlots, tag, tagCap());
@@ -206,6 +212,8 @@ public class PublicApiDiagnosticsAggregator {
     private String render(Bucket bucket) {
         String groups = java.util.stream.IntStream.range(0, GROUPS.length)
                 .mapToObj(i -> GROUPS[i] + ':' + bucket.groups.get(i)).collect(Collectors.joining(","));
+        String walks = java.util.stream.IntStream.range(0, WALKS.length)
+                .mapToObj(i -> WALKS[i] + ':' + bucket.walks.get(i)).collect(Collectors.joining(","));
         String statuses = java.util.stream.IntStream.range(0, 1_000).filter(i -> bucket.statuses.get(i) > 0)
                 .mapToObj(i -> i + ":" + bucket.statuses.get(i)).collect(Collectors.joining(","));
         return "PUBLIC_API_DIAGNOSTICS minute=" + MINUTE_FORMAT.format(Instant.ofEpochSecond(bucket.minute * 60))
@@ -217,7 +225,8 @@ public class PublicApiDiagnosticsAggregator {
                 + " tags=" + top(bucket.tags) + " xffEntries=[0:" + bucket.xffShape.get(0)
                 + ",1:" + bucket.xffShape.get(1) + ",2:" + bucket.xffShape.get(2)
                 + ",3+:" + bucket.xffShape.get(3) + "] trueClientIp=" + bucket.trueClient.sum()
-                + " cfConnectingIp=" + bucket.cfConnecting.sum();
+                + " cfConnectingIp=" + bucket.cfConnecting.sum()
+                + " walk=[" + walks + ']';
     }
 
     private String top(Map<String, LongAdder> map) {
@@ -291,6 +300,19 @@ public class PublicApiDiagnosticsAggregator {
         if (path != null && path.startsWith(PublicApiDiagnosticsFilter.NOTES_PUBLIC + "/")) return 3;
         if (path != null && path.startsWith(PublicApiDiagnosticsFilter.COLLECTIONS_PUBLIC)) return 4;
         return 5;
+    }
+
+    private static int walk(HttpServletRequest request) {
+        Enumeration<String> values = request.getHeaders(WALK_HEADER);
+        if (values == null || !values.hasMoreElements()) return 4;
+        String value = values.nextElement();
+        if (values.hasMoreElements() || value == null || value.length() > MAX_WALK_HEADER_LENGTH) return 3;
+        return switch (value) {
+            case "sitemap" -> 0;
+            case "exam-hub" -> 1;
+            case "subject" -> 2;
+            default -> 3;
+        };
     }
 
     static String sanitize(String value, int limit) {
@@ -473,6 +495,7 @@ public class PublicApiDiagnosticsAggregator {
         final LongAdder cfConnecting = new LongAdder();
         final AtomicLongArray statuses = new AtomicLongArray(1_000);
         final AtomicLongArray groups = new AtomicLongArray(6);
+        final AtomicLongArray walks = new AtomicLongArray(WALKS.length);
         final AtomicLongArray xffShape = new AtomicLongArray(4);
         final ConcurrentHashMap<String, LongAdder> clients = new ConcurrentHashMap<>();
         final ConcurrentHashMap<String, LongAdder> agents = new ConcurrentHashMap<>();
