@@ -49,6 +49,15 @@ node preview-verify/run.mjs --base http://localhost:3100
 | T5b | same, note page | 200 with EMPTY rails, no expired list |
 | T5c | recovery | every page 200 with fresh data |
 | T8 | instances and safety | instances seen; the real API was never contacted |
+| T5c (B3b) | recovery | every page back with fresh data within 25 s of the failure window ending (15 s failure backoff plus margin) |
+| T10, T11 | strict walks | a page without `hasMore`, and an empty page that still says `hasMore: true`, fail closed (error shell, no list) |
+| T12 | 400-page guard | an endless catalog fails closed; runtime logs show `CATALOG_WALK_GUARD_BREACH ... pages=400` |
+| T13 | valid empty catalog | `hasMore: false` with no items renders the normal empty subject page |
+| T14 | junk slugs | 60 junk subject URLs render the existing empty page; logs show about one `CATALOG_WALK ... notes=0` per request (not cached) |
+| T15 | slow walk | 20 pages x 6 s (each under the 15 s request timeout): an error shell at min(90 s deadline, page TTL). A 504 or an earlier end at scale 1 means the platform function limit is below 90 s |
+| T17 | sitemap | complete for the stub catalog, every `<loc>` on the `www` host |
+
+B3 notes: the deadlines are fixed constants, so the slow-walk phase is real time even in a scaled dry run (where the page TTL override clamps the deadline to u). The 240 s sitemap deadline cannot be tested here (the harness shortens the sitemap TTL, which clamps it); read the platform limit in Settings, Functions. Evidence that needs the Preview's runtime logs (1 hour retention on Hobby): the guard breach line, the deadline line and the not-cached junk walks.
 
 ## Known limitations (read before relying on a PASS)
 - **L1, found by the local dry run: pages do NOT return a real 5xx on upstream failure.** `app/layout.tsx` wraps all page

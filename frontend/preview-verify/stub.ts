@@ -33,7 +33,16 @@ const SUBJECTS = ["Verify Alpha", "Verify Beta", "Verify Gamma", "Verify Delta"]
 const PROGRAM = "Verify Program A";
 const slugify = (v: string) => v.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const abortError = () => new DOMException("The operation was aborted.", "AbortError");
+/** Abort-aware sleep: a request whose signal aborts stops being answered, like a real upstream the client gave up on. */
+const sleep = (ms: number, signal?: AbortSignal | null) => new Promise<void>((resolve, reject) => {
+  if (signal?.aborted) { reject(abortError()); return; }
+  const onAbort = () => { clearTimeout(timer); shared.calls.aborted = (shared.calls.aborted ?? 0) + 1; reject(abortError()); };
+  const timer = setTimeout(() => { signal?.removeEventListener("abort", onAbort); resolve(); }, ms);
+  signal?.addEventListener("abort", onAbort, { once: true });
+});
+/** Each page of the dedicated slow subject takes this long (NOT scaled: the deadlines under test are fixed constants). */
+export const SLOW_PAGE_MS = 6_000;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -75,6 +84,26 @@ function list(url: URL): Response {
   const programSlug = sp.get("courseProgram") ? slugify(sp.get("courseProgram") as string) : null;
   const page = Math.max(0, Number(sp.get("page") ?? "0") || 0);
   const size = Math.min(50, Math.max(1, Number(sp.get("pageSize") ?? "20") || 20));
+  // ---- driver-triggered special subjects (not clock-driven); their notes carry "Strict Probe Note" so any leak is visible ----
+  const strict = (p: number, i: number, tag: string) => note(20000 + p * 100 + i, `Verify ${tag}`,
+    `Strict Probe Note ${tag} ${p}-${i}`, "strict body", null, new Date(Date.UTC(2031, 0, 1) - (p * 100 + i) * 60_000).toISOString());
+  const strictPage = (tag: string) => Array.from({ length: size }, (_, i) => strict(page, i, tag));
+  if (subjectSlug === "verify-nohasmore") {
+    return json({ items: [strict(page, 0, "NoFlag")], total: 1, page, pageSize: size, totalMatching: 1 }); // hasMore omitted
+  }
+  if (subjectSlug === "verify-emptymore") {
+    return json({ items: [], total: 0, page, pageSize: size, totalMatching: 0, hasMore: true });
+  }
+  if (subjectSlug === "verify-empty") {
+    return json({ items: [], total: 0, page, pageSize: size, totalMatching: 0, hasMore: false });
+  }
+  if (subjectSlug === "verify-endless") {
+    return json({ items: strictPage("Endless"), total: 999_999, page, pageSize: size, totalMatching: 999_999, hasMore: true });
+  }
+  if (subjectSlug === "verify-epsilon") {
+    const pages = 20;
+    return json({ items: strictPage("Epsilon"), total: pages * size, page, pageSize: size, totalMatching: pages * size, hasMore: page + 1 < pages });
+  }
   const key = `${subjectSlug ?? "all"}|${programSlug ?? "-"}`;
   if (page === 0) shared.seq[key] = (shared.seq[key] ?? 0) + 1;
   const tag = subjectSlug ? `s-${subjectSlug}` : programSlug ? `p-${programSlug}` : "all";
@@ -114,7 +143,7 @@ function plans(): Response {
 }
 
 /** Returns a Response for a stubbed API path, or null when the URL is not an API path this stub owns. */
-export async function stubFetch(url: URL): Promise<Response | null> {
+export async function stubFetch(url: URL, signal?: AbortSignal | null): Promise<Response | null> {
   const path = url.pathname.replace(/^\/api(?=\/)/, "");
   let route: string | null = null;
   let make: (() => Response) | null = null;
@@ -127,6 +156,8 @@ export async function stubFetch(url: URL): Promise<Response | null> {
   else if (path === "/subjects") { route = "subjects"; make = () => json(SUBJECTS); }
   if (!route || !make) return null;
   shared.calls[route] = (shared.calls[route] ?? 0) + 1;
-  await sleep(Math.max(5, Math.round(100 * SCALE)));
+  const slow = route === "list" && url.searchParams.get("subject") === "verify-epsilon";
+  if (slow) shared.calls["slow-page"] = (shared.calls["slow-page"] ?? 0) + 1;
+  await sleep(slow ? SLOW_PAGE_MS : Math.max(5, Math.round(100 * SCALE)), signal);
   return make();
 }

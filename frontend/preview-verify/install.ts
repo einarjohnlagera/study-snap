@@ -12,7 +12,8 @@ export function installPreviewStub(): void {
     let url: URL | null = null;
     try { url = new URL(raw); } catch { url = null; }
     if (url) {
-      const stubbed = await stubFetch(url);
+      const signal = init?.signal ?? (typeof input === "object" && "signal" in input ? (input as Request).signal : undefined);
+      const stubbed = await stubFetch(url, signal);
       if (stubbed) return stubbed;
       if (raw.startsWith(apiBase)) {
         shared.blocked.push(raw.slice(0, 160));

@@ -11,7 +11,10 @@ const base = (arg("base", "") || "").replace(/\/$/, "");
 if (!base) { console.error("--base is required"); process.exit(2); }
 const bypass = arg("bypass", "");
 const outFile = arg("out", `preview-verify-results-${Date.now()}.json`);
-const reqHeaders = bypass ? { "x-vercel-protection-bypass": bypass } : {};
+// Alternative to --bypass: an auth cookie obtained from a Vercel shareable link, passed via the environment so it stays
+// out of shell history and `ps`: VERIFY_COOKIE='_vercel_jwt=...' node preview-verify/run.mjs --base ...
+const cookie = process.env.VERIFY_COOKIE || "";
+const reqHeaders = { ...(bypass ? { "x-vercel-protection-bypass": bypass } : {}), ...(cookie ? { cookie } : {}) };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let skew = 0;
@@ -67,7 +70,7 @@ const record = (id, name, pass, detail) => {
   if (serverNow() > ps + 0.05 * u) ps += st0.periodMs; // start at the next period boundary
   const T = (x) => ps + x * u;
   const tWithdraw = T(st0.withdrawU);
-  console.log(`waiting for the next period start in ${(Math.max(0, T(0) - serverNow()) / 1000).toFixed(0)} s; the run then takes about ${(11.6 * u / 60000).toFixed(1)} min`);
+  console.log(`waiting for the next period start in ${(Math.max(0, T(0) - serverNow()) / 1000).toFixed(0)} s; the run then takes about ${(11.6 * u / 60000 + 5).toFixed(1)} min (timeline plus about 5 minutes of strictness and slow-walk phases)`);
   while (T(0) - serverNow() > 60_000) { await sleep(60_000); console.log(`  ...${((T(0) - serverNow()) / 1000).toFixed(0)} s to start`); }
   await sleepUntil(T(0));
 
@@ -121,10 +124,20 @@ const record = (id, name, pass, detail) => {
     await sleepUntil(T(10.6));
     const during = {};
     for (const k of ["s4", "hub", "sitemap", "note", "s2"]) { during[k] = keep(await get(PAGES[k])); }
-    await sleepUntil(T(11.3));
-    const after = {};
-    for (const k of ["s4", "hub", "sitemap", "note", "s2"]) { after[k] = keep(await get(PAGES[k])); addTags(after[k]); }
-    return { warm4, during, after };
+    // Recovery is polled: after a failure the cache backs off for 15 s per key per instance (B3b), so the first rounds
+    // after the window may still show the error shell. The bound is the backoff plus a margin, NOT scaled with u.
+    const failEndT = T(st0.failEndU);
+    let after = null; let recoveredAfterMs = null;
+    for (let t = failEndT + 1000; t <= failEndT + 40_000; t += 2000) {
+      await sleepUntil(t);
+      const cur = {};
+      for (const k of ["s4", "hub", "sitemap", "note", "s2"]) { cur[k] = keep(await get(PAGES[k])); addTags(cur[k]); }
+      after = cur;
+      const ok = ["s4", "hub", "sitemap", "note", "s2"].every((k) => cur[k].status === 200)
+        && /Edit Probe New Title|EDIT-NEW-TEXT|Probe [a-f0-9]{6}/.test(cur.note.body) && !MARKER.test(cur.s2.body) && !MARKER.test(cur.hub.body);
+      if (ok) { recoveredAfterMs = serverNow() - failEndT; break; }
+    }
+    return { warm4, during, after, recoveredAfterMs };
   })();
   const [conc, idl, , fail] = await Promise.all([concurrency, idle, polls, failure]);
 
@@ -192,11 +205,53 @@ const record = (id, name, pass, detail) => {
   const railsGone = d.note.status === 200 && !/Verify Beta Note \d|Edit Probe|Probe [a-f0-9]{6}/.test(d.note.body);
   record("T5b", "upstream failure: the note page still renders (200) with EMPTY rails, no expired list",
     railsGone, `note page status ${d.note.status}; rails content present: ${d.note.status === 200 ? !railsGone : "n/a"}`);
-  const recovered = ["s4", "hub", "sitemap", "note", "s2"].every((k) => a[k].status === 200);
-  const railsBack = /Edit Probe New Title|EDIT-NEW-TEXT|Probe [a-f0-9]{6}/.test(a.note.body);
-  record("T5c", "recovery after the failure window: every page returns 200 with fresh data, rails back",
-    recovered && railsBack && !MARKER.test(a.s2.body) && !MARKER.test(a.hub.body),
-    `statuses after: ${["s4", "hub", "sitemap", "note", "s2"].map((k) => `${k}=${a[k].status}`).join(" ")}; rails back ${railsBack}; marker absent on s2 ${!MARKER.test(a.s2.body)} and hub ${!MARKER.test(a.hub.body)}`);
+  const RECOVERY_BOUND_MS = 25_000; // 15 s failure backoff plus polling and render margin
+  const recoveredMs = fail.recoveredAfterMs;
+  record("T5c", "recovery after the failure window: every page returns 200 with fresh data and rails back within the backoff bound",
+    recoveredMs !== null && recoveredMs <= RECOVERY_BOUND_MS,
+    `recovered ${recoveredMs === null ? "NEVER within 40 s" : `${(recoveredMs / 1000).toFixed(1)} s`} after the failure window ended (bound ${RECOVERY_BOUND_MS / 1000} s); last statuses ${["s4", "hub", "sitemap", "note", "s2"].map((k) => `${k}=${a?.[k]?.status}`).join(" ")}`);
+
+  // ---- sitemap completeness and canonical host (from the warm response taken before the withdrawal) ----
+  const locs = [...warm.sitemap.body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  const wrongHost = locs.filter((l) => !l.startsWith("https://www.notelib.app/"));
+  const wantAll = ["/public/library/verify-alpha", "/public/library/verify-beta", "/public/library/verify-gamma", "/public/library/verify-delta", "anchor-note-stable"];
+  const missing = wantAll.filter((w) => !locs.some((l) => l.includes(w)));
+  record("T17", "sitemap is complete for the stub catalog and every URL uses the www host",
+    locs.length > 0 && wrongHost.length === 0 && missing.length === 0,
+    `${locs.length} <loc> entries; non-www entries ${wrongHost.length ? wrongHost.slice(0, 2).join(", ") : "none"}; missing ${missing.length ? missing.join(", ") : "none"}`);
+
+  // ---- B3 phases (not clock-driven; the stub is outside its failure window here) ----
+  const SUBJ = (slug) => `/public/library/${slug}`;
+  const strictLeak = (b) => /Strict Probe Note/.test(b);
+  const rendersSubject = (b) => /Subject Library/.test(b);
+  const timed = async (path) => { const t0 = Date.now(); const r = await get(path); keep(r); return { ...r, ms: Date.now() - t0 }; };
+  const failsClosed = (r) => r.status === 200 && !strictLeak(r.body) && !rendersSubject(r.body);
+  const describeR = (r) => `status ${r.status}, ${(r.ms / 1000).toFixed(1)} s, subject page rendered ${rendersSubject(r.body)}, strict notes leaked ${strictLeak(r.body)}`;
+
+  const noFlag = await timed(SUBJ("verify-nohasmore"));
+  record("T10", "walk page without hasMore: fails closed (error shell, no partial list rendered)", failsClosed(noFlag), describeR(noFlag));
+  const emptyMore = await timed(SUBJ("verify-emptymore"));
+  record("T11", "empty page that still says hasMore=true: fails closed", failsClosed(emptyMore), describeR(emptyMore));
+  const endless = await timed(SUBJ("verify-endless"));
+  record("T12", "endless catalog: the 400-page guard (or the deadline) fails the walk closed; check runtime logs for CATALOG_WALK_GUARD_BREACH",
+    failsClosed(endless), `${describeR(endless)} (a guard breach takes about 400 stub pages; near 90 s means the deadline fired first)`);
+  const validEmpty = await timed(SUBJ("verify-empty"));
+  record("T13", "valid empty catalog (hasMore=false): renders the normal (empty) subject page, no error",
+    validEmpty.status === 200 && rendersSubject(validEmpty.body) && !strictLeak(validEmpty.body), describeR(validEmpty));
+  const junk = [];
+  for (let i = 0; i < 40; i += 1) junk.push(await timed(SUBJ(`verify-junk-${i}`)));
+  for (let i = 0; i < 20; i += 1) junk.push(await timed(SUBJ("verify-junk-repeat")));
+  const junkOk = junk.every((r) => r.status === 200 && rendersSubject(r.body) && !strictLeak(r.body));
+  record("T14", "junk subject slugs: every request renders the existing empty page (HTTP 200); check runtime logs that empty walks are not cached",
+    junkOk, `60 requests (40 distinct, 20 repeating one slug); all rendered the normal empty page: ${junkOk}; slowest ${(Math.max(...junk.map((r) => r.ms)) / 1000).toFixed(1)} s (logs should show about 60 or more CATALOG_WALK ... notes=0 lines, not about 40)`);
+  console.log("starting the slow-walk phase (about 90 s)...");
+  const slowWalk = await timed(SUBJ("verify-epsilon"));
+  // The effective deadline is min(90 s, page TTL): at scale 1 the TTL is 120 s so 90 s governs; in a scaled dry run the TTL
+  // override (u) is lower and the clamp makes the deadline equal to u. Both are the production behavior.
+  const expectedMs = Math.min(90_000, u);
+  const deadlineGoverned = failsClosed(slowWalk) && slowWalk.ms >= 0.85 * expectedMs && slowWalk.ms <= expectedMs + 25_000;
+  record("T15", "slow walk (20 pages x 6 s, each under the 15 s request timeout): the whole-walk deadline governs and fails the page closed",
+    deadlineGoverned, `${describeR(slowWalk)}; expected an error shell at about ${(expectedMs / 1000).toFixed(0)} s (min of the 90 s deadline and the page TTL). A 504 or an earlier end at scale 1 means the PLATFORM function limit is below the 90 s deadline (record the elapsed time); check runtime logs for CATALOG_CACHE_DEADLINE class=walk:page deadlineMs=${expectedMs}`);
 
   const finalState = await state().catch(() => null);
   record("T8", "instances and safety: instances observed; the real API was never contacted",
