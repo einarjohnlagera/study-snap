@@ -24,7 +24,7 @@ import {
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import { buildCollectionPageStructuredData } from "@/lib/structured-data";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 type SubjectLandingPageProps = {
   params: Promise<{
@@ -126,15 +126,6 @@ function SubjectSection({ title, description, notes, subjectPath }: Readonly<Sub
       </div>
     </section>
   );
-}
-
-// ⚠️ DELIBERATELY EMPTY (v0.178.0 Step 0). Prerendering every public subject made each production build walk the
-// catalog against the PRODUCTION API (about 250 requests, the `general` subject walking the whole catalog), at the
-// same moment as a deploy, on a 0.1 CPU database. Pages now render on the first request and are cached by
-// `revalidate` above; `dynamicParams` defaults to true, so an unknown slug resolves or 404s exactly as before.
-// Do not restore the slug list without reading docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md.
-export function generateStaticParams(): Array<{ subject: string }> {
-  return [];
 }
 
 export async function generateMetadata({ params }: SubjectLandingPageProps): Promise<Metadata> {
