@@ -2,8 +2,16 @@ import {
   CATALOG_CACHE_MAX_ITEMS,
   CATALOG_CACHE_MAX_KEYS,
   CATALOG_PAGE_TTL_CAP_MS,
+  CATALOG_PAGE_WALK_DEADLINE_MS,
+  CATALOG_SITEMAP_WALK_DEADLINE_MS,
+  CATALOG_WALK_PAGE_REQUEST_TIMEOUT_MS,
+  CATALOG_RAIL_REQUEST_TIMEOUT_MS,
+  CATALOG_PLAN_REQUEST_TIMEOUT_MS,
+  CATALOG_WALK_MAX_PAGES,
   CATALOG_SITEMAP_TTL_CAP_MS,
   catalogTtlMs,
+  CatalogDeadlineError,
+  createRequestSignal,
   getCatalogCached,
   resetCatalogCacheForTests,
 } from "./catalog-cache";
@@ -26,6 +34,9 @@ describe("hard-TTL catalog cache", () => {
   it("has room for rails alongside catalog walks while keeping the item cap", () => {
     expect(CATALOG_CACHE_MAX_KEYS).toBe(1024);
     expect(CATALOG_CACHE_MAX_ITEMS).toBe(15_000);
+    expect([CATALOG_PAGE_WALK_DEADLINE_MS, CATALOG_SITEMAP_WALK_DEADLINE_MS]).toEqual([90_000, 240_000]);
+    expect([CATALOG_WALK_PAGE_REQUEST_TIMEOUT_MS, CATALOG_RAIL_REQUEST_TIMEOUT_MS, CATALOG_PLAN_REQUEST_TIMEOUT_MS]).toEqual([15_000, 10_000, 10_000]);
+    expect(CATALOG_WALK_MAX_PAGES).toBe(400);
   });
 
   it("serves inside the TTL but refreshes at its exact boundary without serving expired data (a)", async () => {
@@ -45,14 +56,14 @@ describe("hard-TTL catalog cache", () => {
     expect(await refresh).toBe("new");
   });
 
-  it("measures from load START, so a slow completed load is immediately expired (b)", async () => {
+  it("measures from load START, so a slow completed load fails at the boundary (b)", async () => {
     const first = deferred<string>();
     const load = jest.fn().mockReturnValueOnce(first.promise).mockResolvedValueOnce("fresh");
     const initial = read("slow", load);
     await Promise.resolve();
     time = 100;
     first.resolve("old");
-    expect(await initial).toBe("old");
+    await expect(initial).rejects.toBeInstanceOf(CatalogDeadlineError);
     expect(await read("slow", load)).toBe("fresh");
     expect(load).toHaveBeenCalledTimes(2);
   });
@@ -123,5 +134,94 @@ describe("hard-TTL catalog cache", () => {
         expect(catalogTtlMs(cap, value)).toBe(cap);
       }
     }
+  });
+
+  describe("load deadlines", () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
+
+    it("cuts a hung signal-ignoring load, aborts it, rejects ten waiters, and permits a fresh load", async () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation();
+      let signal!: AbortSignal;
+      const load = jest.fn().mockImplementationOnce((received: AbortSignal) => {
+        signal = received;
+        return new Promise<string>(() => undefined);
+      }).mockResolvedValueOnce("fresh");
+      const callers = Array.from({ length: 10 }, () => getCatalogCached("walk:page:secret-slug", 100, load));
+      const settled = Promise.allSettled(callers);
+      await Promise.resolve();
+      expect(load).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(100);
+      const results = await settled;
+      expect(results.every((result) => result.status === "rejected" && result.reason instanceof CatalogDeadlineError)).toBe(true);
+      expect(signal.aborted).toBe(true);
+      expect(warn).toHaveBeenCalledWith("CATALOG_CACHE_DEADLINE class=walk:page deadlineMs=100");
+      expect(jest.getTimerCount()).toBe(0);
+      await expect(getCatalogCached("walk:page:secret-slug", 100, load)).resolves.toBe("fresh");
+      expect(load).toHaveBeenCalledTimes(2);
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it("ignores a late completion after the deadline and never caches it", async () => {
+      jest.spyOn(console, "warn").mockImplementation();
+      const late = deferred<string>();
+      const load = jest.fn().mockReturnValueOnce(late.promise).mockResolvedValueOnce("fresh");
+      const readers = Array.from({ length: 2 }, () => getCatalogCached("walk:sitemap:private", 200, load, { deadlineMs: 100 }));
+      const settled = Promise.allSettled(readers);
+      await jest.advanceTimersByTimeAsync(100);
+      expect((await settled).every((result) => result.status === "rejected" && result.reason instanceof CatalogDeadlineError)).toBe(true);
+      late.resolve("withdrawn");
+      await jest.advanceTimersByTimeAsync(0); // flush the abandoned loader's continuation
+      await expect(getCatalogCached("walk:sitemap:private", 200, load, { deadlineMs: 100 })).resolves.toBe("fresh");
+      expect(load).toHaveBeenCalledTimes(2);
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it("rejects completion exactly at the deadline and clamps a longer deadline to the TTL", async () => {
+      jest.spyOn(console, "warn").mockImplementation();
+      let clock = 0;
+      const clockNow = () => clock;
+      await expect(getCatalogCached("rail:exact", 100, async () => { clock = 100; return "old"; }, { now: clockNow })).rejects.toBeInstanceOf(CatalogDeadlineError);
+      clock = 0;
+      const pending = getCatalogCached("plans:clamped", 60_000, () => new Promise<string>(() => undefined), { deadlineMs: 90_000 });
+      const rejected = expect(pending).rejects.toBeInstanceOf(CatalogDeadlineError);
+      await jest.advanceTimersByTimeAsync(60_000);
+      await rejected;
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it("clears timers on success and failure, and does not cache when shouldCache rejects the value", async () => {
+      const load = jest.fn().mockResolvedValue("value");
+      await getCatalogCached("rail:no-cache", 100, load, { shouldCache: () => false });
+      await getCatalogCached("rail:no-cache", 100, load, { shouldCache: () => false });
+      expect(load).toHaveBeenCalledTimes(2);
+      await getCatalogCached("rail:cached", 100, load, { shouldCache: () => true });
+      await getCatalogCached("rail:cached", 100, load);
+      expect(load).toHaveBeenCalledTimes(3);
+      await expect(getCatalogCached("plans:fail", 100, async () => { throw new Error("failed"); })).rejects.toThrow("failed");
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it("evicts an entry when the clock moves backwards", async () => {
+      let clock = 10;
+      const load = jest.fn().mockResolvedValueOnce("old").mockResolvedValueOnce("new");
+      await getCatalogCached("rail:clock", 100, load, { now: () => clock });
+      clock = 9;
+      await expect(getCatalogCached("rail:clock", 100, load, { now: () => clock })).resolves.toBe("new");
+      expect(load).toHaveBeenCalledTimes(2);
+    });
+
+    it("request signal aborts on timeout or parent abort, and clear removes the timer", async () => {
+      const parent = new AbortController();
+      const timed = createRequestSignal(parent.signal, 10);
+      await jest.advanceTimersByTimeAsync(10);
+      expect(timed.signal.aborted).toBe(true);
+      timed.clear();
+      const inherited = createRequestSignal(parent.signal, 10);
+      parent.abort();
+      expect(inherited.signal.aborted).toBe(true);
+      inherited.clear();
+      expect(jest.getTimerCount()).toBe(0);
+    });
   });
 });
