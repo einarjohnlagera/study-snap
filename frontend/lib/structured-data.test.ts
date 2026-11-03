@@ -4,7 +4,7 @@ describe("buildCollectionPageStructuredData", () => {
   it("omits mainEntity when no items are provided", () => {
     const result = buildCollectionPageStructuredData({
       name: "PNLE Exam Hub",
-      url: "https://notelib.app/exam/pnle",
+      url: "https://www.notelib.app/exam/pnle",
       description: "PNLE notes and quizzes.",
     });
 
@@ -15,7 +15,7 @@ describe("buildCollectionPageStructuredData", () => {
   it("omits mainEntity when items is an empty array", () => {
     const result = buildCollectionPageStructuredData({
       name: "PNLE Exam Hub",
-      url: "https://notelib.app/exam/pnle",
+      url: "https://www.notelib.app/exam/pnle",
       description: "PNLE notes and quizzes.",
       items: [],
     });
@@ -26,11 +26,11 @@ describe("buildCollectionPageStructuredData", () => {
   it("asserts an ItemList of the collection's actual member notes when items are provided", () => {
     const result = buildCollectionPageStructuredData({
       name: "PNLE Exam Hub",
-      url: "https://notelib.app/exam/pnle",
+      url: "https://www.notelib.app/exam/pnle",
       description: "PNLE notes and quizzes.",
       items: [
-        { name: "Fundamentals of Nursing", url: "https://notelib.app/public/library/nursing/fundamentals" },
-        { name: "Med-Surg Notes", url: "https://notelib.app/public/library/nursing/med-surg" },
+        { name: "Fundamentals of Nursing", url: "https://www.notelib.app/public/library/nursing/fundamentals" },
+        { name: "Med-Surg Notes", url: "https://www.notelib.app/public/library/nursing/med-surg" },
       ],
     });
 
@@ -41,13 +41,13 @@ describe("buildCollectionPageStructuredData", () => {
           "@type": "ListItem",
           position: 1,
           name: "Fundamentals of Nursing",
-          item: "https://notelib.app/public/library/nursing/fundamentals",
+          item: "https://www.notelib.app/public/library/nursing/fundamentals",
         },
         {
           "@type": "ListItem",
           position: 2,
           name: "Med-Surg Notes",
-          item: "https://notelib.app/public/library/nursing/med-surg",
+          item: "https://www.notelib.app/public/library/nursing/med-surg",
         },
       ],
     });

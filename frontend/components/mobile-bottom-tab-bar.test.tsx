@@ -60,7 +60,7 @@ describe("MobileBottomTabBar", () => {
 
     expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library?tags=Review");
 
-    searchParams = new URLSearchParams({ ref: "https://notelib.app/library?tags=Review" });
+    searchParams = new URLSearchParams({ ref: "https://www.notelib.app/library?tags=Review" });
     rerender(<MobileBottomTabBar pathname="/notes/note-1" profileType="STUDENT" />);
 
     expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library");

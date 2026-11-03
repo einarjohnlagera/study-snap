@@ -31,7 +31,7 @@ describe("ExamHubIndexPage", () => {
       title: "NoteLib Exam Hubs – ALE, PNLE, LET, CPALE, and CELE Review Notes",
       description: "Browse NoteLib exam hubs for ALE, PNLE, LET, CPALE, and CELE public notes, summaries, and practice quizzes.",
       alternates: {
-        canonical: "https://notelib.app/exam",
+        canonical: "https://www.notelib.app/exam",
       },
     });
   });

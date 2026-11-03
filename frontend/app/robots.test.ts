@@ -15,7 +15,7 @@ describe("robots metadata route", () => {
           "/app",
         ],
       },
-      sitemap: "https://notelib.app/sitemap.xml",
+      sitemap: "https://www.notelib.app/sitemap.xml",
     });
   });
 });

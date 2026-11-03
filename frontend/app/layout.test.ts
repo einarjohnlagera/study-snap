@@ -2,6 +2,7 @@ import { metadata } from "./layout";
 
 describe("RootLayout metadata", () => {
   it("exports the standardized favicon and apple-touch metadata", () => {
+    expect(new URL(String(metadata.metadataBase)).origin).toBe("https://www.notelib.app");
     expect(metadata).toMatchObject({
       description: "Build your notes library and turn notes into summaries and quizzes.",
       manifest: "/site.webmanifest",
@@ -21,7 +22,7 @@ describe("RootLayout metadata", () => {
       openGraph: expect.objectContaining({
         images: expect.arrayContaining([
           expect.objectContaining({
-            url: "https://notelib.app/og-image-v2.png",
+            url: "https://www.notelib.app/og-image-v2.png",
             alt: "NoteLib — your notes become your study system. Turn notes into Study Packs with summaries, key concepts, quizzes, and flashcards.",
           }),
         ]),

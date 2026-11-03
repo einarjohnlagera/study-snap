@@ -39,11 +39,11 @@ describe("LearnPage", () => {
       description:
         "Study guides for students, board exam reviewees, teachers, and professionals who want to turn notes into reviewers, practice questions, and better exam prep.",
       alternates: {
-        canonical: "https://notelib.app/learn",
+        canonical: "https://www.notelib.app/learn",
       },
       openGraph: expect.objectContaining({
         type: "website",
-        url: "https://notelib.app/learn",
+        url: "https://www.notelib.app/learn",
       }),
     });
   });

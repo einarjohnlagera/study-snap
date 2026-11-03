@@ -235,7 +235,7 @@ describe("ExamHubPage", () => {
 
     expect(metadata.title).toBe(title);
     expect(metadata.description).toContain(EXAM_HUBS[slug as keyof typeof EXAM_HUBS].description);
-    expect(metadata.alternates?.canonical).toBe(`https://notelib.app/exam/${slug}`);
+    expect(metadata.alternates?.canonical).toBe(`https://www.notelib.app/exam/${slug}`);
   });
 
   it("returns notFound for unknown slugs", async () => {

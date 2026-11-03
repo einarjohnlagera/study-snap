@@ -70,7 +70,7 @@ describe("HowItWorksPage", () => {
       title: "How NoteLib Works — Notes to Study Packs and Quiz Practice",
       description: "See how NoteLib turns saved notes into Study Packs, quizzes, Board Exam practice, and review insights.",
       alternates: {
-        canonical: "https://notelib.app/how-it-works",
+        canonical: "https://www.notelib.app/how-it-works",
       },
     });
   });
