@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { PublicLibraryReturnLink } from "@/components/notes/public-library-return-link";
@@ -17,22 +16,11 @@ import {
   buildPublicLibrarySubjectPath,
   getPublicTitleSlug,
 } from "@/lib/public-note-path";
-import {
-  getServerPublicNotesBySubjectSlug,
-  SUBJECT_PAGE_INDEX_THRESHOLD,
-} from "@/lib/server-public-notes";
-import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
+import { getServerPublicNotesBySubjectSlug } from "@/lib/server-public-notes";
+import { absoluteUrl } from "@/lib/site-metadata";
 import { buildCollectionPageStructuredData } from "@/lib/structured-data";
 
-export const dynamic = "force-dynamic";
-
-type SubjectLandingPageProps = {
-  params: Promise<{
-    subject: string;
-  }>;
-};
-
-type SubjectNote = NoteListItemResponse & {
+export type SubjectNote = NoteListItemResponse & {
   slug?: string | null;
 };
 
@@ -48,11 +36,11 @@ function formatSubjectFallback(subjectSlug: string) {
   return fallback.replaceAll(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function resolveSubjectLabel(subjectSlug: string, notes: SubjectNote[]) {
+export function resolveSubjectLabel(subjectSlug: string, notes: SubjectNote[]) {
   return notes.find((note) => note.subject?.trim())?.subject?.trim() || formatSubjectFallback(subjectSlug);
 }
 
-function buildSubjectDescription(subjectLabel: string) {
+export function buildSubjectDescription(subjectLabel: string) {
   return `Free ${subjectLabel} reviewer notes and practice quizzes shared by real students. Browse community-contributed notes, summaries, and quiz sets.`;
 }
 
@@ -128,22 +116,12 @@ function SubjectSection({ title, description, notes, subjectPath }: Readonly<Sub
   );
 }
 
-export async function generateMetadata({ params }: SubjectLandingPageProps): Promise<Metadata> {
-  const { subject } = await params;
-  const notes = await getServerPublicNotesBySubjectSlug(subject) as SubjectNote[];
-  const subjectLabel = resolveSubjectLabel(subject, notes);
-  const description = buildSubjectDescription(subjectLabel);
-
-  return buildPageMetadata({
-    title: `Free ${subjectLabel} Reviewer Notes & Practice Quizzes | NoteLib`,
-    description,
-    path: buildPublicLibrarySubjectPath(subject),
-    noIndex: notes.length < SUBJECT_PAGE_INDEX_THRESHOLD,
-  });
-}
-
-export default async function SubjectLandingPage({ params }: Readonly<SubjectLandingPageProps>) {
-  const { subject } = await params;
+/**
+ * The catalog-dependent body of the subject listing. The page renders it inside a Suspense boundary (fallback: the text-free
+ * skeleton), so a genuine navigation shows the shell and the skeleton immediately while this awaits the single-flight catalog
+ * walk. It is a separate file because a Next.js page file may only export the route's special fields.
+ */
+export async function SubjectListingContent({ subject }: Readonly<{ subject: string }>) {
   const notes = await getServerPublicNotesBySubjectSlug(subject) as SubjectNote[];
   const subjectLabel = resolveSubjectLabel(subject, notes);
   const description = buildSubjectDescription(subjectLabel);

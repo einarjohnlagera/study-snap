@@ -26,7 +26,7 @@ export function schedule(now = Date.now()) {
   const failStart = periodStart + FAIL_START_U * U_MS;
   const failEnd = periodStart + FAIL_END_U * U_MS;
   return { now, u: U_MS, periodMs, periodStart, tWithdraw, failStart, failEnd,
-    withdrawn: now >= tWithdraw, failing: now >= failStart && now < failEnd };
+    withdrawn: now >= tWithdraw, failing: process.env.PREVIEW_VERIFY_NO_FAILURE !== "1" && now >= failStart && now < failEnd };
 }
 
 const SUBJECTS = ["Verify Alpha", "Verify Beta", "Verify Gamma", "Verify Delta"];
@@ -43,6 +43,10 @@ const sleep = (ms: number, signal?: AbortSignal | null) => new Promise<void>((re
 });
 /** Each page of the dedicated slow subject takes this long (NOT scaled: the deadlines under test are fixed constants). */
 export const SLOW_PAGE_MS = 6_000;
+/** Independent slow subjects, so one test never joins another test's in-flight walk or inherits its backoff. */
+export const SLOW_SUBJECTS = new Set(["verify-epsilon", "verify-zeta", "verify-theta", "verify-iota"]);
+/** A slow exam-hub program: hub `ce` is mapped to it below, so its notes walk takes about 120 s. */
+export const SLOW_PROGRAM = "verify-slow-program";
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -100,7 +104,11 @@ function list(url: URL): Response {
   if (subjectSlug === "verify-endless") {
     return json({ items: strictPage("Endless"), total: 999_999, page, pageSize: size, totalMatching: 999_999, hasMore: true });
   }
-  if (subjectSlug === "verify-epsilon") {
+  if (programSlug === SLOW_PROGRAM) {
+    const pages = 20;
+    return json({ items: strictPage("SlowHub"), total: pages * size, page, pageSize: size, totalMatching: pages * size, hasMore: page + 1 < pages });
+  }
+  if (subjectSlug && SLOW_SUBJECTS.has(subjectSlug)) {
     const pages = 20;
     return json({ items: strictPage("Epsilon"), total: pages * size, page, pageSize: size, totalMatching: pages * size, hasMore: page + 1 < pages });
   }
@@ -152,12 +160,21 @@ export async function stubFetch(url: URL, signal?: AbortSignal | null): Promise<
     const [, , , , subject, slug] = path.split("/");
     route = "detail"; make = () => detail(decodeURIComponent(subject ?? ""), decodeURIComponent(slug ?? ""));
   } else if (path === "/collections/public") { route = "plans"; make = plans; }
-  else if (path === "/public/exam-goals/course-programs") { route = "mapping"; make = () => json({ ale: [PROGRAM] }); }
+  else if (path === "/public/exam-goals/course-programs") { route = "mapping"; make = () => json({ ale: [PROGRAM], ce: ["Verify Slow Program"] }); }
   else if (path === "/subjects") { route = "subjects"; make = () => json(SUBJECTS); }
   if (!route || !make) return null;
   shared.calls[route] = (shared.calls[route] ?? 0) + 1;
-  const slow = route === "list" && url.searchParams.get("subject") === "verify-epsilon";
+  const subjectParam = slugify(url.searchParams.get("subject") ?? "");
+  const programParam = slugify(url.searchParams.get("courseProgram") ?? "");
+  const slow = route === "list" && (SLOW_SUBJECTS.has(subjectParam) || programParam === SLOW_PROGRAM);
   if (slow) shared.calls["slow-page"] = (shared.calls["slow-page"] ?? 0) + 1;
+  // One line per walk start (page 0 of any subject or program list), so a prefetch that starts a walk, or a duplicate walk for
+  // one navigation, is visible in the server or runtime logs.
+  if (route === "list" && (url.searchParams.get("page") ?? "0") === "0" && (subjectParam || programParam)) {
+    // A catalog walk requests 50 per page; the note-page rails request a handful. Logged separately so a rail is never counted as a walk.
+    const kind = Number(url.searchParams.get("pageSize") ?? "0") === 50 ? "walk-start" : "rail-start";
+    console.info(`PREVIEW_STUB ${kind} kind=${programParam ? "program" : "subject"} slug=${programParam || subjectParam}`);
+  }
   await sleep(slow ? SLOW_PAGE_MS : Math.max(5, Math.round(100 * SCALE)), signal);
   return make();
 }

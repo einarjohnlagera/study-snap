@@ -56,6 +56,12 @@ node preview-verify/run.mjs --base http://localhost:3100
 | T14 | junk slugs | 60 junk subject URLs render the existing empty page; logs show about one `CATALOG_WALK ... notes=0` per request (not cached) |
 | T15 | slow walk | 20 pages x 6 s (each under the 15 s request timeout): an error shell at min(90 s deadline, page TTL). A 504 or an earlier end at scale 1 means the platform function limit is below 90 s |
 | T17 | sitemap | complete for the stub catalog, every `<loc>` on the `www` host |
+| T18 (B4) | skeleton streams early | on a slow subject (`verify-zeta`) the text-free skeleton marker (`data-public-page-skeleton="listing"`) and the site nav arrive within 5 s, with no catalog data and no "Subject Library" in the early bytes |
+| T19 (B4) | prefetch starts no walk | a prefetch-style RSC request (`RSC: 1`, `Next-Router-Prefetch: 1`) to a slow loading-bounded subject (`verify-theta`) returns in under 5 s with a small payload and no catalog data (baseline on B3 without `loading.tsx`: 1.2 s, 251 bytes); also check the runtime logs that no walk started |
+| T20 (B4) | note route | the note page renders and carries no skeleton marker (the note route has no loading boundary) |
+| T21 (B4) | limited bots | `facebookexternalhit` and `Twitterbot` get complete HTML (content present, title in the head); the raw streamed HTML also contains the text-free skeleton fallback, which is reported, not forbidden; N1 records what a browser user agent gets |
+
+B4 evidence that needs the Preview's runtime logs (within the hour): `CATALOG_CACHE_STATS` lines (format, fields, one per minute per instance, no key or slug, `inst` distinct per instance, a burst showing `join` counts), and no `CATALOG_WALK` for the prefetch probe. The hub skeleton is unit-tested only (the stub cannot slow a hub).
 
 B3 notes: the deadlines are fixed constants, so the slow-walk phase is real time even in a scaled dry run (where the page TTL override clamps the deadline to u). The 240 s sitemap deadline cannot be tested here (the harness shortens the sitemap TTL, which clamps it); read the platform limit in Settings, Functions. Evidence that needs the Preview's runtime logs (1 hour retention on Hobby): the guard breach line, the deadline line and the not-cached junk walks.
 

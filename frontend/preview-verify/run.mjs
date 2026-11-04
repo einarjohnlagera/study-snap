@@ -253,6 +253,56 @@ const record = (id, name, pass, detail) => {
   record("T15", "slow walk (20 pages x 6 s, each under the 15 s request timeout): the whole-walk deadline governs and fails the page closed",
     deadlineGoverned, `${describeR(slowWalk)}; expected an error shell at about ${(expectedMs / 1000).toFixed(0)} s (min of the 90 s deadline and the page TTL). A 504 or an earlier end at scale 1 means the PLATFORM function limit is below the 90 s deadline (record the elapsed time); check runtime logs for CATALOG_CACHE_DEADLINE class=walk:page deadlineMs=${expectedMs}`);
 
+  // ---- B4 phases: the loading skeleton, prefetch, the note route and limited bots ----
+  const BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
+  const SKEL = 'data-public-page-skeleton="listing"';
+  // Reads the response as a stream for up to `ms`, timestamping every chunk (an aborted read is expected for slow pages).
+  const streamProbe = async (path, { ua = BROWSER_UA, ms = 6000 } = {}) => {
+    const ctrl = new AbortController(); const t0 = Date.now(); const timer = setTimeout(() => ctrl.abort(), ms);
+    const chunks = []; let status = 0;
+    try {
+      const r = await fetch(`${base}${path}`, { headers: { ...reqHeaders, "user-agent": ua }, redirect: "manual", cache: "no-store", signal: ctrl.signal });
+      status = r.status; const reader = r.body.getReader(); const dec = new TextDecoder();
+      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push({ t: Date.now() - t0, text: dec.decode(value, { stream: true }) }); }
+    } catch { /* aborted at the cap */ }
+    clearTimeout(timer);
+    return { status, chunks, body: chunks.map((c) => c.text).join(""), ms: Date.now() - t0 };
+  };
+
+  const early = await streamProbe(SUBJ("verify-zeta"), { ms: 6000 });
+  const firstSkel = early.chunks.find((c) => c.text.includes(SKEL));
+  record("T18", "slow subject: the text-free skeleton and the site chrome stream within seconds, with no catalog data in the early bytes",
+    early.status === 200 && !!firstSkel && firstSkel.t <= 5000 && !strictLeak(early.body) && !rendersSubject(early.body) && /<nav/.test(early.body),
+    `status ${early.status}; skeleton marker first seen at ${firstSkel ? `${(firstSkel.t / 1000).toFixed(1)} s` : "never"} of a 6 s probe (${early.chunks.length} chunks, ${early.body.length} bytes); nav present ${/<nav/.test(early.body)}; strict notes leaked ${strictLeak(early.body)}; 'Subject Library' present ${rendersSubject(early.body)}`);
+
+  // A prefetch-style request (what <Link> sends) to a loading-bounded slow subject must NOT start a walk. Baseline on the B3 Preview
+  // (no loading.tsx): 1.2 s, 251 bytes. A walk would take about 90 s.
+  const pfStart = Date.now(); let pf;
+  try {
+    const r = await fetch(`${base}${SUBJ("verify-theta")}`, { headers: { ...reqHeaders, "user-agent": BROWSER_UA, RSC: "1", "Next-Router-Prefetch": "1" }, redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(12000) });
+    const b = await r.text(); pf = { status: r.status, ms: Date.now() - pfStart, bytes: b.length, body: b };
+  } catch (error) { pf = { status: 0, ms: Date.now() - pfStart, bytes: 0, body: "", error: String(error) }; }
+  record("T19", "prefetch-style request to a loading-bounded slow subject returns fast with no catalog data (a prefetch must not start a walk)",
+    pf.status === 200 && pf.ms < 5000 && pf.bytes < 200_000 && !strictLeak(pf.body),
+    `status ${pf.status}${pf.error ? ` (${pf.error})` : ""}; ${(pf.ms / 1000).toFixed(1)} s; ${pf.bytes} bytes (baseline on B3: 1.2 s, 251 bytes); strict notes leaked ${strictLeak(pf.body)}. Also confirm in the runtime logs that no walk for this subject started`);
+
+  const noteFull = await timed("/public/library/verify-beta/anchor-note-stable");
+  record("T20", "note page: renders the note and carries NO loading skeleton marker (the note route has no loading boundary)",
+    noteFull.status === 200 && /Anchor Note Stable/.test(noteFull.body) && !noteFull.body.includes(SKEL),
+    `status ${noteFull.status}, ${(noteFull.ms / 1000).toFixed(1)} s; note title present ${/Anchor Note Stable/.test(noteFull.body)}; skeleton marker present ${noteFull.body.includes(SKEL)}`);
+
+  const BOTS = ["facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)", "Twitterbot/1.0"];
+  const headOf = (body) => { const i = body.indexOf("<body"); return i > 0 ? body.slice(0, i) : body.slice(0, 20000); };
+  const botRes = []; for (const ua of BOTS) botRes.push(await streamProbe(SUBJ("verify-beta"), { ua, ms: 30000 }));
+  // The raw streamed HTML legitimately contains the text-free fallback markup as well as the content (observed in the dry run),
+  // so the skeleton marker is REPORTED here, not required to be absent.
+  const botOk = botRes.every((r) => r.status === 200 && rendersSubject(r.body) && /<title>[^<]*Verify Beta/.test(headOf(r.body)));
+  record("T21", "limited-bot user agents get complete HTML: the page content is present and the title is in the head (the text-free skeleton marker is reported, not forbidden)",
+    botOk, botRes.map((r, i) => `${BOTS[i].split("/")[0]}: status ${r.status}, content ${rendersSubject(r.body)}, skeleton ${r.body.includes(SKEL)}, title in head ${/<title>[^<]*Verify Beta/.test(headOf(r.body))}`).join("; "));
+  const normalRes = await streamProbe(SUBJ("verify-beta"), { ms: 30000 });
+  results.notes.push({ id: "N1", name: "INFORMATIONAL: browser user agent on a fast subject", observed: `title in head ${/<title>[^<]*Verify Beta/.test(headOf(normalRes.body))}; skeleton marker in the raw stream ${normalRes.body.includes(SKEL)}; ${normalRes.chunks.length} chunks` });
+  console.log(`NOTE  N1  browser UA on a fast subject: title in head ${/<title>[^<]*Verify Beta/.test(headOf(normalRes.body))}; skeleton marker in the raw stream ${normalRes.body.includes(SKEL)}; ${normalRes.chunks.length} chunks`);
+
   const finalState = await state().catch(() => null);
   record("T8", "instances and safety: instances observed; the real API was never contacted",
     instances.size > 0 && !!finalState && finalState.stubInstalled && (finalState.blockedApiRequests ?? []).length === 0,

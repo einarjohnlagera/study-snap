@@ -1,5 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { Suspense } from "react";
 import SubjectLandingPage, { dynamic, generateMetadata } from "./page";
+import { SubjectListingContent } from "./subject-listing-content";
+import { PublicListingSkeleton } from "@/components/public-page-skeleton";
 import { getServerPublicNotesBySubjectSlug } from "@/lib/server-public-notes";
 import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 import type { NoteListItemResponse } from "@/lib/api";
@@ -84,7 +87,20 @@ describe("SubjectLandingPage", () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockRejectedValue(error);
     const props = { params: Promise.resolve({ subject: "biology" }) };
     await expect(generateMetadata(props)).rejects.toBe(error);
-    await expect(SubjectLandingPage(props)).rejects.toBe(error);
+    await expect(SubjectListingContent({ subject: "biology" })).rejects.toBe(error);
+  });
+
+  it("returns a Suspense shell with the skeleton fallback and does not walk the catalog itself", async () => {
+    const props = { params: Promise.resolve({ subject: "biology" }) };
+    const element = await SubjectLandingPage(props) as unknown as {
+      type: unknown;
+      props: { fallback: { type: unknown }; children: { type: unknown; props: unknown } };
+    };
+    expect(element.type).toBe(Suspense);
+    expect(element.props.fallback.type).toBe(PublicListingSkeleton);
+    expect(element.props.children.type).toBe(SubjectListingContent);
+    expect(element.props.children.props).toEqual({ subject: "biology" });
+    expect(getServerPublicNotesBySubjectSlug).not.toHaveBeenCalled();
   });
 
   it("generates per-subject metadata from the subject label", async () => {
@@ -127,7 +143,7 @@ describe("SubjectLandingPage", () => {
   it("renders ranked subject sections and canonical note links", async () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue(subjectNotes);
 
-    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+    render(await SubjectListingContent({ subject: "biology" }));
 
     expect(screen.getByRole("link", { name: "← Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByRole("heading", { name: "Biology" })).toBeInTheDocument();
@@ -147,7 +163,7 @@ describe("SubjectLandingPage", () => {
   it("saves this subject-landing page as the Public Library return URL when a note card is clicked", async () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue(subjectNotes);
 
-    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+    render(await SubjectListingContent({ subject: "biology" }));
 
     expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBeNull();
     fireEvent.click(screen.getByRole("link", { name: /Cell Structure/ }));
@@ -157,7 +173,7 @@ describe("SubjectLandingPage", () => {
   it("does not repeat notes across sections", async () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue(subjectNotes);
 
-    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+    render(await SubjectListingContent({ subject: "biology" }));
 
     expect(screen.getAllByText("Cell Structure")).toHaveLength(1);
     expect(screen.getAllByText("Genetics Basics")).toHaveLength(1);
@@ -185,7 +201,7 @@ describe("SubjectLandingPage", () => {
       }),
     ]);
 
-    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+    render(await SubjectListingContent({ subject: "biology" }));
 
     // Note preview wins when it clears the minimum length — the summary never shows alongside it.
     expect(screen.getByText("A concise public note preview about biology.")).toBeInTheDocument();
@@ -199,7 +215,7 @@ describe("SubjectLandingPage", () => {
   it("renders an empty state when no notes match the subject slug", async () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([]);
 
-    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+    render(await SubjectListingContent({ subject: "biology" }));
 
     expect(screen.getByText("No notes yet for this subject.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "← Browse all subjects" })).toHaveAttribute("href", "/public/library");
