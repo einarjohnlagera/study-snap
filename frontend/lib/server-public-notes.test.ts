@@ -306,6 +306,32 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 
+  it("keeps the first occurrence when a note repeats across a page boundary (a note published mid-walk shifts the offset)", async () => {
+    const info = jest.spyOn(console, "info").mockImplementation();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "a", title: "A first" }, { id: "b", title: "B first" }], true))
+      .mockResolvedValueOnce(page([{ id: "b", title: "B repeated" }, { id: "c", title: "C" }], false));
+    await expect(getServerPublicNotes()).resolves.toEqual([
+      { id: "a", title: "A first" },
+      { id: "b", title: "B first" },
+      { id: "c", title: "C" },
+    ]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(info).toHaveBeenCalledWith(expect.stringMatching(/CATALOG_WALK outcome=ok class=page entry=subject pages=2 notes=3 /));
+  });
+
+  it("de-duplicates the sitemap walk too, and keeps items that have no usable id", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "a" }, { title: "no id one" }], true))
+      .mockResolvedValueOnce(page([{ id: "a" }, { title: "no id two" }, { id: "z" }], false));
+    await expect(getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" })).resolves.toEqual([
+      { id: "a" },
+      { title: "no id one" },
+      { title: "no id two" },
+      { id: "z" },
+    ]);
+  });
+
   it("aborts a stalled walk page at 15 seconds and logs only bounded fields", async () => {
     jest.useFakeTimers();
     const info = jest.spyOn(console, "info").mockImplementation();

@@ -13,7 +13,7 @@ describe("catalog cache route guards", () => {
   });
 
   it("keeps subject and exam pages dynamic, with no ISR revalidate export", () => {
-    for (const path of ["app/public/library/[subject]/page.tsx", "app/exam/[slug]/page.tsx"]) {
+    for (const path of ["app/public/library/[subject]/(listing)/page.tsx", "app/exam/[slug]/page.tsx"]) {
       const page = source(path);
       expect(page).toContain('export const dynamic = "force-dynamic"');
       expect(page).not.toMatch(/export const revalidate\s*=/);
