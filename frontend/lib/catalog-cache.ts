@@ -1,7 +1,7 @@
 /** In-process catalog cache. Entries expire from the start of their load, including rebuild time. */
 export const CATALOG_PAGE_TTL_CAP_MS = 120_000;
 export const CATALOG_SITEMAP_TTL_CAP_MS = 3_600_000;
-export const CATALOG_CACHE_MAX_KEYS = 256;
+export const CATALOG_CACHE_MAX_KEYS = 1024;
 export const CATALOG_CACHE_MAX_ITEMS = 15_000;
 
 type Entry = { value: unknown; startedAt: number; itemCount: number };

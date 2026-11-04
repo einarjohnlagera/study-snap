@@ -23,6 +23,11 @@ describe("hard-TTL catalog cache", () => {
 
   beforeEach(() => { resetCatalogCacheForTests(); time = 0; });
 
+  it("has room for rails alongside catalog walks while keeping the item cap", () => {
+    expect(CATALOG_CACHE_MAX_KEYS).toBe(1024);
+    expect(CATALOG_CACHE_MAX_ITEMS).toBe(15_000);
+  });
+
   it("serves inside the TTL but refreshes at its exact boundary without serving expired data (a)", async () => {
     const load = jest.fn().mockResolvedValueOnce("old");
     expect(await read("a", load)).toBe("old");

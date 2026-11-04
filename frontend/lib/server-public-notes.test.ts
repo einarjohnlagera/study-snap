@@ -1,5 +1,6 @@
 import {
   getServerPublicNoteCount,
+  getServerPublicNoteById,
   getServerPublicNotes,
   getServerPublicNotesByCourseProgramRecent,
   getServerPublicNotesByCoursePrograms,
@@ -322,15 +323,18 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
     expect((global.fetch as jest.Mock).mock.calls.map(([, options]) => options.headers["X-NoteLib-Catalog-Walk"])).toEqual(["sitemap", "subject"]);
   });
 
-  it("keeps the count and bounded rails on the legacy 300-second fetch without attribution", async () => {
+  it("keeps the count on the 300-second fetch while rails use uncached upstream reads without attribution", async () => {
     global.fetch = jest.fn().mockResolvedValue(page([], false));
     await getServerPublicNoteCount();
     await getServerPublicNotesBySubject("Biology");
     await getServerPublicNotesBySubjectSlugRecent("biology", 3);
     await getServerPublicNotesByCourseProgramRecent("Nursing", 3);
-    for (const [, options] of (global.fetch as jest.Mock).mock.calls) {
-      expect(options).toEqual({ method: "GET", next: { revalidate: 300 } });
-    }
+    const calls = (global.fetch as jest.Mock).mock.calls;
+    expect(calls).toHaveLength(4);
+    expect(calls[0][1]).toEqual({ method: "GET", next: { revalidate: 300 } });
+    calls.slice(1).forEach(([, options]) => {
+      expect(options).toEqual({ method: "GET", cache: "no-store" });
+    });
   });
 
   /**
@@ -461,5 +465,141 @@ describe("bounded, most-recent-first Public Note page rails (production-outage f
     await expect(getServerPublicNotesByCourseProgramRecent("Civil Engineering", 0)).resolves.toEqual([]);
 
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("public note rails use the page-class hard-TTL cache", () => {
+  const originalTtlOverride = process.env.NOTELIB_CATALOG_PAGE_TTL_MS;
+  let now = 0;
+
+  const page = (items: unknown[]) => ({
+    ok: true,
+    json: async () => ({ items, total: items.length }),
+  });
+
+  beforeEach(() => {
+    now = 0;
+    jest.spyOn(Date, "now").mockImplementation(() => now);
+    delete process.env.NOTELIB_CATALOG_PAGE_TTL_MS;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+    if (originalTtlOverride === undefined) delete process.env.NOTELIB_CATALOG_PAGE_TTL_MS;
+    else process.env.NOTELIB_CATALOG_PAGE_TTL_MS = originalTtlOverride;
+  });
+
+  it("caches each rail inside 120 s and refetches at the boundary without returning the old list", async () => {
+    const oldNote = { id: "old", title: "Withdrawn title", excerpt: "Withdrawn excerpt" };
+    const newNote = { id: "new", title: "Current title", excerpt: "Current excerpt" };
+    global.fetch = jest.fn().mockResolvedValueOnce(page([oldNote])).mockResolvedValueOnce(page([newNote]));
+
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([oldNote]);
+    now = 119_999;
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([oldNote]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    now = 120_000;
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([newNote]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect((global.fetch as jest.Mock).mock.calls[0][1]).toEqual({ method: "GET", cache: "no-store" });
+  });
+
+  it("clamps a raised page TTL override for rails to 120 s", async () => {
+    process.env.NOTELIB_CATALOG_PAGE_TTL_MS = "999999";
+    global.fetch = jest.fn().mockResolvedValueOnce(page([{ id: "old" }])).mockResolvedValueOnce(page([{ id: "new" }]));
+
+    await getServerPublicNotesBySubject("Biology");
+    now = 120_000;
+    await expect(getServerPublicNotesBySubject("Biology")).resolves.toEqual([{ id: "new" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns an empty rail after a failed expired refresh and retries instead of caching the failure", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "withdrawn", title: "Withdrawn title" }]))
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce(page([{ id: "replacement" }]));
+
+    await expect(getServerPublicNotesByCourseProgramRecent("Nursing", 4)).resolves.toEqual([{ id: "withdrawn", title: "Withdrawn title" }]);
+    now = 120_000;
+    await expect(getServerPublicNotesByCourseProgramRecent("Nursing", 4)).resolves.toEqual([]);
+    await expect(getServerPublicNotesByCourseProgramRecent("Nursing", 4)).resolves.toEqual([{ id: "replacement" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("returns empty, uncached rails for malformed JSON, missing items, non-OK, and network errors", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => { throw new SyntaxError("bad JSON"); } })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 1 }) })
+      .mockResolvedValueOnce({ ok: false })
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce(page([{ id: "recovered" }]));
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await expect(getServerPublicNotesBySubject("Physics")).resolves.toEqual([]);
+    }
+    await expect(getServerPublicNotesBySubject("Physics")).resolves.toEqual([{ id: "recovered" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(5);
+  });
+
+  it("single-flights 10 concurrent cold rail reads", async () => {
+    let resolveFetch!: (response: ReturnType<typeof page>) => void;
+    const pending = new Promise<ReturnType<typeof page>>((resolve) => { resolveFetch = resolve; });
+    global.fetch = jest.fn().mockReturnValue(pending);
+
+    const reads = Array.from({ length: 10 }, () => getServerPublicNotesBySubjectSlugRecent("biology", 6));
+    await Promise.resolve();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    resolveFetch(page([{ id: "shared" }]));
+    expect(await Promise.all(reads)).toEqual(Array(10).fill([{ id: "shared" }]));
+  });
+
+  it("single-flights 10 failed expired rail reads, returning empty to every waiter", async () => {
+    let rejectFetch!: (error: Error) => void;
+    const pending = new Promise<ReturnType<typeof page>>((_, reject) => { rejectFetch = reject; });
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "withdrawn" }]))
+      .mockReturnValueOnce(pending)
+      .mockResolvedValueOnce(page([{ id: "recovered" }]));
+
+    await getServerPublicNotesBySubjectSlugRecent("biology", 6);
+    now = 120_000;
+    const reads = Array.from({ length: 10 }, () => getServerPublicNotesBySubjectSlugRecent("biology", 6));
+    await Promise.resolve();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    rejectFetch(new Error("network"));
+    expect(await Promise.all(reads)).toEqual(Array(10).fill([]));
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([{ id: "recovered" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps 600 distinct small rail keys resident within the TTL", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([{ id: "one" }]));
+
+    for (let index = 0; index < 600; index += 1) {
+      await getServerPublicNotesBySubjectSlugRecent(`subject-${index}`, 6);
+    }
+    for (let index = 0; index < 600; index += 1) {
+      await getServerPublicNotesBySubjectSlugRecent(`subject-${index}`, 6);
+    }
+    expect(global.fetch).toHaveBeenCalledTimes(600);
+  });
+
+  it("keeps the homepage count on the 300 s fetch cache with null failures and direct notes no-store", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 7 }) })
+      .mockRejectedValueOnce(new Error("count unavailable"))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ id: "first" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ id: "second" }) });
+
+    await expect(getServerPublicNoteCount()).resolves.toBe(7);
+    await expect(getServerPublicNoteCount()).resolves.toBeNull();
+    await expect(getServerPublicNoteById("same")).resolves.toEqual({ id: "first" });
+    await expect(getServerPublicNoteById("same")).resolves.toEqual({ id: "second" });
+    const calls = (global.fetch as jest.Mock).mock.calls;
+    expect(calls).toHaveLength(4);
+    expect(calls.slice(0, 2).map(([, options]) => options)).toEqual(Array(2).fill({ method: "GET", next: { revalidate: 300 } }));
+    expect(calls.slice(2).map(([, options]) => options)).toEqual(Array(2).fill({ method: "GET", cache: "no-store" }));
   });
 });

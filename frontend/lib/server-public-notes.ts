@@ -46,8 +46,22 @@ async function fetchPublicNote(path: string): Promise<PublicNoteDetailResponse |
 }
 
 async function fetchPublicNotes(path: string): Promise<NoteListItemResponse[]> {
-  const payload = await fetchPublicNoteList(path);
-  return payload?.items ?? [];
+  try {
+    return await getCatalogCached(
+      `rail:${path}`,
+      catalogTtlMs(CATALOG_PAGE_TTL_CAP_MS, process.env.NOTELIB_CATALOG_PAGE_TTL_MS),
+      async () => {
+        const response = await fetch(buildApiUrl(path), { method: "GET", cache: "no-store" });
+        if (!response.ok) throw new Error("Could not load public note rail.");
+        const payload = await response.json() as ServerPublicNoteListResponse;
+        if (!payload || !Array.isArray(payload.items)) throw new Error("Invalid public note rail response.");
+        return payload.items;
+      },
+      { hardCapMs: CATALOG_PAGE_TTL_CAP_MS },
+    );
+  } catch {
+    return [];
+  }
 }
 
 async function fetchPublicNoteList(path: string): Promise<ServerPublicNoteListResponse | null> {
