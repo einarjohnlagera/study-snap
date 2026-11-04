@@ -114,6 +114,21 @@ async function fetchPublicNoteList(path: string): Promise<ServerPublicNoteListRe
 export type CatalogWalkEntry = "sitemap" | "subject" | "exam-hub";
 type CatalogTtlClass = "page" | "sitemap";
 
+/**
+ * Offset paging over a catalog that changes while it is walked: a note published mid-walk shifts the offset and
+ * repeats one item across a page boundary. Keep the first occurrence (it keeps the position order). A note
+ * UNPUBLISHED mid-walk can still make the walk skip one item; that needs a consistent snapshot and is not fixed here.
+ */
+function dedupeById(items: NoteListItemResponse[]): NoteListItemResponse[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (typeof item?.id !== "string") return true;
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
 async function fetchAllPublicNotePages(
   query: string,
   entry: CatalogWalkEntry,
@@ -129,6 +144,7 @@ async function fetchAllPublicNotePages(
     const separator = query.length > 0 ? "&" : "";
     const startedAt = Date.now();
     let pages = 0;
+    let reported = 0;
     let outcome = "error";
     try {
       for (let page = 0; page < CATALOG_WALK_MAX_PAGES; page += 1) {
@@ -151,9 +167,12 @@ async function fetchAllPublicNotePages(
           const items = payload.items;
           if (payload.hasMore && items.length === 0) throw new Error("Invalid public catalog response.");
           collected.push(...items);
+          reported = collected.length;
           if (payload.hasMore === false) {
             outcome = "ok";
-            return collected;
+            const unique = dedupeById(collected);
+            reported = unique.length;
+            return unique;
           }
         } finally {
           request.clear();
@@ -162,7 +181,7 @@ async function fetchAllPublicNotePages(
       console.error(`CATALOG_WALK_GUARD_BREACH class=${ttlClass} entry=${entry} pages=${CATALOG_WALK_MAX_PAGES}`);
       throw new Error("Public catalog walk exceeded page guard.");
     } finally {
-      console.info(`CATALOG_WALK outcome=${outcome} class=${ttlClass} entry=${entry} pages=${pages} notes=${collected.length} durationMs=${Date.now() - startedAt}`);
+      console.info(`CATALOG_WALK outcome=${outcome} class=${ttlClass} entry=${entry} pages=${pages} notes=${reported} durationMs=${Date.now() - startedAt}`);
     }
   }, {
     hardCapMs: cap,
