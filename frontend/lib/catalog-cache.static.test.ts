@@ -13,12 +13,20 @@ describe("catalog cache route guards", () => {
   });
 
   it("keeps subject and exam pages dynamic, with no ISR revalidate export", () => {
-    for (const path of ["app/public/library/[subject]/(listing)/page.tsx", "app/exam/[slug]/page.tsx"]) {
+    for (const path of ["app/public/library/[subject]/page.tsx", "app/exam/[slug]/page.tsx"]) {
       const page = source(path);
       expect(page).toContain('export const dynamic = "force-dynamic"');
       expect(page).not.toMatch(/export const revalidate\s*=/);
       expect(page).not.toContain("generateStaticParams");
     }
+  });
+
+  it("wraps the subject listing body in a Suspense boundary with the skeleton fallback, instead of a route loading.tsx", () => {
+    const page = source("app/public/library/[subject]/page.tsx");
+    expect(page).toContain("<Suspense fallback={<PublicListingSkeleton />}>");
+    expect(page).toContain("<SubjectListingContent subject={subject} />");
+    const defaultExport = page.slice(page.indexOf("export default"));
+    expect(defaultExport).not.toContain("getServerPublicNotesBySubjectSlug"); // the walk is awaited only in generateMetadata and the content child
   });
 
   it("never substitutes an empty note list on sitemap failure (j)", () => {
