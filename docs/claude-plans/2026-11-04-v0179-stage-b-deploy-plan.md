@@ -1,0 +1,116 @@
+# v0.179.0 Stage B (frontend) deploy plan: DRAFT, criteria fixed before any result
+
+Written 2026-11-04 by the Release Implementor session. **This is a plan for the owner to approve, not an approval and not a recommendation to deploy.** Every threshold below is stated before the evidence exists, on purpose (the checkpoint convention): a result read later may not move them. Nothing here has been run. Claude never merges, deploys or rolls back; those are the owner's.
+
+Related: the release plan `docs/claude-plans/2026-11-01-v0178-followup-listing-projection-scope.md` (section 5 checklist and "FINAL PRODUCT UX DECISIONS 3"), `RELEASES.md` v0.179.0 ("Stage B verification record"), `docs/product/ROADMAP.md` (the three Stage A checkpoint rows and the creator-page defect row).
+
+## 1. What Stage B deploys (verified 2026-11-04; re-check at PR time)
+
+- **PRs:** #1550 (B1), #1552 (B1b), #1553 (B2), #1556 (B3, B3b, B3c), and B4 (PR #1558: the subject listing's in-page skeleton, `prefetch={false}` on subject links, and the cache statistics line), stacked, all frontend only. They merge into the integration branch `releases/v0.179.0-stage-b` (which deploys nothing); the **deploy trigger is the final PR from that branch into `main`**, because Vercel builds production from every merge to `main`.
+- **Not changing:** `backend/` (verify with `git diff --stat origin/main..releases/v0.179.0-stage-b -- backend` showing nothing), any version file (`frontend/package.json`, `backend/pom.xml`), the API, copy, robots, `noindex` rules, the busy copy. A merge with nothing under `backend/` does not redeploy Render (observed on the docs-only merges #1554, #1555 and #1557).
+- **Behavior changes:**
+  1. Subject pages and exam hubs render dynamically over a hard-TTL single-flight in-process cache (120 s; whole-walk deadline 90 s; per-request timeout 15 s); the sitemap is dynamic over the same cache (1 h; deadline 240 s, provisional).
+  2. The three note-page rails read through the same cache (120 s; request timeout 10 s); a failing rail renders empty.
+  3. Walks complete only on an explicit `hasMore: false`, with a 400-page internal guard, and are de-duplicated by note id.
+  4. After any failed load a key rejects for 15 s without calling the backend.
+  5. Empty subject-slug walks are not cached.
+  6. Canonical host `https://www.notelib.app` (canonicals, sitemap, robots, structured data).
+  7. The walkers send `X-NoteLib-Catalog-Walk` (Stage A's counter, already live, will then count `sitemap`, `exam-hub`, `subject`).
+  8. Failure shapes: pages and hubs show the existing error shell (HTTP 200, L1 accepted), the sitemap returns HTTP 500, rails render empty.
+  9. **B4:** the exam hub shows a text-free skeleton through a route `loading.tsx`; the subject listing shows the same skeleton as an in-page Suspense fallback (it has NO `loading.tsx`), and `CATALOG_CACHE_STATS` logs hit, miss, join and backoff counts with wait buckets once per minute per instance.
+  10. **`prefetch={false}` on every link to a subject listing** (the note page breadcrumb, its "See all" link, the exam hub's subject chips). Why: a real browser's link prefetch runs a route's `generateMetadata` (with or without a `loading.tsx`) and the subject listing's metadata walks the subject catalog, so a visible link started walks for pages nobody opened. A static test guards the known link patterns; new subject-listing links must set `prefetch={false}` unless verified otherwise in a real browser; re-verify on every Next.js upgrade.
+- **Deploy-order statement (the API-form rule):** Stage B adds one request header and changes no API form, parameter or response shape; Stage A (the backend that counts the header) is already live and treats an unknown or absent value as `other` or `none`. There is no ordering hazard in either direction.
+
+## 2. Gates before the owner is asked to approve (state on 2026-11-04)
+
+| Gate | State |
+|---|---|
+| Stage A +24 h read: zero non-deploy kills in 24 h (due 2026-11-04T10:56Z) | **PASSED, read 2026-11-04T10:56:31Z**: no `signal 9`, no crash-recovery line, no 5xx, no Render deploy since Stage A; database memory drifted up to 256.4 MB at 10:45Z (95.5% of the limit; ordinary traffic, no burst), which is a trend to watch, not a criterion |
+| Stage A +72 h read: zero kills in 72 h AND at least one minute of about 40 or more anonymous listing requests (due 2026-11-06T10:56Z) | PENDING (the denominator clause was met once at 2026-11-03T12:50Z; the window is still open) |
+| Preview verification on the final code | B3 and B3b: 22 of 22 PASSED. B3c (de-dup by id) is unit-tested only; the owner decides whether the extra 45-minute Preview run is wanted |
+| Cold reviews | Two done (B1 to B2, then B3 and B3b); B3c and B4 have had none beyond their own mutants |
+| **B4: subject-link prefetch on the Preview, in a real browser** (viewport links start no walk; a click starts exactly one) | **DONE 2026-11-04: 13 of 13 scenarios pass on the Preview of the final code; 11 walk starts in the whole run, read from the runtime logs, each at the click that caused it, none from a viewport or prefetch** (`RELEASES.md` B4 verification record) |
+| **B4: skeleton, bots and note route on the Preview** (skeleton and nav within seconds of a click with no data in them; limited bots get complete HTML; the note route has no skeleton) | **DONE 2026-11-04**: real-browser scenarios (skeleton in 411 ms and 108 ms; failure state at 90.5 s and 90.4 s) and T18 to T21 of the T-series (all pass) |
+| **Stage B existing checks (T0 to T21) on the final code** | **DONE 2026-11-04: ALL PASS, 25 checks** (11:05:47Z to 11:54:50Z, exit 0, Preview of the final code); two log confirmations (which limit stopped T12's endless catalog; that T14's empty walks were not cached) were not re-read in that pass and stay open from the earlier B3 run, which read both |
+| Product UX acknowledgement of: D3 constraints, the 240 s sitemap deadline, the 15 s backoff, de-dup and the skip limit, the cold-walk latency | **RECEIVED 2026-11-04 (final sign-off, see section 2b): accepted with documented limitations; the 240 s deadline is accepted ONLY after the function limit is verified** (addendum: `docs/claude-plans/2026-11-04-v0179-stage-b-product-ux-addendum-prompt.md`) |
+| Owner reads the platform function limit (Settings, Functions); the sitemap deadline must stay under it, with execution-time margin | PENDING. **Product UX condition:** do not assume the believed 300 s; if the limit is insufficient, STOP and bring a revised deadline or approach for approval. The shortened Preview sitemap test is not proof |
+| No `NOTELIB_CATALOG_*` environment override in production (an override below the walk duration lowers the deadline and fails every cold load) | DONE 2026-11-04 (only `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_GOOGLE_CLIENT_ID` exist); **re-check at deploy time** |
+| Stack merged into `releases/v0.179.0-stage-b`; `main` merged forward into it; the final PR diff shows nothing under `backend/` and no version or package file | PENDING |
+| The merge path for the final PR into `main` (the `require_extra_approval_for_unattributed_changes` ruleset parameter blocked #1557) | PENDING owner |
+| No non-deploy kill in the 24 hours before the deploy (the section 5 rule, applied because Stage B changes the database load pattern) | check at deploy time |
+| Verified rollback target and an assigned person for first-hour log collection (Hobby keeps runtime logs 1 hour) | PENDING (Product UX sign-off item 4.5 and 4.7). Rollback target: the production deployment that is current before the merge; see section 3 |
+| A recent database backup | Owner's call. Stage B writes nothing and changes no schema, so none is required by the change; the 2026-11-03 13:09 backup exists. Recommended anyway if the owner wants the same posture as Stage A |
+
+## 2b. Product UX final sign-off (received 2026-11-04), recorded verbatim in substance
+
+Reference: the final report `docs/claude-plans/2026-11-04-v0179-stage-b-product-ux-final-report.md`. **Decision: B4 APPROVED FOR STAGE B INTEGRATION (PR #1558, head `7d620428`, subject to repository review and merge requirements); Stage B production deployment NOT YET APPROVED.** The approval does not authorize merging Stage B into `main` or any production deployment. No unrelated backend, infrastructure, crawler, caching or UX changes; no new implementation in response to the sign-off. Priorities in order: database stability, public-note privacy, legitimate search indexing, responsive learner feedback, no needless complexity. The Preview used a fake catalog, so the results verify behaviour and regressions, **not production-scale latency or database capacity**.
+
+| Risk | Decision | Condition or consequence for this plan |
+|---|---|---|
+| 1. Function limit vs the 240 s sitemap deadline | **Conditionally accepted** | Owner verifies the limit in Settings, Functions, with execution-time margin above 240 s; if insufficient, stop and present a revised deadline or approach. Do not assume 300 s; do not treat the shortened Preview test as proof |
+| 2. Stage A 72 h checkpoint | **Required deployment gate** | No deploy recommendation before the 2026-11-06T10:56Z read, which covers kills and restarts, 5xx, listing-query performance, database memory and connection trends, and at least one qualifying burst (the 12:50Z burst of 54 requests may count if it meets the plan's criterion). **Judge the 256.4 MB reading as sustained growth, plateau or insufficient evidence; do not invent a memory hard stop; existing thresholds unchanged** |
+| 3. D3 / deadline / backoff / de-dup / cold latency / logs / rollback | **Accepted with documented limitations** | Empty subject results are not cached; a genuine 404 would reopen L1; a junk subject URL still costs one backend walk per request (keep documented). 15 s per-key, per-instance backoff accepted, no expired data served. De-dup by note id keeping the first occurrence accepted; a mid-walk unpublish can skip a note until the next successful refresh. Cold latency accepted provisionally: **the 90 s deadline is a safety ceiling, not a learner-experience target**; keep the `w10p` threshold (10 s or more); measure cold-walk duration and frequency after deploy; never claim skeletons reduce load time. Hobby logs: **assign explicit responsibility for collecting the first-hour logs at each checkpoint**. 24-hour `main` freeze accepted; any merge that triggers a production deployment counts against it |
+| 4. Per-instance cache dilution | **Accepted provisionally** | Evaluate at +1 h, +24 h, +72 h; never describe the per-instance cache as equivalent to a shared one |
+| 5. Note-link prefetch fan-out (24 to 26 requests per hub view) | **Accepted as a monitoring item** | Do not change note-link prefetching without evidence of material effect on database stability; record for future optimisation |
+| 6. Static guard limits | **Accepted** | Keep the rule: `prefetch={false}` on subject-listing links unless independently proven safe; re-verify after Next.js upgrades or relevant navigation changes |
+| 7. HTTP 200 error shell, unknown subject URLs | **Accepted temporarily** | Do not reopen L1 in this release; record as a follow-up routing and SEO improvement |
+| 8. Creator and profile 300 s cache | **Accept the deferral, NOT the defect** | Remains a confirmed unresolved privacy defect, tracked as a follow-up priority after Stage B stabilisation. Do not claim every public listing meets the new freshness bound |
+| 9. `NOTELIB_CATALOG_*` overrides | **Verification required before deploy** | Last checked 2026-11-04 (none; the gate row above); re-check at deploy time. A TTL or deadline override below the walk duration fails every cold load |
+| 10. Ruleset and merges | **Accepted** | Owner does the required approvals and merges; no administrative bypass |
+
+**Production deployment checklist from the sign-off (all required before approval is requested):** (1) Stage A 72 h checkpoint; (2) function-limit verification; (3) safe production environment; (4) final integration-branch verification and required approvals; (5) verified rollback target and backup readiness; (6) off-peak timing; (7) assigned first-hour log collection and monitoring; (8) no non-deploy database kill within the clean window. All earlier hard stops are unchanged, and **the owner separately authorizes the final production merge and deployment.**
+
+## 3. Timing and the two rules that are specific to Vercel Hobby
+
+- **Off-peak, owner's call, after the 72 h read.** Observed traffic: about 14 to 188 requests per 30 minutes with quiet hours around 18:10Z to 18:40Z; bursts exist (54 listing requests in a minute on 2026-11-03T12:50Z).
+- **Freeze `main` from the merge until the watch ends.** On the Hobby plan Vercel can roll back **only to the previous production deployment** (documented: "To roll back further than the previous production deployment, upgrade to pro"). Every merge to `main`, even a docs-only one, creates a new production deployment with identical code. A merge after the Stage B deploy would make the Stage B build the "previous" deployment and **remove the rollback target**. So: no merge to `main` of any kind (docs, BSIT, anything) between the Stage B deploy and the end of the 24-hour watch, unless the owner accepts having no one-step rollback.
+- **Runtime logs last one hour on Hobby.** The `CATALOG_*` log lines are the only direct evidence of walk durations and failures. The watcher must save excerpts at +15, +30, +45 and +60 minutes into the scratchpad; after that they are gone. Past the first hour only database-side and Render-side reads remain.
+
+## 4. Watch plan (T0 = the production deployment of the final PR reports READY)
+
+Cadence: every 5 minutes for 30 minutes, every 15 minutes to +2 hours, hourly to +24 hours. All reads are read-only.
+
+1. **Database (Render):** memory, connections, the Postgres log for `signal 9`, backend 5xx and 502 counts, backend `PUBLIC_API_DIAGNOSTICS minute=` lines.
+2. **Attribution check (first time it can happen):** `walk=[sitemap:N,exam-hub:N,subject:N,other:N,none:N]` lines should show non-zero `sitemap`, `exam-hub` or `subject` counts once the walkers run, and `other` should stay near zero.
+3. **Frontend logs (Vercel runtime logs, within the hour):** `CATALOG_WALK` lines (`outcome`, `class`, `entry`, `pages`, `notes`, `durationMs`), `CATALOG_CACHE_DEADLINE`, `CATALOG_WALK_GUARD_BREACH`, and error-level function logs.
+   **`CATALOG_CACHE_STATS` (B4):** one line per minute per instance, only when non-zero: `inst`, `windowMs` and, per class (`rail`, `plans`, `walk:sitemap`, `walk:page:all`, `walk:page:subject`, `walk:page:program`), `hit`, `miss`, `join`, `backoff`, wait buckets `w1` (under 1 s), `w10` (1 to under 10 s), `w10p` (10 s or more) and `err`. **Read it as a READ-level statistic, not a request-level one:** a subject-page request makes two reads (metadata and page) that normally share one walk, so a cold request shows as one `miss` plus one `join`; a hub makes two reads on two classes; a note page makes three rail reads. Distinct `inst` values per hour give the instance count. An idle instance emits nothing until its next read. Product UX's 10-second observation threshold is the `w10p` bucket: report `w10p` over `miss` plus `join` per class for each hour, as an observation, **not a hard stop**.
+4. **Statement load:** `pg_stat_statements` call counts per hour for the listing shapes against the Stage A baseline rates measured 2026-11-03T15:14Z to 2026-11-04T02:01Z (unfiltered offset page about 14 calls an hour, `courseProgram` offset page about 3 an hour). **These are baselines for comparison, not targets.**
+5. **Smoke GETs (owner's call; a smoke check, not a load test):** one each of `/sitemap.xml` (200, note URLs present, every `<loc>` on `www`), `/public/library/general`, `/exam/ale`, and one public note page. Note the response time of each cold request.
+
+## 5. Hard stops (any one means pause and decide; never an automatic rollback)
+
+- Any `signal 9` kill after T0.
+- Backend 5xx above 2% for 5 minutes, or database connections above 25 for 5 minutes.
+- Any `CATALOG_WALK_GUARD_BREACH` line.
+- Any `CATALOG_CACHE_DEADLINE` line (a real walk outlasted its deadline: the 90 s and 240 s numbers are wrong for production).
+- `CATALOG_WALK outcome=error` on more than 20% of page-class walks in any 15-minute window that contains at least 10 walks.
+- Page-class `CATALOG_WALK` `durationMs` with a p95 above 45 seconds (half the deadline) in any 15-minute window, or any single walk above 80 seconds.
+- `/sitemap.xml` returns a 5xx on two consecutive smoke GETs one minute apart.
+- Database memory above 260 MB (of 268.4 MB) at two consecutive reads. (The highest ordinary reading so far is 252.5 MB.)
+- **Not a stop, a finding to report:** the listing request rate not falling, a low cache hit rate (from `CATALOG_CACHE_STATS`), and a `w10p` share above zero (Product UX's 10-second observation threshold).
+- **Prefetch leak watch (Product UX, 2026-11-04):** a rise in `walk:page:subject` misses without matching visitor traffic would mean a subject link escaped the `prefetch={false}` rule or a framework change reintroduced prefetch walks; report it as a finding and re-run the real-browser prefetch check on a Preview. The cache is per instance and one Preview burst reached 19 to 21 instances, so the rail-query estimate of about 2.5 times per instance may be optimistic; this is exactly what the watch measures.
+
+**Rollback (owner's action):** Vercel's rollback to the previous production deployment (dashboard or `vercel rollback`; `vercel promote` undoes it). The previous production deployment must be recorded at T0 minus 1 (it is the deployment on `main` just before the merge). Rolling back reverts everything in Stage B, including the `www` canonicals (sitemap and robots return to the apex), the cache and the header; Stage A is unaffected. A `git revert` PR is the slow alternative and is itself a production deployment.
+
+## 6. Success criteria, stated before the evidence
+
+- **72 hours after T0:** zero signal-9 kills, no hard stop fired, and the Stage A and Stage B reads are both complete. A quiet window is not a pass: as with Stage A, at least one minute with about 40 or more anonymous listing requests must occur in the window; with none, report "no burst observed" and extend.
+- **What the numbers should show, not required to be a particular size:** `walk=` counts attribute the walkers; walker listing requests per hour fall relative to the Stage A rates; cold page-class walks run in tens of seconds, not minutes.
+- **Reported, not scored:** the hit, miss and join shares and the wait buckets per class from `CATALOG_CACHE_STATS`, the instance count, the cold-visitor wait (estimate: a whole-catalog walk of about 46 pages at about 0.44 s per deep page is about 20 seconds, if Stage A's 238 unfiltered calls were whole-catalog walks, which is unproven; a `courseProgram` hub page walk runs at about 1.3 to 1.6 s per page).
+
+## 7. Draft checkpoint rows (to insert into the Backlog Index in the deploy PR or the signoff commit; the clock starts when T0 is READY, not at merge)
+
+- **`[CHECKPOINT: due T0 + 1 hour]` did the Stage B deploy end cleanly?** Read the section 4 signals. Kill criteria are the section 5 hard stops. Denominator clause: fewer than 10 page-class walks in the hour means walk health is not read yet; extend.
+- **`[CHECKPOINT: due T0 + 24 hours]` zero non-deploy kills and no hard stop in the first day?** Memory is read as a trend. A kill in the window means Stage B did not protect the database; the lighter list read for the walkers (not built) moves up. A kill in the first hour is attributed to the 1-hour row.
+- **`[CHECKPOINT: due T0 + 72 hours]` did Stage B hold through at least one walk-shaped burst, and what did the cache actually save?** Denominator clause as in section 6. This row also reports the measured hit rate and the cold-visitor wait, and gates the `v0.179.0` signoff and tag.
+- **Fallbacks, verified unbuilt on 2026-11-04:** the lighter list read for the walkers; Vercel's remote runtime cache (`use cache: remote`, not evaluated); the database upgrade (ruled out by the owner on 2026-11-01).
+
+## 8. After a clean 72 hours
+
+Sign-off per `.claude/commands/signoff.md`: release notes file `docs/releases/v0.179.0.md`, mark the Backlog rows this release shipped (the paged-projection row, the production-stabilization row), move or close the checkpoint rows with real reads, and cut the `v0.179.0` tag on the commit that landed Stage B on `main` (owner decision 2026-11-03). Creator and profile pages (D4) remain a recorded privacy defect until their own follow-up ships; **do not claim every public listing meets the privacy bound.**
+
+## 9. Who does what
+
+- **Owner:** approves the deploy; merges the stack and the final PR; reads the platform limit; decides the off-peak time and whether to take a backup; runs any rollback; holds the `main` freeze; may run the smoke GETs.
+- **First-hour log collection (Product UX asked for an explicit owner of this):** the proposal is that Claude collects and saves the Vercel runtime-log excerpts at T0 plus 10 min, 30 min and 55 min of the first hour, because Hobby keeps logs for one hour only; **the owner confirms this assignment and must keep the session able to run in that hour, or names another person.** A checkpoint missed inside the hour cannot be recovered later.
+- **Claude (read-only):** the watch in sections 4 and 5, saving log excerpts within the hour, reporting every milestone, and telling the owner immediately if a hard stop fires. Claude does not merge, deploy, roll back, change environment variables or run a load test.
