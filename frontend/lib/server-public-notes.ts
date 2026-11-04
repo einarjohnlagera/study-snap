@@ -1,6 +1,6 @@
 import type { NoteListItemResponse, PublicNoteDetailResponse } from "@/lib/api";
 import { getPublicSubjectSlug } from "@/lib/public-note-path";
-import { CATALOG_PAGE_TTL_CAP_MS, CATALOG_SITEMAP_TTL_CAP_MS, catalogTtlMs, getCatalogCached } from "@/lib/catalog-cache";
+import { CATALOG_PAGE_TTL_CAP_MS, CATALOG_SITEMAP_TTL_CAP_MS, CATALOG_PAGE_WALK_DEADLINE_MS, CATALOG_SITEMAP_WALK_DEADLINE_MS, CATALOG_WALK_PAGE_REQUEST_TIMEOUT_MS, CATALOG_RAIL_REQUEST_TIMEOUT_MS, CATALOG_WALK_MAX_PAGES, CATALOG_FAILURE_BACKOFF_MS, catalogTtlMs, createRequestSignal, getCatalogCached } from "@/lib/catalog-cache";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 
@@ -50,14 +50,19 @@ async function fetchPublicNotes(path: string): Promise<NoteListItemResponse[]> {
     return await getCatalogCached(
       `rail:${path}`,
       catalogTtlMs(CATALOG_PAGE_TTL_CAP_MS, process.env.NOTELIB_CATALOG_PAGE_TTL_MS),
-      async () => {
-        const response = await fetch(buildApiUrl(path), { method: "GET", cache: "no-store" });
-        if (!response.ok) throw new Error("Could not load public note rail.");
-        const payload = await response.json() as ServerPublicNoteListResponse;
-        if (!payload || !Array.isArray(payload.items)) throw new Error("Invalid public note rail response.");
-        return payload.items;
+      async (signal) => {
+        const request = createRequestSignal(signal, CATALOG_RAIL_REQUEST_TIMEOUT_MS);
+        try {
+          const response = await fetch(buildApiUrl(path), { method: "GET", cache: "no-store", signal: request.signal });
+          if (!response.ok) throw new Error("Could not load public note rail.");
+          const payload = await response.json() as ServerPublicNoteListResponse;
+          if (!payload || !Array.isArray(payload.items)) throw new Error("Invalid public note rail response.");
+          return payload.items;
+        } finally {
+          request.clear();
+        }
       },
-      { hardCapMs: CATALOG_PAGE_TTL_CAP_MS },
+      { hardCapMs: CATALOG_PAGE_TTL_CAP_MS, deadlineMs: CATALOG_PAGE_WALK_DEADLINE_MS, failureBackoffMs: CATALOG_FAILURE_BACKOFF_MS },
     );
   } catch {
     return [];
@@ -109,40 +114,81 @@ async function fetchPublicNoteList(path: string): Promise<ServerPublicNoteListRe
 export type CatalogWalkEntry = "sitemap" | "subject" | "exam-hub";
 type CatalogTtlClass = "page" | "sitemap";
 
+/**
+ * Offset paging over a catalog that changes while it is walked: a note published mid-walk shifts the offset and
+ * repeats one item across a page boundary. Keep the first occurrence (it keeps the position order). A note
+ * UNPUBLISHED mid-walk can still make the walk skip one item; that needs a consistent snapshot and is not fixed here.
+ */
+function dedupeById(items: NoteListItemResponse[]): NoteListItemResponse[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (typeof item?.id !== "string") return true;
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
 async function fetchAllPublicNotePages(
   query: string,
   entry: CatalogWalkEntry,
   ttlClass: CatalogTtlClass = "page",
+  shouldCache?: (notes: NoteListItemResponse[]) => boolean,
 ): Promise<NoteListItemResponse[]> {
   const cap = ttlClass === "sitemap" ? CATALOG_SITEMAP_TTL_CAP_MS : CATALOG_PAGE_TTL_CAP_MS;
   const override = ttlClass === "sitemap"
     ? process.env.NOTELIB_CATALOG_SITEMAP_TTL_MS
     : process.env.NOTELIB_CATALOG_PAGE_TTL_MS;
-  return getCatalogCached(`walk:${ttlClass}:${query}`, catalogTtlMs(cap, override), async () => {
+  return getCatalogCached(`walk:${ttlClass}:${query}`, catalogTtlMs(cap, override), async (signal) => {
     const collected: NoteListItemResponse[] = [];
     const separator = query.length > 0 ? "&" : "";
-    for (let page = 0; ; page += 1) {
-      const response = await fetch(buildApiUrl(
-        `/notes/public?${query}${separator}page=${page}&pageSize=${PUBLIC_NOTES_PAGE_SIZE}&sort=recent`,
-      ), {
-        method: "GET",
-        cache: "no-store",
-        headers: { "X-NoteLib-Catalog-Walk": entry },
-      });
-      if (!response.ok) throw new Error("Could not load public catalog.");
-      const payload = await response.json() as ServerPublicNoteListResponse;
-      if (!payload || !Array.isArray(payload.items)) throw new Error("Invalid public catalog response.");
-      const items = payload.items;
-      collected.push(...items);
-      // Stop only on an authoritative signal: hasMore=false or an empty page.
-      //
-      // A short page with hasMore=true is not the end: the server may clamp pageSize below our request.
-      if (payload.hasMore !== true || items.length === 0) {
-        break;
+    const startedAt = Date.now();
+    let pages = 0;
+    let reported = 0;
+    let outcome = "error";
+    try {
+      for (let page = 0; page < CATALOG_WALK_MAX_PAGES; page += 1) {
+        const request = createRequestSignal(signal, CATALOG_WALK_PAGE_REQUEST_TIMEOUT_MS);
+        try {
+          const response = await fetch(buildApiUrl(
+            `/notes/public?${query}${separator}page=${page}&pageSize=${PUBLIC_NOTES_PAGE_SIZE}&sort=recent`,
+          ), {
+            method: "GET",
+            cache: "no-store",
+            headers: { "X-NoteLib-Catalog-Walk": entry },
+            signal: request.signal,
+          });
+          pages += 1;
+          if (!response.ok) throw new Error("Could not load public catalog.");
+          const payload = await response.json() as ServerPublicNoteListResponse;
+          if (!payload || !Array.isArray(payload.items) || typeof payload.hasMore !== "boolean") {
+            throw new Error("Invalid public catalog response.");
+          }
+          const items = payload.items;
+          if (payload.hasMore && items.length === 0) throw new Error("Invalid public catalog response.");
+          collected.push(...items);
+          reported = collected.length;
+          if (payload.hasMore === false) {
+            outcome = "ok";
+            const unique = dedupeById(collected);
+            reported = unique.length;
+            return unique;
+          }
+        } finally {
+          request.clear();
+        }
       }
+      console.error(`CATALOG_WALK_GUARD_BREACH class=${ttlClass} entry=${entry} pages=${CATALOG_WALK_MAX_PAGES}`);
+      throw new Error("Public catalog walk exceeded page guard.");
+    } finally {
+      console.info(`CATALOG_WALK outcome=${outcome} class=${ttlClass} entry=${entry} pages=${pages} notes=${reported} durationMs=${Date.now() - startedAt}`);
     }
-    return collected;
-  }, { hardCapMs: cap });
+  }, {
+    hardCapMs: cap,
+    deadlineMs: ttlClass === "sitemap" ? CATALOG_SITEMAP_WALK_DEADLINE_MS : CATALOG_PAGE_WALK_DEADLINE_MS,
+    shouldCache,
+    failureBackoffMs: CATALOG_FAILURE_BACKOFF_MS,
+  });
 }
 
 export async function getServerPublicNoteById(noteId: string) {
@@ -293,7 +339,7 @@ export async function getServerPublicNotesBySubjectSlug(subjectSlug: string) {
     const notes = await getServerPublicNotes({ entry: "subject" });
     return notes.filter((note) => getPublicSubjectSlug(note.subject) === PUBLIC_SUBJECT_FALLBACK_SLUG);
   }
-  return fetchAllPublicNotePages(`subject=${encodeURIComponent(normalizedSubjectSlug)}`, "subject");
+  return fetchAllPublicNotePages(`subject=${encodeURIComponent(normalizedSubjectSlug)}`, "subject", "page", (notes) => notes.length > 0);
 }
 
 export async function getServerPublicNotesBySubject(subject: string) {
