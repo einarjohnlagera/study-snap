@@ -886,8 +886,8 @@ describe("PublicLibrarySeoPage", () => {
 
     const structuredData = container.querySelector("#public-note-breadcrumb-structured-data");
     expect(structuredData?.textContent).toContain('"@type":"BreadcrumbList"');
-    expect(structuredData?.textContent).toContain('"item":"https://notelib.app/public/library/science"');
-    expect(structuredData?.textContent).toContain('"item":"https://notelib.app/public/library/science/cell-structure"');
+    expect(structuredData?.textContent).toContain('"item":"https://www.notelib.app/public/library/science"');
+    expect(structuredData?.textContent).toContain('"item":"https://www.notelib.app/public/library/science/cell-structure"');
   });
 
   it("returns SEO metadata for a public note", async () => {
@@ -900,12 +900,12 @@ describe("PublicLibrarySeoPage", () => {
     expect(metadata.title).toBe("Cell Structure | NoteLib");
     expect(metadata.description).toContain("Cell structure is fundamental");
     expect(metadata.alternates).toEqual({
-      canonical: "https://notelib.app/public/library/science/cell-structure",
+      canonical: "https://www.notelib.app/public/library/science/cell-structure",
     });
     expect(metadata.openGraph).toMatchObject({
       title: "Cell Structure | NoteLib",
       type: "article",
-      url: "https://notelib.app/public/library/science/cell-structure",
+      url: "https://www.notelib.app/public/library/science/cell-structure",
       siteName: "NoteLib",
     });
     // The static default image is dropped so the per-note opengraph-image.tsx

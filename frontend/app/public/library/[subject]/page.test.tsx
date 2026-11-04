@@ -96,7 +96,7 @@ describe("SubjectLandingPage", () => {
 
     expect(metadata.title).toBe("Free Biology Reviewer Notes & Practice Quizzes | NoteLib");
     expect(metadata.description).toContain("Biology");
-    expect(metadata.alternates?.canonical).toBe("https://notelib.app/public/library/biology");
+    expect(metadata.alternates?.canonical).toBe("https://www.notelib.app/public/library/biology");
   });
 
   it("marks a thin subject page noindex when it has fewer notes than the depth threshold", async () => {

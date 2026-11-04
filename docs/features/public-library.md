@@ -6,6 +6,8 @@ Public Library is the public, canonical discovery surface for shared notes. It s
 
 `/public/library` remains self-canonical and emits the notes-only `NoteLib Public Library` `CollectionPage`. `/explore` is separately self-canonical with a distinct composite `CollectionPage` for Official Study Plans plus public notes. This is not duplicate ownership of one collection: Public Library owns the public-note route family, including subject and note-detail canonicals, while Explore describes the cross-source discovery page. No Public Library route redirects as part of Public Explore.
 
+As of `v0.179.0` Stage B2, public page canonicals, structured-data URLs, sitemap entries, and the `robots.txt` sitemap line use `https://www.notelib.app`. The apex redirects to `www` through Vercel; route paths and indexing rules are unchanged.
+
 Routes:
 
 - canonical list route for signed-in and signed-out users: `/public/library`

@@ -312,7 +312,7 @@ describe("PublicProfilePage", () => {
     expect(metadata.title).toBe("Study Buddy | NoteLib Public Profile");
     expect(metadata.robots).toEqual({ index: false, follow: true });
     expect(metadata.alternates).toEqual({
-      canonical: "https://notelib.app/public/profile/user-1",
+      canonical: "https://www.notelib.app/public/profile/user-1",
     });
   });
 

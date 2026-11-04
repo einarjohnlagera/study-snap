@@ -1,5 +1,7 @@
 import sitemap, { dynamic } from "./sitemap";
+import robots from "./robots";
 import { getServerPublicNotes } from "@/lib/server-public-notes";
+import { buildPageMetadata } from "@/lib/site-metadata";
 
 jest.mock("@/lib/server-public-notes", () => {
   const actual = jest.requireActual("@/lib/server-public-notes");
@@ -46,6 +48,37 @@ describe("sitemap metadata route", () => {
     };
   }
 
+  it("keeps indexable metadata canonicals, every sitemap entry, and the robots sitemap on www", async () => {
+    (getServerPublicNotes as jest.Mock).mockResolvedValue(
+      Array.from({ length: 6 }, (_, index) => buildScienceNote({
+        id: `note-science-${index}`,
+        title: `Science Note ${index}`,
+      })),
+    );
+
+    const indexablePaths = [
+      "/pricing",
+      "/explore",
+      "/exam/ale",
+      "/public/library",
+      "/public/library/science",
+      "/public/library/science/cell-structure",
+    ];
+    const canonicals = indexablePaths.map((path) => {
+      const metadata = buildPageMetadata({ title: "Test", description: "Test", path });
+      expect(metadata.robots).toBeUndefined();
+      return metadata.alternates?.canonical;
+    });
+    expect(canonicals).toEqual(indexablePaths.map((path) => `https://www.notelib.app${path}`));
+
+    const entries = await sitemap();
+    expect(entries.length).toBeGreaterThan(indexablePaths.length);
+    for (const entry of entries) {
+      expect(new URL(entry.url).origin).toBe("https://www.notelib.app");
+    }
+    expect(robots().sitemap).toBe("https://www.notelib.app/sitemap.xml");
+  });
+
   it("includes only public SEO-safe pages, subject pages at or above the depth threshold, and public note URLs", async () => {
     (getServerPublicNotes as jest.Mock).mockResolvedValue([
       // 6 Science notes — meets SUBJECT_PAGE_INDEX_THRESHOLD, subject page appears in the sitemap.
@@ -79,79 +112,79 @@ describe("sitemap metadata route", () => {
 
     expect(entries).toEqual(expect.arrayContaining([
       {
-        url: "https://notelib.app/",
+        url: "https://www.notelib.app/",
         changeFrequency: "weekly",
         priority: 1,
       },
       {
-        url: "https://notelib.app/pricing",
+        url: "https://www.notelib.app/pricing",
         changeFrequency: "weekly",
         priority: 0.9,
       },
       {
-        url: "https://notelib.app/how-it-works",
+        url: "https://www.notelib.app/how-it-works",
         changeFrequency: "weekly",
         priority: 0.9,
       },
       {
-        url: "https://notelib.app/learn",
+        url: "https://www.notelib.app/learn",
         changeFrequency: "weekly",
         priority: 0.9,
       },
       {
-        url: "https://notelib.app/privacy",
+        url: "https://www.notelib.app/privacy",
         changeFrequency: "monthly",
         priority: 0.3,
       },
       {
-        url: "https://notelib.app/terms",
+        url: "https://www.notelib.app/terms",
         changeFrequency: "monthly",
         priority: 0.3,
       },
       {
-        url: "https://notelib.app/refund",
+        url: "https://www.notelib.app/refund",
         changeFrequency: "monthly",
         priority: 0.3,
       },
       {
-        url: "https://notelib.app/public/library",
+        url: "https://www.notelib.app/public/library",
         changeFrequency: "daily",
         priority: 0.9,
       },
       {
-        url: "https://notelib.app/exam",
+        url: "https://www.notelib.app/exam",
         changeFrequency: "weekly",
         priority: 0.9,
       },
       {
-        url: "https://notelib.app/exam/ale",
+        url: "https://www.notelib.app/exam/ale",
         changeFrequency: "daily",
         priority: 0.9,
       },
       {
-        url: "https://notelib.app/exam/pnle",
+        url: "https://www.notelib.app/exam/pnle",
         changeFrequency: "daily",
         priority: 0.9,
       },
       {
-        url: "https://notelib.app/exam/let",
+        url: "https://www.notelib.app/exam/let",
         changeFrequency: "daily",
         priority: 0.9,
       },
       {
-        url: "https://notelib.app/public/library/science",
+        url: "https://www.notelib.app/public/library/science",
         lastModified: "2026-03-24T08:30:00Z",
         changeFrequency: "daily",
         priority: 0.8,
       },
       {
-        url: "https://notelib.app/public/library/accounting/journal-entries",
+        url: "https://www.notelib.app/public/library/accounting/journal-entries",
         lastModified: "2026-03-22T08:30:00Z",
         changeFrequency: "monthly",
         priority: 0.7,
       },
       {
-        url: "https://notelib.app/public/library/science/cell-structure",
+        url: "https://www.notelib.app/public/library/science/cell-structure",
         lastModified: "2026-03-24T08:30:00Z",
         changeFrequency: "monthly",
         priority: 0.7,
@@ -159,7 +192,7 @@ describe("sitemap metadata route", () => {
     ]));
     expect(entries).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        url: expect.stringMatching(/^https:\/\/notelib\.app\/learn\//),
+        url: expect.stringMatching(/^https:\/\/www\.notelib\.app\/learn\//),
         changeFrequency: "monthly",
         priority: 0.8,
       }),
@@ -167,6 +200,6 @@ describe("sitemap metadata route", () => {
 
     // Accounting has only 1 note — below SUBJECT_PAGE_INDEX_THRESHOLD, so its subject-collection page is
     // excluded from the sitemap even though its individual note page still appears above.
-    expect(entries.some((entry) => entry.url === "https://notelib.app/public/library/accounting")).toBe(false);
+    expect(entries.some((entry) => entry.url === "https://www.notelib.app/public/library/accounting")).toBe(false);
   });
 });
