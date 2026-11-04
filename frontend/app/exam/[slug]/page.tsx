@@ -157,6 +157,7 @@ function BrowseSubjectsSection({ subjects }: Readonly<{ subjects: BrowseSubjectE
           <Link
             key={subject}
             href={buildPublicLibrarySubjectPath(subject)}
+            prefetch={false}
             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 hover:text-blue-700 dark:hover:text-blue-300"
           >
             {subject}

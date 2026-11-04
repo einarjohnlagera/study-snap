@@ -21,6 +21,15 @@ export function getPublicTitleSlug(title: string | null | undefined) {
   return slugify(title, DEFAULT_PUBLIC_TITLE_SLUG);
 }
 
+/**
+ * ⚠️ DEVELOPMENT RULE: a `<Link>` to a subject listing page MUST set `prefetch={false}`.
+ * Next.js 16.1.6 runs a route's `generateMetadata` when a link to it is prefetched (verified with a real browser, with or without
+ * a `loading.tsx`), and the subject listing's metadata walks the whole subject catalog. So a link merely scrolling into view would
+ * start catalog walks for pages nobody opens. Do not add a link without `prefetch={false}` unless engineering has first verified,
+ * in a real browser, that prefetching no longer starts a walk. `lib/subject-link-prefetch.static.test.ts` guards the known
+ * patterns; it is a safeguard, not proof that every possible construction is covered (a `router.prefetch()` call or an href
+ * assembled another way would escape it). Re-verify on every Next.js upgrade.
+ */
 export function buildPublicLibrarySubjectPath(subject: string | null | undefined) {
   return `/public/library/${getPublicSubjectSlug(subject)}`;
 }
