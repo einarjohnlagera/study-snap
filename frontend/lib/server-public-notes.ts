@@ -1,5 +1,6 @@
 import type { NoteListItemResponse, PublicNoteDetailResponse } from "@/lib/api";
 import { getPublicSubjectSlug } from "@/lib/public-note-path";
+import { CATALOG_PAGE_TTL_CAP_MS, CATALOG_SITEMAP_TTL_CAP_MS, catalogTtlMs, getCatalogCached } from "@/lib/catalog-cache";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 
@@ -72,14 +73,8 @@ async function fetchPublicNoteList(path: string): Promise<ServerPublicNoteListRe
 }
 
 /**
- * Fetches every page of a public-note query so no single response can cross the 2MB cache limit.
- * `query` is appended to /notes/public and must already be encoded.
- *
- * Failure semantics deliberately match the previous single-shot behaviour: fetchPublicNoteList returns
- * null rather than throwing when the backend is unreachable, and a null on the FIRST page yields an empty
- * list exactly as before. A null on a later page returns what was collected instead of discarding it --
- * a partial catalog degrades the sitemap, whereas throwing would fail the build, which is the outcome
- * this whole change exists to prevent.
+ * Fetches every page of a public-note query so no single response can cross the 2MB limit.
+ * `query` is appended to /notes/public and must already be encoded. Any failed page rejects the walk.
  *
  * ⚠️ ALWAYS sends `sort=recent` -- this is REQUIRED, not decorative, same reasoning as
  * `getServerPublicNoteCount` above. With no `sort` the server defaults to RECOMMENDED, which is not
@@ -89,36 +84,51 @@ async function fetchPublicNoteList(path: string): Promise<ServerPublicNoteListRe
  * two "More from {Subject}"/"More {Program} notes" rails called this function to walk an entire
  * subject's or program's note list -- 8 pages for Accountancy, 18 for Civil Engineering -- recomputing
  * live popularity on every single page, to fill 7 cards. `RECENT` is SQL-orderable
- * (`order by created_at desc, id asc`), so every page here is now one cheap, indexed query instead of
- * one ranking query. Per the owner's reliability decision
+ * (`order by created_at desc, id asc`), so every page here uses the SQL-orderable listing path instead
+ * of the ranking query. Per the owner's reliability decision
  * (`docs/claude-plans/2026-10-01-public-note-discovery-rail-ordering-decision.md`), the two broken rails
  * no longer call this function at all -- see `getServerPublicNotesBySubjectRecent` and
  * `getServerPublicNotesByCourseProgramRecent` below -- but this walker still serves callers that
  * genuinely need the full list (the subject listing page, exam hub pages, the sitemap), so it must stay
  * cheap for all of them, not just the two rails that stopped using it.
  */
-async function fetchAllPublicNotePages(query: string): Promise<NoteListItemResponse[]> {
-  const collected: NoteListItemResponse[] = [];
-  const separator = query.length > 0 ? "&" : "";
-  for (let page = 0; ; page += 1) {
-    const payload = await fetchPublicNoteList(
-      `/notes/public?${query}${separator}page=${page}&pageSize=${PUBLIC_NOTES_PAGE_SIZE}&sort=recent`,
-    );
-    const items = payload?.items ?? [];
-    collected.push(...items);
-    // ⚠️ Stop ONLY on an authoritative signal: a failed page, hasMore=false, or an empty page. Together
-    // these terminate; an empty page cannot repeat forever because it always breaks.
-    //
-    // ⚠️ There used to be a fourth condition here -- "a page shorter than we asked for means the end" --
-    // and it was a REAL DEFECT, not a redundant guard. The server clamps pageSize to its own maximum, so
-    // a request for more than that always comes back short WITH hasMore=true. The loop exited after page
-    // zero and the whole catalog silently became one page. Do not reintroduce a length-based stop: the
-    // page size we receive is the server's to decide, not ours to assume.
-    if (payload === null || payload.hasMore !== true || items.length === 0) {
-      break;
+export type CatalogWalkEntry = "sitemap" | "subject" | "exam-hub";
+type CatalogTtlClass = "page" | "sitemap";
+
+async function fetchAllPublicNotePages(
+  query: string,
+  entry: CatalogWalkEntry,
+  ttlClass: CatalogTtlClass = "page",
+): Promise<NoteListItemResponse[]> {
+  const cap = ttlClass === "sitemap" ? CATALOG_SITEMAP_TTL_CAP_MS : CATALOG_PAGE_TTL_CAP_MS;
+  const override = ttlClass === "sitemap"
+    ? process.env.NOTELIB_CATALOG_SITEMAP_TTL_MS
+    : process.env.NOTELIB_CATALOG_PAGE_TTL_MS;
+  return getCatalogCached(`walk:${ttlClass}:${query}`, catalogTtlMs(cap, override), async () => {
+    const collected: NoteListItemResponse[] = [];
+    const separator = query.length > 0 ? "&" : "";
+    for (let page = 0; ; page += 1) {
+      const response = await fetch(buildApiUrl(
+        `/notes/public?${query}${separator}page=${page}&pageSize=${PUBLIC_NOTES_PAGE_SIZE}&sort=recent`,
+      ), {
+        method: "GET",
+        cache: "no-store",
+        headers: { "X-NoteLib-Catalog-Walk": entry },
+      });
+      if (!response.ok) throw new Error("Could not load public catalog.");
+      const payload = await response.json() as ServerPublicNoteListResponse;
+      if (!payload || !Array.isArray(payload.items)) throw new Error("Invalid public catalog response.");
+      const items = payload.items;
+      collected.push(...items);
+      // Stop only on an authoritative signal: hasMore=false or an empty page.
+      //
+      // A short page with hasMore=true is not the end: the server may clamp pageSize below our request.
+      if (payload.hasMore !== true || items.length === 0) {
+        break;
+      }
     }
-  }
-  return collected;
+    return collected;
+  }, { hardCapMs: cap });
 }
 
 export async function getServerPublicNoteById(noteId: string) {
@@ -130,18 +140,17 @@ export async function getServerPublicNoteBySeoPath(subject: string, slug: string
 }
 
 /**
- * The whole public catalog. ⚠️ Only sitemap.ts legitimately needs this -- every other caller should filter
- * server-side. It is paginated so each response stays cacheable; an unbounded single fetch is the defect
- * that broke the production build.
+ * The whole public catalog. The sitemap and the `general` subject page need this; other callers should
+ * filter server-side. It is paginated so each response stays below the 2 MB limit; an unbounded single
+ * fetch is the defect that broke the production build.
  *
  * ⚠️ THAT PAGINATION BOUNDED THE RESPONSE, NOT THE SERVER'S WORK, AND READING IT OTHERWISE IS WHAT LET
  * THE 2026-09-05 OUTAGE HAPPEN. It correctly fixed the 2 MB Next.js data-cache defect; it did nothing
- * about the server materialising the whole catalog per request. Note that `fetchAllPublicNotePages("")`
- * sends no `sort`, and the default RECOMMENDED sort is not SQL-orderable — so at 1,442 notes a single
- * sitemap generation issues ~29 full-catalog loads.
+ * about the server materialising the whole catalog per request. The walker sends `sort=recent` on every
+ * page to use the SQL-orderable path instead of the default ranked branch.
  */
-export async function getServerPublicNotes() {
-  return fetchAllPublicNotePages("");
+export async function getServerPublicNotes(options: { ttlClass?: CatalogTtlClass; entry?: CatalogWalkEntry } = {}) {
+  return fetchAllPublicNotePages("", options.entry ?? "subject", options.ttlClass ?? "page");
 }
 
 export async function getServerPublicNoteCount(): Promise<number | null> {
@@ -267,10 +276,10 @@ export async function getServerPublicNotesBySubjectSlug(subjectSlug: string) {
   // would silently vanish from a route getPublicSubjectEntries manufactures for it. Filtering these in
   // JS is what the old code did for every subject; it is bounded now because the fetch is paginated.
   if (normalizedSubjectSlug === PUBLIC_SUBJECT_FALLBACK_SLUG) {
-    const notes = await getServerPublicNotes();
+    const notes = await getServerPublicNotes({ entry: "subject" });
     return notes.filter((note) => getPublicSubjectSlug(note.subject) === PUBLIC_SUBJECT_FALLBACK_SLUG);
   }
-  return fetchAllPublicNotePages(`subject=${encodeURIComponent(normalizedSubjectSlug)}`);
+  return fetchAllPublicNotePages(`subject=${encodeURIComponent(normalizedSubjectSlug)}`, "subject");
 }
 
 export async function getServerPublicNotesBySubject(subject: string) {
@@ -340,7 +349,7 @@ export async function getServerPublicNotesByCourseProgram(courseProgram: string)
   if (!normalizedCourseProgram) {
     return [];
   }
-  return fetchAllPublicNotePages(`courseProgram=${encodeURIComponent(normalizedCourseProgram)}`);
+  return fetchAllPublicNotePages(`courseProgram=${encodeURIComponent(normalizedCourseProgram)}`, "exam-hub");
 }
 
 export async function getServerPublicNotesByCoursePrograms(coursePrograms: readonly string[]) {

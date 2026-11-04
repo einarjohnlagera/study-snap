@@ -19,6 +19,13 @@ describe("sitemap metadata route", () => {
     expect(dynamic).toBe("force-dynamic");
   });
 
+  it("rejects a failed walk instead of returning a short sitemap (j)", async () => {
+    const error = new Error("catalog unavailable");
+    (getServerPublicNotes as jest.Mock).mockRejectedValue(error);
+    await expect(sitemap()).rejects.toBe(error);
+    expect(getServerPublicNotes).toHaveBeenCalledWith({ ttlClass: "sitemap", entry: "sitemap" });
+  });
+
   function buildScienceNote(overrides: Partial<Record<string, unknown>> = {}) {
     return {
       id: "note-science",
@@ -68,6 +75,7 @@ describe("sitemap metadata route", () => {
     ]);
 
     const entries = await sitemap();
+    expect(getServerPublicNotes).toHaveBeenCalledWith({ ttlClass: "sitemap", entry: "sitemap" });
 
     expect(entries).toEqual(expect.arrayContaining([
       {

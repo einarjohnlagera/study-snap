@@ -7,8 +7,10 @@ import {
   getServerPublicNotesBySubjectSlug,
   getServerPublicNotesBySubjectSlugRecent,
 } from "./server-public-notes";
+import { resetCatalogCacheForTests } from "./catalog-cache";
 
 const originalFetch = global.fetch;
+beforeEach(resetCatalogCacheForTests);
 
 describe("getServerPublicNoteCount", () => {
   afterEach(() => {
@@ -244,14 +246,91 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
     expect((global.fetch as jest.Mock).mock.calls).toHaveLength(1);
   });
 
-  it("keeps what it has collected when a later page fails, rather than failing the build", async () => {
+  it("rejects a later failed page and retries the whole walk instead of caching a partial catalog (e, h)", async () => {
     global.fetch = jest.fn()
-      .mockResolvedValueOnce(page(Array.from({ length: 250 }, (_, i) => ({ id: `note-${i}` })), true))
-      .mockResolvedValueOnce({ ok: false });
+      .mockResolvedValueOnce(page([{ id: "first" }], true))
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce(page([{ id: "new" }], false));
+    await expect(getServerPublicNotes()).rejects.toThrow("Could not load public catalog");
+    await expect(getServerPublicNotes()).resolves.toEqual([{ id: "new" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
 
-    const notes = await getServerPublicNotes();
+  it("rejects malformed JSON and network failures without caching them", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => { throw new SyntaxError("bad JSON"); } })
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce(page([{ id: "healthy" }], false));
+    await expect(getServerPublicNotes()).rejects.toThrow("bad JSON");
+    await expect(getServerPublicNotes()).rejects.toThrow("network");
+    await expect(getServerPublicNotes()).resolves.toEqual([{ id: "healthy" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
 
-    expect(notes).toHaveLength(250);
+  it("rejects a 200 response with no items array instead of ending the walk with a partial list (n)", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "first" }], true))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ error: "unexpected shape" }) })
+      .mockResolvedValueOnce(page([{ id: "healthy" }], false));
+    await expect(getServerPublicNotes()).rejects.toThrow("Invalid public catalog response");
+    await expect(getServerPublicNotes()).resolves.toEqual([{ id: "healthy" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("sends allowlisted attribution only on walk misses, without Next fetch caching (g, i)", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([{ id: "note" }], false));
+    await getServerPublicNotes({ entry: "subject" });
+    await getServerPublicNotes({ entry: "exam-hub" }); // same query, same cache entry
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect((global.fetch as jest.Mock).mock.calls[0][1]).toEqual({
+      method: "GET", cache: "no-store", headers: { "X-NoteLib-Catalog-Walk": "subject" },
+    });
+    await getServerPublicNotesByCoursePrograms(["Nursing"]);
+    expect((global.fetch as jest.Mock).mock.calls[1][1]).toEqual({
+      method: "GET", cache: "no-store", headers: { "X-NoteLib-Catalog-Walk": "exam-hub" },
+    });
+    await getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" });
+    expect((global.fetch as jest.Mock).mock.calls[2][1]).toEqual({
+      method: "GET", cache: "no-store", headers: { "X-NoteLib-Catalog-Walk": "sitemap" },
+    });
+  });
+
+  it("single-flights the entire paginated walk for concurrent metadata and page readers", async () => {
+    let releaseFirst!: () => void;
+    const firstPage = new Promise<ReturnType<typeof page>>((resolve) => {
+      releaseFirst = () => resolve(page([{ id: "first" }], true));
+    });
+    global.fetch = jest.fn().mockReturnValueOnce(firstPage).mockResolvedValueOnce(page([{ id: "second" }], false));
+    const metadataRead = getServerPublicNotesBySubjectSlug("biology");
+    const pageRead = getServerPublicNotesBySubjectSlug("biology");
+    await Promise.resolve();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    releaseFirst();
+    expect(await Promise.all([metadataRead, pageRead])).toEqual([
+      [{ id: "first" }, { id: "second" }],
+      [{ id: "first" }, { id: "second" }],
+    ]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps sitemap and page TTL classes separate", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([], false));
+    await getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" });
+    await getServerPublicNotes({ entry: "subject" });
+    await getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" });
+    await getServerPublicNotes({ entry: "subject" });
+    expect((global.fetch as jest.Mock).mock.calls.map(([, options]) => options.headers["X-NoteLib-Catalog-Walk"])).toEqual(["sitemap", "subject"]);
+  });
+
+  it("keeps the count and bounded rails on the legacy 300-second fetch without attribution", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([], false));
+    await getServerPublicNoteCount();
+    await getServerPublicNotesBySubject("Biology");
+    await getServerPublicNotesBySubjectSlugRecent("biology", 3);
+    await getServerPublicNotesByCourseProgramRecent("Nursing", 3);
+    for (const [, options] of (global.fetch as jest.Mock).mock.calls) {
+      expect(options).toEqual({ method: "GET", next: { revalidate: 300 } });
+    }
   });
 
   /**

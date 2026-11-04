@@ -85,7 +85,7 @@ a bounded ranked query per subject, which is not built.
 **Frontend**
 - `frontend/components/notes/public-library-page-client.tsx` — main public library client; filter state; discovery/filter mode switching; section rendering (Featured / Popular / Recent)
 - `frontend/app/public/library/page.tsx` — server component entry; passes `searchParams` to client
-- `frontend/app/public/library/[subject]/page.tsx` — SEO subject landing page (server-rendered on first request, ISR 300s; **`generateStaticParams` returns `[]` since `v0.178.0`**, so a production build does not prerender subjects or call the production API)
+- `frontend/app/public/library/[subject]/page.tsx` — SEO subject landing page (dynamic rendering over the 120 s hard-TTL catalog cache; no `generateStaticParams`, so a production build does not prerender subjects or call the production API)
 - `frontend/lib/public-library-url.ts` — canonical URL model: `PublicLibraryUrlFilters` type, `buildPublicLibraryUrl()`, `parsePublicLibraryFilters()`; single source of truth for public library URL construction
 - `frontend/lib/public-library-discovery.ts` — frontend discovery scoring and section deduplication helpers
 - `frontend/lib/api.ts` — `listPublicNotes(params?)`, `getPublicNote(id)`, `togglePublicNoteLike(id)`
@@ -357,7 +357,7 @@ Response shape:
 - The four pagination fields are nullable and omitted from legacy JSON responses.
 - In legacy mode, `items` contains the public notes after the current filters, sorting, and optional `size` clamp; `total` is captured after the DB-level creator and Authored Depth pre-filters but before in-memory `search`, `subject`, `tag`, and `courseProgram` filters.
 - In paginated mode, `items` is the requested enriched page and `totalMatching` is the post-filter count. `total` mirrors that count for response compatibility.
-- Server-side Public Library helpers unwrap `items` and continue returning `NoteListItemResponse[]` to static/SSR callers.
+- Server-side Public Library helpers unwrap `items` and continue returning `NoteListItemResponse[]` to their callers.
 
 Supported query params:
 
@@ -673,11 +673,11 @@ A non-interactive "More ways to study when you copy this note" block showing Cha
 
 ### J — Subject landing pages (shipped in v0.14.0)
 
-The `/public/library/[subject]` route is now a server-rendered subject landing page instead of a redirect. It ships with per-subject metadata, CollectionPage structured data, ISR at `300` seconds, and `generateStaticParams()` from `getServerPublicSubjects()` (**superseded in `v0.178.0` Step 0: it now returns `[]`; see "Build-time catalog walks" below**).
+The `/public/library/[subject]` route is now a dynamically server-rendered subject landing page instead of a redirect. It has per-subject metadata, CollectionPage structured data, and a 120 s hard-TTL catalog walk. It has no `generateStaticParams` hook, so no subject is prerendered at build time (see "Build-time catalog walks" below).
 
 Final implementation:
 
-- static, server-rendered discovery page; no client filters or anonymous session state
+- dynamic, server-rendered discovery page; no client filters or anonymous session state
 - subject label resolves from matching note metadata with a slug fallback
 - three ranked sections: Featured Notes, Most Popular, Recently Added
 - section ordering and deduplication reuse the existing discovery helpers: Featured first, Popular excludes Featured, Recent excludes both
@@ -698,13 +698,15 @@ This fallback turns the limit hit into a *content-discovery* moment rather than 
 
 ## Build-time catalog walks (v0.178.0 Step 0)
 
-A Vercel production build calls the production API, and the prerender hooks used to walk the catalog while a deploy was in progress (measured on a counting mock backend: **393 backend requests per `next build`** to **1**). Three deliberate settings stop that, and each is pinned by a test:
+A Vercel production build can call the production API, and the old prerender hooks used to walk the catalog while a deploy was in progress (measured on a counting mock backend in `v0.178.0`: **393 backend requests per `next build`** to **1**). The current dynamic routes avoid those walks:
 
-- `generateStaticParams` on `/public/library/[subject]` returns `[]` (`app/public/library/[subject]/page.tsx`).
-- `generateStaticParams` on `/exam/[slug]` returns `[]` (`app/exam/[slug]/page.tsx`); the five hub slugs render on first request and an unknown slug still reaches `notFound()`.
-- `app/sitemap.ts` exports `dynamic = "force-dynamic"`, so the sitemap is rendered on request; its catalog walk (about 41 pages of 50 notes) is bounded by the fetch cache (`revalidate: 300`), not by the build.
+- `/public/library/[subject]` has no `generateStaticParams` hook (`app/public/library/[subject]/page.tsx`). The empty hook from `v0.178.0` was removed when the route became dynamic: Next's build still labeled the route SSG while that hook existed.
+- `/exam/[slug]` has no `generateStaticParams` hook (`app/exam/[slug]/page.tsx`); the five hub slugs render dynamically on request and an unknown slug still reaches `notFound()`.
+- `app/sitemap.ts` exports `dynamic = "force-dynamic"`, so the sitemap is rendered on request; its catalog walk is bounded by the 1 h hard-TTL in-process cache, not by the build.
 
-Behavior is otherwise unchanged: same URLs, titles, canonicals, robots and sitemap URL set (checked on 8 URLs and a 2,274-URL sitemap). The first **cold** request (after a deploy, or when nothing is cached) pays the walk synchronously and sequentially, inside a Vercel function with a time limit (the project's limit is unverified; see `RELEASES.md` v0.178.0); after the fetch cache expires (300 s) the stale value is served while it refreshes. A cold sitemap, the `general` subject page and the exam hubs are the long walks (about 41 pages of 50 notes for the sitemap), always with `sort=recent`. Do not restore the slug lists without reading `docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md`; `getServerPublicSubjectSlugs` in `lib/server-public-notes.ts` is now unused by production code and is kept for a future cleanup.
+The subject pages and exam hubs are also dynamic and use the same in-process cache with a separate 120 s class. The TTL starts when a whole walk begins; a hit is served only before that deadline. On expiry, the first request waits for a fresh whole walk, shared by concurrent readers. Any failed page makes the entire walk fail, with no partial result or stale fallback; the sitemap request also fails rather than silently omitting note URLs. Exam-hub public study plans use the 120 s cache and fail the hub render if a read fails. The cache holds at most 256 keys and 15,000 list items, evicting least recently used entries. It is per instance, so cold requests pay the sequential walk and several instances may rebuild independently. The walk's upstream fetch uses `cache: "no-store"` and sends `X-NoteLib-Catalog-Walk` only on a cache miss. The `general` subject page and the sitemap each walk the whole catalog under separate TTL classes, always with `sort=recent`.
+
+The public note detail page's three related-note rails and the homepage's public-note count still use the 300 s stale-while-revalidate fetch cache. Direct public-note reads use `cache: "no-store"` and keep their immediate visibility behavior. The page and sitemap URLs, canonicals, robots and subject `noindex` threshold are unchanged by this cache change. Vercel Preview verification is required before production frontend deployment; the bound has been verified only for the in-process layer and local Next.js behavior. Do not restore the slug lists without reading `docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md`; `getServerPublicSubjectSlugs` in `lib/server-public-notes.ts` is unused by production code.
 
 ## Ranked listing snapshot (v0.178.0 Release 1)
 

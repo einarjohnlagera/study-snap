@@ -1,13 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import SubjectLandingPage, { generateMetadata, generateStaticParams } from "./page";
-import { getServerPublicNotesBySubjectSlug, getServerPublicSubjectSlugs } from "@/lib/server-public-notes";
+import SubjectLandingPage, { dynamic, generateMetadata } from "./page";
+import { getServerPublicNotesBySubjectSlug } from "@/lib/server-public-notes";
 import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 import type { NoteListItemResponse } from "@/lib/api";
 
 jest.mock("@/lib/server-public-notes", () => ({
   ...jest.requireActual("@/lib/server-public-notes"),
   getServerPublicNotesBySubjectSlug: jest.fn(),
-  getServerPublicSubjectSlugs: jest.fn(),
 }));
 
 type TestNote = NoteListItemResponse & { slug: string };
@@ -76,16 +75,16 @@ const subjectNotes = [
 describe("SubjectLandingPage", () => {
   beforeEach(() => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockReset();
-    (getServerPublicSubjectSlugs as jest.Mock).mockReset();
     window.sessionStorage.clear();
   });
 
-  // ⚠️ v0.178.0 Step 0: the list is deliberately empty. Prerendering every public subject made each production build
-  // walk the catalog against the production API; pages now render on the first request and are cached.
-  it("generates no static params and makes no backend call, so a build never walks the catalog", () => {
-    expect(generateStaticParams()).toEqual([]);
-    expect(getServerPublicSubjectSlugs).not.toHaveBeenCalled();
-    expect(getServerPublicNotesBySubjectSlug).not.toHaveBeenCalled();
+  it("renders dynamically and rejects a failed walk for both metadata and page", async () => {
+    expect(dynamic).toBe("force-dynamic");
+    const error = new Error("walk failed");
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockRejectedValue(error);
+    const props = { params: Promise.resolve({ subject: "biology" }) };
+    await expect(generateMetadata(props)).rejects.toBe(error);
+    await expect(SubjectLandingPage(props)).rejects.toBe(error);
   });
 
   it("generates per-subject metadata from the subject label", async () => {

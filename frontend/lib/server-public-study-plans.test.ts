@@ -1,4 +1,5 @@
 import { getServerPublicStudyPlansByCoursePrograms } from "./server-public-study-plans";
+import { resetCatalogCacheForTests } from "./catalog-cache";
 
 const originalFetch = globalThis.fetch;
 
@@ -23,6 +24,7 @@ describe("getServerPublicStudyPlansByCoursePrograms", () => {
   });
 
   beforeEach(() => {
+    resetCatalogCacheForTests();
     globalThis.fetch = jest.fn();
   });
 
@@ -46,9 +48,14 @@ describe("getServerPublicStudyPlansByCoursePrograms", () => {
     expect((globalThis.fetch as jest.Mock).mock.calls[0][0]).toContain("courseProgram=Architecture");
     expect((globalThis.fetch as jest.Mock).mock.calls[1][0]).toContain("courseProgram=Nursing");
     expect(result.map((item) => item.id)).toEqual(["shared", "nursing"]);
+    for (const [, options] of (globalThis.fetch as jest.Mock).mock.calls) {
+      expect(options).toEqual({ method: "GET", cache: "no-store" });
+    }
+    await getServerPublicStudyPlansByCoursePrograms(["Nursing", "Architecture"]);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2); // sorted key ignores caller order
   });
 
-  it("keeps successful matches when another exact-match lookup fails", async () => {
+  it("rejects the whole plan set when one program lookup fails and retries next time", async () => {
     (globalThis.fetch as jest.Mock)
       .mockRejectedValueOnce(new Error("timeout"))
       .mockResolvedValueOnce({
@@ -59,14 +66,17 @@ describe("getServerPublicStudyPlansByCoursePrograms", () => {
     await expect(getServerPublicStudyPlansByCoursePrograms([
       "Architecture",
       "Nursing",
-    ])).resolves.toEqual([
-      plan("nursing", "Nursing"),
-    ]);
+    ])).rejects.toThrow("timeout");
+    (globalThis.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => [plan("nursing", "Nursing")] });
+    await expect(getServerPublicStudyPlansByCoursePrograms(["Architecture", "Nursing"])).resolves.toHaveLength(1);
   });
 
-  it("degrades to an empty result instead of crashing on a malformed but 200-status response", async () => {
-    // A valid-JSON, non-array 200 response used to throw uncaught downstream (`result.value.forEach`
-    // assumed an array), crashing the anonymous, SEO-relevant Exam Hub page's server render.
+  it("rejects a non-OK response instead of returning no plans for the hub (l)", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 503 });
+    await expect(getServerPublicStudyPlansByCoursePrograms(["Nursing"])).rejects.toThrow("Could not load public study plans");
+  });
+
+  it("rejects a malformed 200 response rather than rendering a hub without review sets", async () => {
     (globalThis.fetch as jest.Mock)
       .mockResolvedValueOnce({
         ok: true,
@@ -80,9 +90,7 @@ describe("getServerPublicStudyPlansByCoursePrograms", () => {
     await expect(getServerPublicStudyPlansByCoursePrograms([
       "Architecture",
       "Nursing",
-    ])).resolves.toEqual([
-      plan("nursing", "Nursing"),
-    ]);
+    ])).rejects.toThrow("Invalid public study plans response");
   });
 
   it("returns the same PNLE sets after removing the zero-match subject-area alias", async () => {
