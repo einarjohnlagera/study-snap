@@ -10,6 +10,7 @@ import {
   CATALOG_WALK_MAX_PAGES,
   CATALOG_SITEMAP_TTL_CAP_MS,
   catalogTtlMs,
+  catalogKeyClass,
   CATALOG_FAILURE_BACKOFF_MS,
   CatalogBackoffError,
   CatalogDeadlineError,
@@ -17,6 +18,175 @@ import {
   getCatalogCached,
   resetCatalogCacheForTests,
 } from "./catalog-cache";
+import { readFileSync } from "node:fs";
+
+describe("catalog cache read statistics", () => {
+  let clock = 0;
+  const now = () => clock;
+  let info: jest.SpyInstance;
+  const read = <T>(key: string, load: () => Promise<T>, ttlMs = 100_000, failureBackoffMs = 0) =>
+    getCatalogCached(key, ttlMs, load, { now, failureBackoffMs });
+  const lines = () => info.mock.calls.map(([line]) => line as string).filter((line) => line.startsWith("CATALOG_CACHE_STATS "));
+  const flush = async () => { clock = 60_000; await read("other:trigger", async () => "ok"); };
+
+  beforeEach(() => {
+    resetCatalogCacheForTests();
+    clock = 0;
+    info = jest.spyOn(console, "info").mockImplementation();
+    jest.useFakeTimers();
+  });
+  afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
+
+  it.each([
+    ["rail:x", "rail"], ["plans:x", "plans"], ["walk:sitemap:x", "walk:sitemap"],
+    ["walk:page:", "walk:page:all"], ["walk:page:subject=x", "walk:page:subject"],
+    ["walk:page:courseProgram=y", "walk:page:program"], ["walk:page:other=z", "walk:page:other"],
+    ["unknown", "other"],
+  ])("classifies %s as %s without exposing its value", (key, expected) => {
+    expect(catalogKeyClass(key)).toBe(expected);
+  });
+
+  it("counts miss, join, hit, error and backoff by read, including failed waiters", async () => {
+    const cold = deferred<string>();
+    const miss = read("walk:page:subject=secret-slug", () => cold.promise);
+    clock = 20;
+    const join = read("walk:page:subject=secret-slug", () => cold.promise);
+    clock = 1020;
+    cold.resolve("ready");
+    await expect(Promise.all([miss, join])).resolves.toEqual(["ready", "ready"]);
+    await expect(read("walk:page:subject=secret-slug", async () => "wrong")).resolves.toBe("ready");
+    const fail = deferred<string>();
+    const failed = read("plans:secret", () => fail.promise, 100_000, 15_000);
+    const failedJoin = read("plans:secret", () => fail.promise, 100_000, 15_000);
+    clock = 2020;
+    fail.reject(new Error("upstream"));
+    expect((await Promise.allSettled([failed, failedJoin])).every((result) => result.status === "rejected")).toBe(true);
+    clock = 2021;
+    await expect(read("plans:secret", async () => "wrong", 100_000, 15_000)).rejects.toBeInstanceOf(CatalogBackoffError);
+    expect(lines()).toHaveLength(0);
+    await flush();
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toContain("walk:page:subject=[hit:1,miss:1,join:1,backoff:0,w1:0,w10:2,w10p:0,err:0]");
+    expect(lines()[0]).toContain("plans=[hit:0,miss:1,join:1,backoff:1,w1:0,w10:2,w10p:0,err:2]");
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it.each([
+    [999, "w1"], [1_000, "w10"], [9_999, "w10"], [10_000, "w10p"],
+  ])("buckets a miss settling at %i ms in %s", async (delay, bucket) => {
+    const pending = deferred<string>();
+    const result = read("rail:boundary", () => pending.promise);
+    clock = delay;
+    pending.resolve("ok");
+    await result;
+    await flush();
+    expect(lines()[0]).toContain(`rail=[hit:0,miss:1,join:0,backoff:0,w1:${bucket === "w1" ? 1 : 0},w10:${bucket === "w10" ? 1 : 0},w10p:${bucket === "w10p" ? 1 : 0},err:0]`);
+  });
+
+  it.each([
+    [999, 1, 1, 0], [1_000, 0, 2, 0], [9_999, 0, 1, 1], [10_000, 0, 0, 2],
+  ])("buckets a join waiting %i ms at its exact boundary", async (delay, w1, w10, w10p) => {
+    const pending = deferred<string>();
+    const miss = read("rail:joined", () => pending.promise);
+    clock = 100;
+    const join = read("rail:joined", () => pending.promise);
+    clock = 100 + delay;
+    pending.resolve("ok");
+    await Promise.all([miss, join]);
+    await flush();
+    expect(lines()[0]).toContain(`rail=[hit:0,miss:1,join:1,backoff:0,w1:${w1},w10:${w10},w10p:${w10p},err:0]`);
+  });
+
+  it("flushes once at 60 seconds before recording the new read, then starts a fresh window", async () => {
+    await read("rail:first", async () => "ok");
+    clock = 59_999;
+    await read("rail:first", async () => "ok");
+    expect(lines()).toHaveLength(0);
+    await flush();
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toMatch(/^CATALOG_CACHE_STATS inst=[0-9a-f]{6} windowMs=60000 rail=\[hit:1,miss:1,join:0,backoff:0,w1:1,w10:0,w10p:0,err:0\]$/);
+    clock = 120_000;
+    await read("other:trigger", async () => "ok");
+    expect(lines()).toHaveLength(2);
+    expect(lines()[1]).toContain("other=[hit:0,miss:1,join:0");
+    expect(lines()[1]).not.toContain("rail=");
+  });
+
+  it("does not emit again inside the new window that a flush starts", async () => {
+    await read("rail:a", async () => "ok");
+    clock = 60_000;
+    await read("rail:a", async () => "ok");
+    expect(lines()).toHaveLength(1);
+    clock = 61_000;
+    await read("rail:a", async () => "ok");
+    clock = 119_999;
+    await read("rail:a", async () => "ok");
+    expect(lines()).toHaveLength(1);
+    clock = 120_000;
+    await read("rail:a", async () => "ok");
+    expect(lines()).toHaveLength(2);
+    expect(lines()[1]).toMatch(/windowMs=60000 /);
+  });
+
+  it("resets without emitting when the injected clock moves backwards", async () => {
+    clock = 10_000;
+    await read("rail:old", async () => "old");
+    clock = 9_999;
+    await read("plans:new", async () => "new");
+    expect(lines()).toHaveLength(0);
+    clock = 70_000;
+    await read("other:trigger", async () => "ok");
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toContain("plans=[");
+    expect(lines()[0]).not.toContain("rail=");
+  });
+
+  it("keeps a late settlement bucket after the decision window has flushed", async () => {
+    const pending = deferred<string>();
+    const cold = read("rail:late", () => pending.promise);
+    clock = 60_000;
+    await read("other:trigger", async () => "ok");
+    expect(lines()).toHaveLength(1);
+    clock = 60_001;
+    pending.resolve("late");
+    await cold;
+    clock = 120_000;
+    await read("other:trigger", async () => "ok");
+    expect(lines()[1]).toContain("rail=[hit:0,miss:0,join:0,backoff:0,w1:0,w10:0,w10p:1,err:0]");
+  });
+
+  it("guards an empty statistics window from emitting a zero line", () => {
+    // An external read always increments a counter; this guard's zero state is internal only.
+    const source = readFileSync(`${process.cwd()}/lib/catalog-cache.ts`, "utf8");
+    expect(source).toMatch(/function flushCacheStats\(elapsed: number\): void \{\s*if \(stats\.size === 0\) return;/);
+  });
+
+  it("logs only fixed fields in fixed class order and never a key, slug or query", async () => {
+    await read("walk:page:subject=secret-slug", async () => "ok");
+    await read("rail:secret-rail", async () => "ok");
+    await flush();
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toMatch(/^CATALOG_CACHE_STATS inst=[0-9a-f]{6} windowMs=60000 rail=\[hit:\d+,miss:\d+,join:\d+,backoff:\d+,w1:\d+,w10:\d+,w10p:\d+,err:\d+\] walk:page:subject=\[hit:\d+,miss:\d+,join:\d+,backoff:\d+,w1:\d+,w10:\d+,w10p:\d+,err:\d+\]$/);
+    expect(lines()[0]).not.toContain("secret-slug");
+    expect(lines()[0]).not.toContain("secret-rail");
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it("orders rail before plans even when plans is read first", async () => {
+    await read("plans:first", async () => "ok");
+    await read("rail:second", async () => "ok");
+    await flush();
+    expect(lines()[0]).toMatch(/windowMs=60000 rail=\[[^\]]+\] plans=\[[^\]]+\]$/);
+  });
+
+  it("keeps reads successful when console.info throws during a flush", async () => {
+    await read("rail:x", async () => "first");
+    info.mockImplementation(() => { throw new Error("logger unavailable"); });
+    clock = 60_000;
+    await expect(read("rail:x", async () => "second")).resolves.toBe("first");
+    expect(jest.getTimerCount()).toBe(0);
+  });
+});
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
