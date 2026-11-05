@@ -1,7 +1,7 @@
 -- ============================================================================
 -- BSIT Year 1: read-only verification queries for the collection build
 -- Status: DRAFT, 2026-11-05. EVERY STATEMENT IS A SELECT. Nothing writes. Safe to run against production.
--- Generated from the shaping TSV and the exact-ID manifest (211 expected placements, 8 excluded).
+-- Generated from the shaping TSV and the exact-ID manifest (214 expected placements, 8 excluded).
 -- The BSIT Year 1 root id (created 2026-11-05) is 94a89870-5522-47d5-b121-5b99b110adea; the queries below find it by exact title.
 -- Run order mirrors checklist section 8. Before the root exists, V1 returns no rows.
 -- ============================================================================
@@ -139,6 +139,7 @@ WITH expected(plan, section, note_id, title) AS (VALUES
     ('🌏 The Contemporary World', 'Global Challenges', '2da7d830-c59b-46e8-b8e5-ce67f2f8289a'::uuid, 'Global Inequality, Development, and Sustainability'),
     ('🌏 The Contemporary World', 'Global Challenges', 'bea5b8a9-a33e-4d7e-97f0-e1de425d9ee5'::uuid, 'Global Migration and Cultural Change'),
     ('🌏 The Contemporary World', 'Global Challenges', 'eb9fd981-3d5d-458d-aac1-37e3c21b6219'::uuid, 'Climate Change and Global Environmental Challenges'),
+    ('🌏 The Contemporary World', 'Global Citizenship and Civil Society', '45133a32-4440-4277-8b50-931eaec3788f'::uuid, 'Global Citizenship and Global Civil Society'),
     ('🌏 The Contemporary World', 'Technology and Society', '8ca37142-0ce8-431a-8886-86837ab9fa24'::uuid, 'Global Media, Technology, and Information Society'),
     ('🌏 The Contemporary World', 'The Philippines and the World', '1334cce8-0f00-4938-af72-1ec271e39c83'::uuid, 'The Philippines in a Globalized World'),
     ('🌏 The Contemporary World', 'The Philippines and the World', '52b12cca-8ced-4b66-8706-be0e46e289da'::uuid, 'Regional Integration and ASEAN'),
@@ -146,7 +147,9 @@ WITH expected(plan, section, note_id, title) AS (VALUES
     ('🎨 Art Appreciation', 'Foundations of Art', '98f57f6a-db29-4cff-a4b6-256a0ea62d42'::uuid, 'Art as Expression, Communication, and Culture'),
     ('🎨 Art Appreciation', 'Foundations of Art', '1504404f-72a9-48b9-8f9d-204840a659db'::uuid, 'Elements and Principles of Art'),
     ('🎨 Art Appreciation', 'Forms and Media', 'e50037bd-c279-46fe-8f18-797a11a5b853'::uuid, 'Art Forms, Media, and Techniques'),
+    ('🎨 Art Appreciation', 'Forms and Media', '3b53ce07-08db-4fac-b4fe-8525462d74a5'::uuid, 'Film and Moving-Image Art'),
     ('🎨 Art Appreciation', 'Interpretation and Criticism', '92804ddd-e1db-4748-a166-483c4d699ec8'::uuid, 'Approaches to Art Interpretation and Criticism'),
+    ('🎨 Art Appreciation', 'Art in Contemporary Society', '6256e54b-1501-44cf-abf3-88b2b4d67a0e'::uuid, 'Art, Popular Culture and Media in Contemporary Society'),
     ('🎨 Art Appreciation', 'History and Heritage', '7b8046ec-8e49-4fe5-8db5-f3c6ec098a9b'::uuid, 'Major Movements and Traditions in Art'),
     ('🎨 Art Appreciation', 'History and Heritage', 'ab7fde1f-fc78-43f1-bdc8-39543c3030b9'::uuid, 'Philippine Art and Cultural Heritage'),
     ('🧠 Computer Programming 2', 'Arrays', '86bdfbfe-b18b-4647-b84e-816437219c9c'::uuid, 'One-Dimensional Arrays in C++'),
@@ -366,6 +369,7 @@ WITH expected(plan, section, note_id, title) AS (VALUES
     ('🌏 The Contemporary World', 'Global Challenges', '2da7d830-c59b-46e8-b8e5-ce67f2f8289a'::uuid, 'Global Inequality, Development, and Sustainability'),
     ('🌏 The Contemporary World', 'Global Challenges', 'bea5b8a9-a33e-4d7e-97f0-e1de425d9ee5'::uuid, 'Global Migration and Cultural Change'),
     ('🌏 The Contemporary World', 'Global Challenges', 'eb9fd981-3d5d-458d-aac1-37e3c21b6219'::uuid, 'Climate Change and Global Environmental Challenges'),
+    ('🌏 The Contemporary World', 'Global Citizenship and Civil Society', '45133a32-4440-4277-8b50-931eaec3788f'::uuid, 'Global Citizenship and Global Civil Society'),
     ('🌏 The Contemporary World', 'Technology and Society', '8ca37142-0ce8-431a-8886-86837ab9fa24'::uuid, 'Global Media, Technology, and Information Society'),
     ('🌏 The Contemporary World', 'The Philippines and the World', '1334cce8-0f00-4938-af72-1ec271e39c83'::uuid, 'The Philippines in a Globalized World'),
     ('🌏 The Contemporary World', 'The Philippines and the World', '52b12cca-8ced-4b66-8706-be0e46e289da'::uuid, 'Regional Integration and ASEAN'),
@@ -373,7 +377,9 @@ WITH expected(plan, section, note_id, title) AS (VALUES
     ('🎨 Art Appreciation', 'Foundations of Art', '98f57f6a-db29-4cff-a4b6-256a0ea62d42'::uuid, 'Art as Expression, Communication, and Culture'),
     ('🎨 Art Appreciation', 'Foundations of Art', '1504404f-72a9-48b9-8f9d-204840a659db'::uuid, 'Elements and Principles of Art'),
     ('🎨 Art Appreciation', 'Forms and Media', 'e50037bd-c279-46fe-8f18-797a11a5b853'::uuid, 'Art Forms, Media, and Techniques'),
+    ('🎨 Art Appreciation', 'Forms and Media', '3b53ce07-08db-4fac-b4fe-8525462d74a5'::uuid, 'Film and Moving-Image Art'),
     ('🎨 Art Appreciation', 'Interpretation and Criticism', '92804ddd-e1db-4748-a166-483c4d699ec8'::uuid, 'Approaches to Art Interpretation and Criticism'),
+    ('🎨 Art Appreciation', 'Art in Contemporary Society', '6256e54b-1501-44cf-abf3-88b2b4d67a0e'::uuid, 'Art, Popular Culture and Media in Contemporary Society'),
     ('🎨 Art Appreciation', 'History and Heritage', '7b8046ec-8e49-4fe5-8db5-f3c6ec098a9b'::uuid, 'Major Movements and Traditions in Art'),
     ('🎨 Art Appreciation', 'History and Heritage', 'ab7fde1f-fc78-43f1-bdc8-39543c3030b9'::uuid, 'Philippine Art and Cultural Heritage'),
     ('🧠 Computer Programming 2', 'Arrays', '86bdfbfe-b18b-4647-b84e-816437219c9c'::uuid, 'One-Dimensional Arrays in C++'),

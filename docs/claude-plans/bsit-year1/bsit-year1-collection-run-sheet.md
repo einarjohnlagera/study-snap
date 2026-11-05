@@ -129,9 +129,9 @@ Tick each plan when its Notes are in.
 | 20 | Graphs and Mathematical Systems | Graphs and Networks: Paths, Circuits, Weighted Graphs and Coloring | `56713e3c-ca99-4056-b069-9141f15de3c9` |
 | 21 | Graphs and Mathematical Systems | Mathematical Systems and Modular Arithmetic | `1a952a58-64b6-4982-905a-5a8d77528a8d` |
 
-## 4. 🌏 The Contemporary World: First Semester (9 Notes)
+## 4. 🌏 The Contemporary World: First Semester (10 Notes)
 
-- [ ] Plan created (checklist section 2). - [ ] All 9 Notes added. - [ ] Read-only verification passed.
+- [ ] Plan created (checklist section 2). - [ ] All 10 Notes added. - [ ] Read-only verification passed.
 
 | # | Section | Note title | Note id |
 |---|---|---|---|
@@ -141,13 +141,14 @@ Tick each plan when its Notes are in.
 | 4 | Global Challenges | Global Inequality, Development, and Sustainability | `2da7d830-c59b-46e8-b8e5-ce67f2f8289a` |
 | 5 | Global Challenges | Global Migration and Cultural Change | `bea5b8a9-a33e-4d7e-97f0-e1de425d9ee5` |
 | 6 | Global Challenges | Climate Change and Global Environmental Challenges | `eb9fd981-3d5d-458d-aac1-37e3c21b6219` |
-| 7 | Technology and Society | Global Media, Technology, and Information Society | `8ca37142-0ce8-431a-8886-86837ab9fa24` |
-| 8 | The Philippines and the World | The Philippines in a Globalized World | `1334cce8-0f00-4938-af72-1ec271e39c83` |
-| 9 | The Philippines and the World | Regional Integration and ASEAN | `52b12cca-8ced-4b66-8706-be0e46e289da` |
+| 7 | Global Citizenship and Civil Society | Global Citizenship and Global Civil Society | `45133a32-4440-4277-8b50-931eaec3788f` |
+| 8 | Technology and Society | Global Media, Technology, and Information Society | `8ca37142-0ce8-431a-8886-86837ab9fa24` |
+| 9 | The Philippines and the World | The Philippines in a Globalized World | `1334cce8-0f00-4938-af72-1ec271e39c83` |
+| 10 | The Philippines and the World | Regional Integration and ASEAN | `52b12cca-8ced-4b66-8706-be0e46e289da` |
 
-## 5. 🎨 Art Appreciation: First Semester (7 Notes)
+## 5. 🎨 Art Appreciation: First Semester (9 Notes)
 
-- [ ] Plan created (checklist section 2). - [ ] All 7 Notes added. - [ ] Read-only verification passed.
+- [ ] Plan created (checklist section 2). - [ ] All 9 Notes added. - [ ] Read-only verification passed.
 
 | # | Section | Note title | Note id |
 |---|---|---|---|
@@ -155,9 +156,11 @@ Tick each plan when its Notes are in.
 | 2 | Foundations of Art | Art as Expression, Communication, and Culture | `98f57f6a-db29-4cff-a4b6-256a0ea62d42` |
 | 3 | Foundations of Art | Elements and Principles of Art | `1504404f-72a9-48b9-8f9d-204840a659db` |
 | 4 | Forms and Media | Art Forms, Media, and Techniques | `e50037bd-c279-46fe-8f18-797a11a5b853` |
-| 5 | Interpretation and Criticism | Approaches to Art Interpretation and Criticism | `92804ddd-e1db-4748-a166-483c4d699ec8` |
-| 6 | History and Heritage | Major Movements and Traditions in Art | `7b8046ec-8e49-4fe5-8db5-f3c6ec098a9b` |
-| 7 | History and Heritage | Philippine Art and Cultural Heritage | `ab7fde1f-fc78-43f1-bdc8-39543c3030b9` |
+| 5 | Forms and Media | Film and Moving-Image Art | `3b53ce07-08db-4fac-b4fe-8525462d74a5` |
+| 6 | Interpretation and Criticism | Approaches to Art Interpretation and Criticism | `92804ddd-e1db-4748-a166-483c4d699ec8` |
+| 7 | Art in Contemporary Society | Art, Popular Culture and Media in Contemporary Society | `6256e54b-1501-44cf-abf3-88b2b4d67a0e` |
+| 8 | History and Heritage | Major Movements and Traditions in Art | `7b8046ec-8e49-4fe5-8db5-f3c6ec098a9b` |
+| 9 | History and Heritage | Philippine Art and Cultural Heritage | `ab7fde1f-fc78-43f1-bdc8-39543c3030b9` |
 
 ## 6. 🧠 Computer Programming 2: Second Semester (31 Notes)
 
@@ -287,7 +290,7 @@ Tick each plan when its Notes are in.
 | 11 | Presentation and Workplace Writing | Workplace and Special-Purpose Communication | `85e8e334-cbd1-4eab-8569-332af2743e06` |
 | 12 | Presentation and Workplace Writing | Technical Writing and Documentation | `1c6d9d70-7338-498e-953b-b5c9625476ce` |
 
-**Total to add: 211 Notes** (should equal 211).
+**Total to add: 214 Notes** (should equal 211).
 
 ## Do NOT add (Excluded)
 

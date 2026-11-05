@@ -2,11 +2,11 @@ Status: Collection creation checklist, DRAFT for the owner, 2026-11-05. NOTHING 
 
 # BSIT Year 1: collection creation checklist
 
-**Unlike BSCS, no Note has to be authored or generated.** All 211 placements are existing production Notes (the last one, the Counting Note, was created 2026-11-05). The work is: create one root and ten Subject Plans, then add existing Notes to them by id. **Do not create or copy any Note**; membership is a join, so the same canonical Note can sit in the BSCS Year and in this one.
+**Unlike BSCS, no Note has to be authored or generated.** All 214 placements are existing production Notes (the last one, the Counting Note, was created 2026-11-05). The work is: create one root and ten Subject Plans, then add existing Notes to them by id. **Do not create or copy any Note**; membership is a join, so the same canonical Note can sit in the BSCS Year and in this one.
 
 ## 0. Preconditions (do not start before these)
 
-- [ ] **The Counting Note is PUBLIC.** Read 2026-11-05: 211 of the 211 placements are existing Notes, 210 are PUBLIC, and the Counting Note (`7564b66c-9dd2-424f-b569-274ec6dd6d20`) was **PRIVATE** at creation. Publishing a plan refuses unless every note in it is PUBLIC.
+- [ ] **Every Note is PUBLIC.** Read 2026-11-05: 214 of the 214 placements are existing Notes; the three General Education Notes added to the first semester on 2026-11-05 are PUBLIC; the Counting Note (`7564b66c-9dd2-424f-b569-274ec6dd6d20`) was still **PRIVATE** when last read (2026-11-05): set it PUBLIC. Publishing a plan refuses unless every note in it is PUBLIC.
 - [ ] **Decide the root's course/program.** The BSCS Year carries `Computer Science`. Setting `Information Technology` on this root makes it the candidate for the Information Technology recommendation slot (and see the existing root below). Recommendation: `Information Technology`. **Owner to confirm.**
 - [ ] **Decide the terms** (section 2): set all ten (First Semester = 1, Second Semester = 2) or none. **Terms freeze at publication and cannot be added or renamed afterwards.** The BSCS plans currently carry NO terms (read 2026-11-05), so if you want BSCS and BSIT consistent, set the BSCS terms **before** BSCS is published again. Recommendation: set terms on BSIT.
 - [ ] **The old private root (id `5d4cc820-ad2a-4ee2-9083-fe863bd3dc18`) is NOT this journey's root.** Read 2026-11-05: it was created 2026-07-03 as "💻 BSIT Semester Review", has 4 legacy plans (Advanced Database Systems 14 Notes, Event-Driven Programming 10, Networking II 15, System Integration and Architecture 17), course/program Information Technology, PRIVATE, and was renamed at 10:20Z that day to "🖥 BS Information Technology — 1st Year" (no variation selector) while keeping its old description. **Owner decision (Option A): create a fresh root and rename this one back to "💻 BSIT Semester Review".** Publishing a Year cascades PUBLIC to every child, so the four legacy plans must never ride under a 1st-Year root.
@@ -42,8 +42,8 @@ Create them in this order; each child gets the next sibling position automatical
 | 1 | `💻 Introduction to Computing` | First Semester | 1 | 39 / 0 |
 | 2 | `⌨️ Computer Programming 1` | First Semester | 1 | 42 / 0 |
 | 3 | `📐 Mathematics in the Modern World` | First Semester | 1 | 21 / 4 |
-| 4 | `🌏 The Contemporary World` | First Semester | 1 | 9 / 0 |
-| 5 | `🎨 Art Appreciation` | First Semester | 1 | 7 / 0 |
+| 4 | `🌏 The Contemporary World` | First Semester | 1 | 10 / 0 |
+| 5 | `🎨 Art Appreciation` | First Semester | 1 | 9 / 0 |
 | 6 | `🧠 Computer Programming 2` | Second Semester | 2 | 31 / 0 |
 | 7 | `🧮 Discrete Mathematics` | Second Semester | 2 | 32 / 3 |
 | 8 | `🪞 Understanding the Self` | Second Semester | 2 | 8 / 1 |
@@ -111,8 +111,9 @@ Create them in this order; each child gets the next sibling position automatical
 |---|---|---|---|
 | 1 | Globalization | 3 | 0 |
 | 2 | Global Challenges | 3 | 0 |
-| 3 | Technology and Society | 1 | 0 |
-| 4 | The Philippines and the World | 2 | 0 |
+| 3 | Global Citizenship and Civil Society | 1 | 0 |
+| 4 | Technology and Society | 1 | 0 |
+| 5 | The Philippines and the World | 2 | 0 |
 
 ### 5. 🎨 Art Appreciation: First Semester
 
@@ -121,9 +122,10 @@ Create them in this order; each child gets the next sibling position automatical
 | # | Section (label, copy exactly) | Placements | Excluded |
 |---|---|---|---|
 | 1 | Foundations of Art | 3 | 0 |
-| 2 | Forms and Media | 1 | 0 |
+| 2 | Forms and Media | 2 | 0 |
 | 3 | Interpretation and Criticism | 1 | 0 |
-| 4 | History and Heritage | 2 | 0 |
+| 4 | Art in Contemporary Society | 1 | 0 |
+| 5 | History and Heritage | 2 | 0 |
 
 ### 6. 🧠 Computer Programming 2: Second Semester
 
@@ -220,7 +222,7 @@ BSIT has no preparatory Precalculus root. The BSCS one is unrelated and is not a
 ## 6. Pre-publication gates
 
 - [ ] **Every note in the Year is PUBLIC**, including the Counting Note. Publishing refuses otherwise.
-- [ ] The IT tag is present on all 211 Notes (the read-only check in section 8 confirms it).
+- [ ] The IT tag is present on all 214 Notes (the read-only check in section 8 confirms it).
 - [ ] Terms coherent and final (all ten set, correct): they freeze at publication.
 - [ ] The root's course/program and the existing private "BSIT Semester Review" root are what you intend (no accidental second recommendation).
 - [ ] Optional but recommended: the 20-Note spot-check of the metadata-ready Notes is already done (35 sampled; Theta defined); nothing outstanding.
