@@ -7,7 +7,7 @@ Exact Note ids for every placement are in `bsit-year1-reuse-id-manifest.tsv` (co
 ## A. Before the collection is built
 - [ ] **Re-read production state.** Everything in the manifest is a snapshot from 2026-11-03. Confirm the ids still exist and are in the BSCS plans.
 - [ ] **Pin canonical identity for the 50 reused GE titles.** Confirm the manifest id is the intended copy (the BSCS plan membership, highest collection count, Information Technology tag where present). Do not merge, delete or edit the other seven copies.
-- [ ] **Run the GE metadata SQL** (`bsit-year1-ge-metadata-correction.sql`) after STEP 0 guards pass: 3 Notes, 6 rows. Verify per the file.
+- [x] **GE metadata SQL** (`bsit-year1-ge-metadata-correction.sql`): RUN by the owner 2026-11-05 08:10:56Z (6 rows), verified read-only. Do not re-run.
 - [x] Q8 (Counting Note) was decided by the owner: approved. Authoring is a later, separately authorized step (`bsit-year1-counting-note-authoring-brief.md`).
 
 ## B. Discrete Mathematics: the 29 conditional Notes (owner-approved rubric)
@@ -22,7 +22,7 @@ Read the Notes and Study Packs in `bsit-year1-curator-review-pack-conditional-29
 - [x] All 29 read in full by the Strategist and independently by GPT (recommendation: 26 PASS, 3 HOLD). Owner (curator) decision 2026-11-05: include and tag all 29. Results: `…conditional-29-GPT-BLIND-RESULT.tsv`; pack: `…review-pack-conditional-29.md`.
 - [ ] Confirm the two Strategist-read Notes (Boolean Algebra and Digital Logic; Mathematical Induction) as part of the same pass.
 - [ ] Check that no retained proof Note depends on loop invariants as a prerequisite (Proof by Contradiction, Proof by Cases and Counterexamples, Divisibility and Greatest Common Divisors mention invariants in passing).
-- [ ] Run `bsit-year1-dm-it-applicability.sql` (owner): dry run, then COMMIT. Note 9 is a separate statement you can strike.
+- [x] `bsit-year1-dm-it-applicability.sql`: RUN by the owner 2026-11-05 08:12:46Z (29 rows, Note 9 included), verified read-only; `…-2-notes.sql` RUN 08:16:31Z (2 rows). Do not re-run.
 - [ ] Obtain CHED MS101 outcomes or one BSIT Discrete Mathematics syllabus, or record the evidence limitation.
 
 ## C. Programming (73 Notes, Q1)

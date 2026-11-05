@@ -1,6 +1,8 @@
 -- ============================================================================
 -- BSIT Year 1: add Information Technology to the last 2 retained Discrete Mathematics Notes
--- Status: PREPARED, NOT RUN. Prepared 2026-11-05 by the Note Strategist session.
+-- Status: RUN by the owner and VERIFIED read-only (SELECT) on 2026-11-05. Kept as a RECORD; idempotent, but DO NOT RE-RUN.
+--   Committed 2026-11-05 08:16:31Z (2 rows, Information Technology: Boolean Algebra and Digital Logic;
+--   Mathematical Induction). Verified: both now carry 3 programs. Prepared 2026-11-05 by the Note Strategist session.
 -- THE OWNER EXECUTES THIS. (CLAUDE.md: production writes are owner-only.)
 --
 -- WHY THIS FILE EXISTS

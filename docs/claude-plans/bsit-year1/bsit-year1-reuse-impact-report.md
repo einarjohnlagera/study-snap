@@ -22,7 +22,7 @@ Verification tiers over the 210 Reuse placements (every placement is in exactly 
 |---|---|---|
 | **Content-verified Reuse** | **5** | Full body read by this session, found program-neutral: 3 GE Notes (Emerging Technologies and Their Social Impacts; Spanish Colonization and Transformation of Philippine Society; Philippine Revolution and the First Philippine Republic) and 2 DS Notes (Boolean Algebra and Digital Logic; Mathematical Induction) |
 | **Metadata-ready Reuse** | **176** | Information Technology already in Applicable Programs; Domain Context explicit; `COLLEGE` depth; one Study Pack; authored or reviewed as shared in BSCS under the per-row two-test rule. **Bodies not re-inspected for BSIT.** Includes all 42 C++-specific Notes, now resolved by Q1 |
-| **Reviewed, owner-approved for tagging** | **29** | Discrete Structures I Notes read in full by this session (bodies and Study Packs) and by an independent GPT blind review (26 PASS, 3 HOLD recommended: 14, 18, 22). The owner, as curator, approved including all of them on 2026-11-05 (rule: include if it adds value). Tag SQL prepared, not run. Known limitations are recorded in the SQL and the decision log |
+| **Reviewed, owner-approved for tagging** | **29** | Discrete Structures I Notes read in full by this session (bodies and Study Packs) and by an independent GPT blind review (26 PASS, 3 HOLD recommended: 14, 18, 22). The owner, as curator, approved including all of them on 2026-11-05 (rule: include if it adds value). Tag SQL RUN by the owner 2026-11-05 and verified read-only. Known limitations are recorded in the SQL and the decision log |
 | New | 1 | the approved Counting Note; not authored |
 | Excluded | 8 | |
 

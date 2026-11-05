@@ -1,6 +1,8 @@
 -- ============================================================================
 -- BSIT Year 1: add Information Technology to 29 Discrete Mathematics Notes
--- Status: PREPARED, NOT RUN. Prepared 2026-11-05 by the Note Strategist session.
+-- Status: RUN by the owner and VERIFIED read-only (SELECT) on 2026-11-05. Kept as a RECORD; idempotent, but DO NOT RE-RUN.
+--   Committed 2026-11-05 08:12:46Z (29 rows, Information Technology). Verified: all 29 Notes carry it;
+--   Computer Science and Computer Engineering are preserved. Prepared 2026-11-05 by the Note Strategist session.
 -- THE OWNER EXECUTES THIS. (CLAUDE.md: production writes are owner-only.)
 --
 -- AUTHORITY

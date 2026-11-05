@@ -29,7 +29,7 @@ All remaining curriculum decisions (Q8, S-1 to S-3, S-7) are owner-approved and 
 ## Update 2026-11-05: the 29 conditional Notes
 - Read in full by this session and independently by a GPT blind review (recommendation: 26 PASS, 3 HOLD: Notes 14, 18, 22). I corrected one of my own pre-read concerns (Note 8's soundness; the Quick Recall defines it).
 - **Owner (curator) decision: include and tag all 29**, rule "include them if they give value to the study plan". The 29 rows in the TSV and workbook now show `+Information Technology`; they are no longer "conditional".
-- New file `bsit-year1-dm-it-applicability.sql` (prepared, not run): exact ids and titles, idempotent, rollback included, STEP 0 guards re-read against production (29 of 29 match, none tagged). Note 9 is a separate statement you can strike.
+- New file `bsit-year1-dm-it-applicability.sql` (RUN by the owner 2026-11-05 08:12:46Z, verified; see the production-state section below): exact ids and titles, idempotent, rollback included, STEP 0 guards re-read against production (29 of 29 match, none tagged). Note 9 is a separate statement you can strike.
 - Known limitations (not fixed, a separate decision because BSCS uses these canonical Notes): Note 22's Q5 uses Theta notation the Note never defines; Notes 14 and 18 carry intro-plus depth; Notes 8, 9 and 24 carry moderate extra depth.
 - Verification tiers are now: 5 content-verified, 29 reviewed and owner-approved, 176 metadata-ready (210 Reuse).
 
@@ -37,7 +37,7 @@ All remaining curriculum decisions (Q8, S-1 to S-3, S-7) are owner-approved and 
 - **GE:** the 3 Notes now have 8 programs each (Computer Science and Information Technology added; the six Education programs kept).
 - **Discrete Mathematics:** 31 of the 34 Discrete Structures I Notes carry Information Technology (the 29 in `bsit-year1-dm-it-applicability.sql` plus Boolean Algebra and Digital Logic and Mathematical Induction from `bsit-year1-dm-it-applicability-2-notes.sql`). The 3 held-out Notes (Strong Induction; Proving Program Correctness; Logic in Programming and Software Specifications) are untagged and untouched.
 - **Across the 213 Notes in the BSCS Year:** 210 carry Information Technology; the 3 without it are exactly the held-out ones. Production now matches the BSIT shaping TSV on Applicable Programs.
-- Statements elsewhere in this folder that these SQL files are "prepared, not run" describe the state before this run.
+- All three SQL files are now headed RUN and verified, with their commit timestamps (GE 08:10:56Z, 29 Notes 08:12:46Z, 2 Notes 08:16:31Z, all 2026-11-05, read from `note_course_program.created_at`). They are idempotent and kept as a record: do not re-run. Any remaining "prepared, not run" wording in this folder is stale.
 
 ## Decisions closed
 - **Q8:** one New Note, "Counting: Sum and Product Rules, Permutations and Combinations", in a `Counting Principles` section after Functions and Sequences. Shared computing knowledge; not added to the BSCS Year. Not a CHED claim (MS101 outcomes unreadable).
@@ -69,8 +69,8 @@ Updated: the TSV and generated workbook (`docs/curriculum/…NOT-IMPLEMENTATION-
 4. Spot-check at least 20 of the 176 metadata-ready Notes, weighted to C++ Notes and computing-flavoured Mathematics in the Modern World Notes.
 
 ## Remaining technical dependencies
-1. Run the GE metadata SQL (yours; guards, dry run, rollback in the file).
-2. Run `bsit-year1-dm-it-applicability.sql`: 29 Notes, +Information Technology, by exact id and title (STEP 0 guards re-read against production on 2026-11-05: 29 of 29 match, none yet tagged). Note 9 is a separate statement you can strike.
+1. (Done 2026-11-05) GE metadata SQL run by the owner and verified read-only; kept as a record, do not re-run.
+2. (Done 2026-11-05) `bsit-year1-dm-it-applicability.sql` (29 Notes) and `bsit-year1-dm-it-applicability-2-notes.sql` (2 Notes) run by the owner and verified read-only; kept as records, do not re-run.
 3. Academic Term: stored on `note_collections.term_label` and `term_order`, **NULL on all ten BSCS plans**. BSIT terms must be set at build time.
 4. Official CHED MS101 outcomes, or a documented evidence limitation. Also check CHED figures against the official PDF (OCR source).
 5. Authoring the Counting Note (a later, separately authorized step) and its Study Pack.
@@ -78,4 +78,4 @@ Updated: the TSV and generated workbook (`docs/curriculum/…NOT-IMPLEMENTATION-
 7. Backlog Index row: the Release Manager writes it.
 
 ## Recommended next controlled step
-Run the two metadata SQLs (GE: 6 rows; Discrete Mathematics: 29 rows), then reconvene. Authoring the Counting Note and building the collection both come after that, each with its own explicit go-ahead. Nothing here is implementation-ready.
+The metadata SQLs are done (see above). Next, each with its own go-ahead: authoring the Counting Note and building the collection, plus the 20-Note spot check.
