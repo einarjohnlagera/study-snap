@@ -1,4 +1,4 @@
-Status: authored bodies; **the three Notes were CREATED by the owner on 2026-11-05 and verified read-only (see the last section)**. The bodies below are the drafts they were created from. Creating the Notes, setting their metadata and generating their Study Packs are owner actions (CLAUDE.md: production writes are owner-only). NOT implementation-ready.
+Status: authored bodies; **the three Notes were CREATED by the owner on 2026-11-05 and verified read-only, all PUBLIC (see the last section)**. The bodies below are the drafts they were created from. Creating the Notes, setting their metadata and generating their Study Packs are owner actions (CLAUDE.md: production writes are owner-only). NOT implementation-ready.
 
 # Three General Education additions for the first semester: authored bodies
 
@@ -15,7 +15,7 @@ The bodies follow the structure of the neighbouring Notes (Overview, Key Idea, C
 | 3 | Global Citizenship and Global Civil Society | The Contemporary World | GENERAL_EDUCATION | COLLEGE | Computer Science, Information Technology | 🌏 The Contemporary World / **Global Citizenship and Civil Society** (new section, after Global Challenges and before The Philippines and the World) |
 
 - Applicable Programs mirror the Counting Note decision (Computer Science and Information Technology). **Information Systems is also an arguable tag** (the BSCS GE Notes mostly carry Computer Science, Information Systems and Information Technology); tell me if you want it and I will change the metadata here. In the New Note form **click each program, not the "Computer Courses" family chip** (it adds Information Systems).
-- **Visibility:** the existing first-semester Notes are PUBLIC. Set each new Note PUBLIC before it joins a plan that will be published.
+- **Visibility:** the existing first-semester Notes are PUBLIC. Each new Note was to be set PUBLIC before joining a plan that will be published (done for all three, see the last section).
 - Do **not** add the Notes to the BSCS collection or the BSIT collection yet: see "After the Notes exist".
 
 ---
@@ -170,10 +170,11 @@ Global civil society links local experience to global action: communities, netwo
 | # | Title | Note id | Visibility | Packs | Collections |
 |---|---|---|---|---|---|
 | 1 | Film and Moving-Image Art | `3b53ce07-08db-4fac-b4fe-8525462d74a5` | PUBLIC | 1 | 0 |
-| 2 | Art, Popular Culture and Media in Contemporary Society | `6256e54b-1501-44cf-abf3-88b2b4d67a0e` | **PRIVATE: set to PUBLIC** | 1 | 0 |
+| 2 | Art, Popular Culture and Media in Contemporary Society | `6256e54b-1501-44cf-abf3-88b2b4d67a0e` | PUBLIC (was PRIVATE at first read; set PUBLIC by the owner, read 2026-11-05 12:50Z) | 1 | 0 |
 | 3 | Global Citizenship and Global Civil Society | `45133a32-4440-4277-8b50-931eaec3788f` | PUBLIC | 1 | 0 |
 
 - **Metadata (FACT):** all three are GENERAL_EDUCATION, COLLEGE, Applicable Programs Computer Science and Information Technology (exactly as specified); Subjects Art Appreciation (1, 2) and The Contemporary World (3). Each title is unique in production. Body lengths 2,885, 2,676 and 3,516 characters, identical to the drafts.
 - **Study Pack review, all 15 quiz items against the bodies (FACT):** every item's keyed answer is correct and is supported by the Note body; no item tests material the body does not teach; the three summaries match the bodies (including the Philippine details, Cinemalaya 2005, Brocka 1975, the Anti-Trafficking Act and its expansion). The "NOT correct" items (Note 1 Q3, Note 2 Q2, Note 3 Q4) key the false statement correctly. Verdict: **PASS** for all three packs. Coverage note, not a defect: the items are conceptual (no computations), which is right for these Notes.
-- **Still open:** set Note 2 to PUBLIC. The not-yet-verified fact is the United Nations trafficking protocol "adopted in 2000" named in Note 3 (the curator should verify the year).
+- **Visibility:** all three Notes are PUBLIC (re-read 2026-11-05; Note 2 was PRIVATE at creation and was set PUBLIC at 12:50Z).
+- **Still open:** the not-yet-verified fact is the United Nations trafficking protocol "adopted in 2000" named in Note 3 (the curator should verify the year).
 - **Not yet done (owner decision):** whether the three Notes join both journeys or BSIT only, and then adding them to the plans (new sections as in the metadata table) and to the shaping TSV (219 to 222 rows, 211 to 214 placements). I did not edit the TSV here because the BSIT TSV changes are still in open PRs (#1562 to #1564); I will add the rows once those merge, or on the owner's instruction.
