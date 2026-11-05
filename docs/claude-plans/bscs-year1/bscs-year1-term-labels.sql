@@ -1,6 +1,12 @@
 -- ============================================================================
 -- BSCS Year 1: set Academic Term on the ten Subject Plans
--- Status: PREPARED, NOT RUN. Prepared 2026-11-05 by the Note Strategist session.
+-- Status: RUN by the owner and VERIFIED read-only (SELECT) on 2026-11-05. Kept as a RECORD; DO NOT RE-RUN
+--   (the guard requires term_label to be null, so it would now match 0 rows). Committed 2026-11-05 10:45:16Z
+--   (updated_at of the ten plans). Verified: First Semester / 1 on Introduction to Computing, Computer
+--   Programming 1, Mathematics in the Modern World, The Contemporary World and Art Appreciation; Second Semester / 2
+--   on Computer Programming 2, Discrete Structures I, Understanding the Self, Readings in Philippine History and
+--   Purposive Communication. Root, visibility, titles and publication stamps unchanged.
+--   Prepared 2026-11-05 by the Note Strategist session.
 -- THE OWNER EXECUTES THIS. (CLAUDE.md: production writes are owner-only.)
 --
 -- WHY A SQL FILE AND NOT THE UI
