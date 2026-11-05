@@ -21,7 +21,7 @@ Status: Phase B final shaping, 2026-11-03. NOT implementation-ready. Owner appro
 |---|---|---|
 | Q1 | Reference language is the same C++17 restricted teaching subset as BSCS | All 73 programming Notes (31 N, 42 S) are Reuse placements; no duplication; no language field |
 | Q2 | Discrete Mathematics: Option B, conditionally | 31 of 34 DS I Notes are Reuse; 3 held out; IT added only where content-verified and individually approved by a curator (Section D) |
-| Q3 | Prepare (not run) a metadata correction for 3 GE Notes | `bsit-year1-ge-metadata-correction.sql`; exact ids; idempotent; rollback included |
+| Q3 | Prepare a metadata correction for 3 GE Notes | `bsit-year1-ge-metadata-correction.sql`; exact ids; idempotent; rollback included. **RUN by the owner 2026-11-05 08:10:56Z (6 rows) and verified read-only the same day; kept as a record, do not re-run** |
 | Q4 | Web fundamentals stays in Year 2 | No Web plan; the 4 web Notes remain in Introduction to Computing |
 | Q5 | Separate BSIT root | Fresh root; BSCS root untouched; reuse is by Note |
 | Q6 | Root title `🖥️ BS Information Technology — 1st Year` | Used verbatim as the builder title |
@@ -39,6 +39,7 @@ Status: Phase B final shaping, 2026-11-03. NOT implementation-ready. Owner appro
 | S-4 | Boolean Algebra and Digital Logic and Mathematical Induction stay in the plan | Retained (Strategist proposal, not contested) |
 | S-6/S-7 | Discrete Mathematics plan description (final): "Build the mathematical foundations of computing through propositional and predicate logic, rules of inference, Boolean algebra, sets, relations, functions, sequences, integers and divisibility, elementary counting principles, and introductory proof techniques including mathematical induction. The emphasis is on understanding discrete mathematical concepts and reasoning that support further study in information technology." | APPROVED, applied identically in TSV, workbook and journey |
 | S-7 | Year description (final): see the journey document | APPROVED |
+| Curator review of the 29 DS Notes (2026-11-05) | Strategist full read (4 HOLD leans, later 3 after a self-correction: Note 8's soundness concern was wrong, the Quick Recall defines it) and an independent GPT blind review (26 PASS, 3 HOLD: 14, 18, 22). **Owner (curator) decision: include all 29 and tag them**, rule "include them if they give value to the study plan". Held Notes 14 Power Sets, Cartesian Products and Cardinality, 18 Partial Orders and 22 Sequences and Summations are kept as-is | APPROVED. Known limitations recorded: Note 22's Q5 uses Theta notation the Note never defines; 14 and 18 carry intro-plus depth (Cantor; lattices); 8, 24, 9 carry moderate extra depth. Fixing any means editing a canonical Note BSCS also uses: a separate owner decision |
 | Root title | Used with a space after the emoji, `🖥️ BS Information Technology — 1st Year`, matching the existing TSV and builder convention and decision Q6. The approved message wrote it without the space; no second variant was created | Recorded convention |
 
 The exclusions apply only to the BSIT Year 1 journey. They do not invalidate the Notes or change their canonical metadata, and they are not reinstated to improve the Reuse percentage.
@@ -47,9 +48,9 @@ The exclusions apply only to the BSIT Year 1 journey. They do not invalidate the
 
 | Change | Notes | Gate |
 |---|---|---|
-| + Computer Science, + Information Technology | 3 GE Notes | Owner runs the SQL after STEP 0 guards |
+| + Computer Science, + Information Technology | 3 GE Notes | RUN by the owner 2026-11-05 08:10:56Z; verified read-only |
 | + Information Technology | 2 DS Notes fully read (Boolean Algebra and Digital Logic, Mathematical Induction) | Curator confirmation, then a separate SQL |
-| + Information Technology | 29 DS Notes screened but not fully read | **No tag before individual curator approval (PASS)**. Record per `bsit-year1-curator-verification-manifest-conditional-29.tsv` |
+| + Information Technology | 29 DS Notes, reviewed and owner-approved | `bsit-year1-dm-it-applicability.sql`: **RUN by the owner 2026-11-05 08:12:46Z (29 rows) and verified read-only the same day**; the 2 Strategist-read Notes (Boolean Algebra, Mathematical Induction) via `bsit-year1-dm-it-applicability-2-notes.sql`, **RUN 2026-11-05 08:16:31Z (2 rows), verified**. Kept as records, do not re-run |
 | none | 3 held-out DS Notes | n/a |
 | none | the new Counting Note (it is created with Computer Science and Information Technology at authoring, so it is not an update) | n/a |
 
