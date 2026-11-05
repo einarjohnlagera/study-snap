@@ -1,4 +1,4 @@
-Status: Spot-check result and owner decision, 2026-11-05. Curriculum review record. NOT implementation-ready. Edits to production are prepared as SQL for the owner; none has been made by Claude.
+Status: Spot-check result and owner decision, 2026-11-05. Curriculum review record. NOT implementation-ready. The one production edit was made by the owner via the prepared SQL; none was made by Claude.
 
 # BSIT Year 1: spot-check of the metadata-ready Notes (35 of 176)
 
@@ -14,9 +14,9 @@ Checked across all 205 Note bodies (176 metadata-ready + 29 Discrete Mathematics
 - The same Note also defines "precondition and postcondition", which resolves the earlier worry that the Discrete Mathematics quizzes used undefined vocabulary: the term is taught upstream in Computer Programming 1.
 
 ## Owner decision (2026-11-05): option b
-Add one Quick Recall bullet defining Theta to "Algorithms and Their Properties" (id `583c82dc-fc5b-4088-ae21-dd474a787be3`). Prepared as `bsit-year1-theta-definition-note-edit.sql`: guarded by id, title, Domain Context, md5 of the current body and the exact updated_at; appends one bullet; no Study Pack regeneration; rollback included; verified read-only against production that the guard matches and that the rollback restores md5 `023dd664…`. **Not run.** It is a canonical Note shared with BSCS, so the change affects both journeys (it only adds a definition).
+Add one Quick Recall bullet defining Theta to "Algorithms and Their Properties" (id `583c82dc-fc5b-4088-ae21-dd474a787be3`). Prepared as `bsit-year1-theta-definition-note-edit.sql`: guarded by id, title, Domain Context, md5 of the current body and the exact updated_at; appends one bullet; no Study Pack regeneration; rollback included; verified read-only against production that the guard matches and that the rollback restores md5 `023dd664…`. **RUN by the owner 2026-11-05 (committed 09:49:12Z) and verified read-only: length 2304 to 2465, one Theta bullet after the Big-O bullet, md5 now `db58e2b0…`, metadata unchanged, the Study Pack untouched.** It is a canonical Note shared with BSCS, so the change affects both journeys (it only adds a definition).
 
-## Consequences once the SQL is run
+## Consequences (the SQL has been run)
 - The Theta gap closes for all four Notes. The two GPT HOLDs (Nested Loops, Recursive Problem Solving) become PASS on this ground; no tag or plan change is needed because they were already in the plan.
 - Remaining open from the spot-check: none. The 141 unsampled Notes are covered only by the text screen.
 - The note-level limitation recorded for Sequences and Summations (Discrete Mathematics) is closed by the same edit.

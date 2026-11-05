@@ -1,6 +1,10 @@
 -- ============================================================================
 -- BSIT Year 1: define Theta notation in the Note "Algorithms and Their Properties"
--- Status: PREPARED, NOT RUN. Prepared 2026-11-05 by the Note Strategist session.
+-- Status: RUN by the owner and VERIFIED read-only (SELECT) on 2026-11-05. Kept as a RECORD; DO NOT RE-RUN
+--   (the md5 guard would now match 0 rows). Committed 2026-11-05 09:49:12Z (notes.updated_at). Verified: content
+--   length 2304 -> 2465, one Theta bullet appended after the Big-O bullet, Subject/Domain Context/Authored
+--   Depth/Applicable Programs unchanged, the single Study Pack untouched (last updated 2026-10-29).
+--   Prepared 2026-11-05 by the Note Strategist session.
 -- THE OWNER EXECUTES THIS. (CLAUDE.md: production writes are owner-only.)
 --
 -- WHY (owner decision 2026-11-05, option b)
