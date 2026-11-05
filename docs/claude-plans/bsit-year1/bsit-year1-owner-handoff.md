@@ -11,33 +11,39 @@ All remaining curriculum decisions (Q8, S-1 to S-3, S-7) are owner-approved and 
 | Subject Plans and terms | **10 plans: First Semester 5, Second Semester 5** |
 | TSV rows | **219** |
 | Total Note placements (excluding Excluded) | **211** |
-| Reuse | **210** |
-| New | **1** (Counting, approved; authoring brief only, not created) |
+| Reuse | **211** |
+| New | **0** (the Counting Note was authored by the owner on 2026-11-05 from the draft body, id `7564b66c-9dd2-424f-b569-274ec6dd6d20`, and is now Reuse) |
 | Excluded | **8** (5 inherited from BSCS, 3 BSIT-specific, final) |
-| Expected counts from your message | 219 rows / 210 Reuse / 1 New / 8 Excluded: **matches, no discrepancy** |
+| Counts before the Counting Note was created | 219 rows / 210 Reuse / 1 New / 8 Excluded (matched your expected figures); now 219 / 211 / 0 / 8 |
 
-**Verification tiers over the 210 Reuse placements (unchanged, no new evidence):**
+**Verification tiers over the 211 Reuse placements:**
 
 | Tier | Count |
 |---|---|
-| Content-verified (full body read by this session) | 5 |
+| Content-verified (full body read by this session; includes the new Counting Note) | 6 |
 | Metadata-ready (bodies not re-inspected for BSIT) | 176 |
 | Reviewed, owner-approved for tagging (read in full by this session and by an independent GPT blind review; the owner included all 29, including the 3 GPT recommended holding) | 29 |
 
-210 Reuse rows are **not** 210 fully content-verified Notes. By status the Reuse share is 210 of 211 (99.5%).
+211 Reuse rows are **not** 211 fully content-verified Notes. Only 6 are.
 
 ## Update 2026-11-05: the 29 conditional Notes
 - Read in full by this session and independently by a GPT blind review (recommendation: 26 PASS, 3 HOLD: Notes 14, 18, 22). I corrected one of my own pre-read concerns (Note 8's soundness; the Quick Recall defines it).
 - **Owner (curator) decision: include and tag all 29**, rule "include them if they give value to the study plan". The 29 rows in the TSV and workbook now show `+Information Technology`; they are no longer "conditional".
 - New file `bsit-year1-dm-it-applicability.sql` (RUN by the owner 2026-11-05 08:12:46Z, verified; see the production-state section below): exact ids and titles, idempotent, rollback included, STEP 0 guards re-read against production (29 of 29 match, none tagged). Note 9 is a separate statement you can strike.
 - Known limitations (not fixed, a separate decision because BSCS uses these canonical Notes): Note 22's Q5 uses Theta notation the Note never defines; Notes 14 and 18 carry intro-plus depth; Notes 8, 9 and 24 carry moderate extra depth.
-- Verification tiers are now: 5 content-verified, 29 reviewed and owner-approved, 176 metadata-ready (210 Reuse).
+- Verification tiers are now: 6 content-verified (incl. the Counting Note), 29 reviewed and owner-approved, 176 metadata-ready (211 Reuse).
 
 ## Production state after the owner's SQL runs (verified read-only, 2026-11-05)
 - **GE:** the 3 Notes now have 8 programs each (Computer Science and Information Technology added; the six Education programs kept).
 - **Discrete Mathematics:** 31 of the 34 Discrete Structures I Notes carry Information Technology (the 29 in `bsit-year1-dm-it-applicability.sql` plus Boolean Algebra and Digital Logic and Mathematical Induction from `bsit-year1-dm-it-applicability-2-notes.sql`). The 3 held-out Notes (Strong Induction; Proving Program Correctness; Logic in Programming and Software Specifications) are untagged and untouched.
 - **Across the 213 Notes in the BSCS Year:** 210 carry Information Technology; the 3 without it are exactly the held-out ones. Production now matches the BSIT shaping TSV on Applicable Programs.
 - All three SQL files are now headed RUN and verified, with their commit timestamps (GE 08:10:56Z, 29 Notes 08:12:46Z, 2 Notes 08:16:31Z, all 2026-11-05, read from `note_course_program.created_at`). They are idempotent and kept as a record: do not re-run. Any remaining "prepared, not run" wording in this folder is stale.
+
+## Update 2026-11-05: the Counting Note exists
+- Created by the owner from `authored-bodies/counting-sum-and-product-rules-permutations-and-combinations.md` at 10:08:38Z. Id `7564b66c-9dd2-424f-b569-274ec6dd6d20`. Verified read-only: Subject Discrete Mathematics, Domain Context COMPUTING, Authored Depth COLLEGE, Applicable Programs Computer Science and Information Technology (exactly the TSV), body length 3,552 (identical to the draft), 1 Study Pack, in 0 collections, 1 Note with that title.
+- **Study Pack review (5 items, against the body):** all five items are correct and supported by the body (sum rule, product rule with 2^5=32, permutations when order matters, the NOT-correct item on combinations, and repetition). No quiz item tests untaught material. Coverage note: none asks for a numeric C(n,r) or P(n,r) computation; that is a limitation, not a defect.
+- **Open:** visibility is PRIVATE; the 34 existing Discrete Mathematics Notes are PUBLIC. Set it to PUBLIC before it joins a public plan.
+- The shaping TSV row changed from New to Reuse with this id (D-40 precedent); workbook regenerated; TSV-to-workbook parity passed.
 
 ## Decisions closed
 - **Q8:** one New Note, "Counting: Sum and Product Rules, Permutations and Combinations", in a `Counting Principles` section after Functions and Sequences. Shared computing knowledge; not added to the BSCS Year. Not a CHED claim (MS101 outcomes unreadable).
@@ -48,7 +54,7 @@ All remaining curriculum decisions (Q8, S-1 to S-3, S-7) are owner-approved and 
 
 ## Validation results (all run against the final files)
 - PASS headers and column order identical to the BSCS shaping TSV.
-- PASS 219 rows = 210 Reuse / 1 New / 8 Excluded.
+- PASS 219 rows = 211 Reuse / 0 New / 8 Excluded (re-run 2026-11-05 after the Counting Note was created).
 - PASS no new Subject or Domain Context values; Applicable Programs use catalog values, none blank, serialized alphabetically.
 - PASS one name, term and description per plan; terms 5 plus 5.
 - PASS sections contiguous and nonempty; Counting Principles sits after Functions and Sequences and before Proof Techniques; held-out section last.

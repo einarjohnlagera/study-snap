@@ -1,4 +1,4 @@
-Status: Phase B final shaping, 2026-11-03. AUTHORING SPECIFICATION ONLY. The Note has not been created or generated. NOT implementation-ready.
+Status: Phase B final shaping, 2026-11-03; updated 2026-11-05: the Note was CREATED by the owner on 2026-11-05 (id 7564b66c-9dd2-424f-b569-274ec6dd6d20) from the draft in authored-bodies/. This file remains the specification. NOT implementation-ready.
 
 # Authoring brief: Counting: Sum and Product Rules, Permutations and Combinations
 
