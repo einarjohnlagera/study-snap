@@ -26,6 +26,9 @@ All remaining curriculum decisions (Q8, S-1 to S-3, S-7) are owner-approved and 
 
 211 Reuse rows are **not** 211 fully content-verified Notes. Only 6 are.
 
+## Update 2026-11-05: the marker was removed
+- By owner decision the shaping TSV and workbook were renamed `bsit-year1-shaping.tsv` and `bsit-year1-study-plan-target-shape.xlsx` (no `preliminary`, no `NOT-IMPLEMENTATION-READY`), the BSCS pattern (BSCS D-38). Rationale: every row has a determined placement, status, Subject, Domain Context and Applicable Programs; what remains is verification and the collection build, not specification. Older text in this folder that names the old file names or says "not implementation-ready" predates this.
+
 ## Update 2026-11-05: the 29 conditional Notes
 - Read in full by this session and independently by a GPT blind review (recommendation: 26 PASS, 3 HOLD: Notes 14, 18, 22). I corrected one of my own pre-read concerns (Note 8's soundness; the Quick Recall defines it).
 - **Owner (curator) decision: include and tag all 29**, rule "include them if they give value to the study plan". The 29 rows in the TSV and workbook now show `+Information Technology`; they are no longer "conditional".
@@ -66,7 +69,7 @@ All remaining curriculum decisions (Q8, S-1 to S-3, S-7) are owner-approved and 
 - **Exceptions:** none open. Not verifiable here: Study Pack quality; the bodies of 205 of 210 Notes; CHED MS101 outcomes.
 
 ## Files changed in this pass
-Updated: the TSV and generated workbook (`docs/curriculum/…NOT-IMPLEMENTATION-READY`), the proposed journey, decision log, reuse impact report, Discrete Mathematics assessment, curator checklist, reuse-ID manifest, and this handoff. New: `bsit-year1-counting-note-authoring-brief.md` and `bsit-year1-curator-verification-manifest-conditional-29.tsv` (all review columns blank; no review has been performed). Uncommitted in the `docs/bsit-year1` worktree on top of `018b4c7d`.
+Updated: the TSV and generated workbook (`docs/curriculum/bsit-year1-shaping.tsv` and `bsit-year1-study-plan-target-shape.xlsx`), the proposed journey, decision log, reuse impact report, Discrete Mathematics assessment, curator checklist, reuse-ID manifest, and this handoff. New: `bsit-year1-counting-note-authoring-brief.md` and `bsit-year1-curator-verification-manifest-conditional-29.tsv` (all review columns blank; no review has been performed). Uncommitted in the `docs/bsit-year1` worktree on top of `018b4c7d`.
 
 ## Remaining curator actions
 1. (Done 2026-11-05) The 29 Notes were reviewed twice; you approved including all of them. Remaining: none beyond the tag SQL run. Known limitations are recorded: Note 22's Q5 uses Theta notation the Note never defines; Notes 14 and 18 carry intro-plus depth; Notes 8, 9 and 24 carry moderate extra depth. Editing a canonical Note is a separate decision because BSCS uses them.

@@ -1,4 +1,4 @@
-Status: Phase B final shaping, updated 2026-11-05 after the independent review and the owner's inclusion decision. Counts are recomputed from the final TSV and the manifest from `docs/curriculum/bsit-year1-preliminary-shaping.NOT-IMPLEMENTATION-READY.tsv` and the exact-ID manifest. NOT implementation-ready.
+Status: Phase B final shaping, updated 2026-11-05 after the independent review and the owner's inclusion decision. Counts are recomputed from the final TSV and the manifest from `docs/curriculum/bsit-year1-shaping.tsv` and the exact-ID manifest. NOT implementation-ready.
 
 # BSIT Year 1: canonical reuse impact report
 

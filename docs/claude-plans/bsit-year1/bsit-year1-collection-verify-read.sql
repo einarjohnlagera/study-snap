@@ -2,6 +2,7 @@
 -- BSIT Year 1: read-only verification queries for the collection build
 -- Status: DRAFT, 2026-11-05. EVERY STATEMENT IS A SELECT. Nothing writes. Safe to run against production.
 -- Generated from the shaping TSV and the exact-ID manifest (211 expected placements, 8 excluded).
+-- The BSIT Year 1 root id (created 2026-11-05) is 94a89870-5522-47d5-b121-5b99b110adea; the queries below find it by exact title.
 -- Run order mirrors checklist section 8. Before the root exists, V1 returns no rows.
 -- ============================================================================
 
@@ -501,8 +502,9 @@ JOIN note_collection_items i ON i.collection_id = c.id
 JOIN notes n ON n.id = i.note_id
 WHERE r.title = '🖥️ BS Information Technology — 1st Year' AND r.parent_collection_id IS NULL;
 
--- V6: the existing private root "BSIT Semester Review" must stay as it is (4 children, PRIVATE, 0 direct items).
+-- V6: the OLD root (id 5d4cc820-ad2a-4ee2-9083-fe863bd3dc18) must again be titled "💻 BSIT Semester Review" with its 4 legacy children, PRIVATE.
+--     Expect title = the old name (NOT the Year 1 title), child_plans = 4, visibility PRIVATE. It must never be published as the Year.
 SELECT c.title, c.visibility, c.course_program,
        (SELECT count(*) FROM note_collections k WHERE k.parent_collection_id = c.id) AS child_plans
 FROM note_collections c
-WHERE c.title ILIKE '%BSIT Semester Review%' AND c.parent_collection_id IS NULL;
+WHERE c.id = '5d4cc820-ad2a-4ee2-9083-fe863bd3dc18';

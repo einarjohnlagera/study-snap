@@ -1,4 +1,4 @@
-Status: Phase B final shaping, 2026-11-03 (owner decisions Q1 to Q8, S-1 to S-3, S-7 incorporated). Preliminary curriculum shaping. NOT implementation-ready. No production writes, Note generation, Study Pack generation, collection creation or publication is authorized or has occurred. Source of truth for placements: `docs/curriculum/bsit-year1-preliminary-shaping.NOT-IMPLEMENTATION-READY.tsv`; counts below are read from it.
+Status: Phase B final shaping, 2026-11-03 (owner decisions Q1 to Q8, S-1 to S-3, S-7 incorporated). Specification complete (the files lost their NOT-IMPLEMENTATION-READY marker on 2026-11-05); the collection is not built yet. No production writes, Note generation, Study Pack generation, collection creation or publication is authorized or has occurred. Source of truth for placements: `docs/curriculum/bsit-year1-shaping.tsv`; counts below are read from it.
 
 # Proposed Study Journey: 🖥️ BS Information Technology — 1st Year
 
