@@ -11,7 +11,7 @@ Exact Note ids for every placement are in `bsit-year1-reuse-id-manifest.tsv` (co
 - [x] Q8 (Counting Note) was decided by the owner: approved. Authoring is a later, separately authorized step (`bsit-year1-counting-note-authoring-brief.md`).
 
 ## B. Discrete Mathematics: the 29 conditional Notes (owner-approved rubric)
-Record every review in `bsit-year1-curator-verification-manifest-conditional-29.tsv` (all review columns are blank; no review has been performed). **No Information Technology tag may be added to any of the 29 before individual curator approval.**
+Read the Notes and Study Packs in `bsit-year1-curator-review-pack-conditional-29.md` (full bodies, quizzes and a labelled Strategist pre-read; the pre-read is observation, not verification). Record every review in `bsit-year1-curator-verification-manifest-conditional-29.tsv` (all review columns are blank; no review has been performed). **No Information Technology tag may be added to any of the 29 before individual curator approval.**
 
 **A. Canonical equivalence.** The complete Note body transfers unchanged to a BSIT learner; its framing does not depend on BSCS-specific academic objectives; the explanation suits introductory college Discrete Mathematics; the Note needs no rewriting.
 **B. Prerequisites and depth.** A learner with foundational mathematics and introductory programming can follow it; advanced CS theory is not assumed; formal verification and loop invariants are not prerequisites; proof rigor is proportionate; algorithm or programming examples are illustrative, not required knowledge.
@@ -19,10 +19,10 @@ Record every review in `bsit-year1-curator-verification-manifest-conditional-29.
 **D. Disposition.** PASS (suitable unchanged; approve for the curator's proposed Information Technology update) · HOLD (uncertain or a specific problem; no tag yet; document the issue) · REPLACE / REINSTATE (the course needs knowledge the candidate does not provide; recommend a targeted new Note or reconsidering an excluded Note, with the coverage and prerequisite rationale).
 **E. Record per Note.** Exact production id, canonical title, Subject, Domain Context, Authored Depth, Applicable Programs, full-body result, Study Pack result or explicit absence, disposition, reviewer and date, brief justification, proposed metadata change.
 
-- [ ] All 29 reviewed and recorded. Do not promote any to content-verified because of the earlier screening.
+- [x] All 29 read in full by the Strategist and independently by GPT (recommendation: 26 PASS, 3 HOLD). Owner (curator) decision 2026-11-05: include and tag all 29. Results: `…conditional-29-GPT-BLIND-RESULT.tsv`; pack: `…review-pack-conditional-29.md`.
 - [ ] Confirm the two Strategist-read Notes (Boolean Algebra and Digital Logic; Mathematical Induction) as part of the same pass.
 - [ ] Check that no retained proof Note depends on loop invariants as a prerequisite (Proof by Contradiction, Proof by Cases and Counterexamples, Divisibility and Greatest Common Divisors mention invariants in passing).
-- [ ] Only after PASS decisions: approve a separate SQL adding Information Technology to exactly those Notes.
+- [ ] Run `bsit-year1-dm-it-applicability.sql` (owner): dry run, then COMMIT. Note 9 is a separate statement you can strike.
 - [ ] Obtain CHED MS101 outcomes or one BSIT Discrete Mathematics syllabus, or record the evidence limitation.
 
 ## C. Programming (73 Notes, Q1)

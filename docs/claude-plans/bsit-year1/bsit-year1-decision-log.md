@@ -39,6 +39,7 @@ Status: Phase B final shaping, 2026-11-03. NOT implementation-ready. Owner appro
 | S-4 | Boolean Algebra and Digital Logic and Mathematical Induction stay in the plan | Retained (Strategist proposal, not contested) |
 | S-6/S-7 | Discrete Mathematics plan description (final): "Build the mathematical foundations of computing through propositional and predicate logic, rules of inference, Boolean algebra, sets, relations, functions, sequences, integers and divisibility, elementary counting principles, and introductory proof techniques including mathematical induction. The emphasis is on understanding discrete mathematical concepts and reasoning that support further study in information technology." | APPROVED, applied identically in TSV, workbook and journey |
 | S-7 | Year description (final): see the journey document | APPROVED |
+| Curator review of the 29 DS Notes (2026-11-05) | Strategist full read (4 HOLD leans, later 3 after a self-correction: Note 8's soundness concern was wrong, the Quick Recall defines it) and an independent GPT blind review (26 PASS, 3 HOLD: 14, 18, 22). **Owner (curator) decision: include all 29 and tag them**, rule "include them if they give value to the study plan". Held Notes 14 Power Sets, Cartesian Products and Cardinality, 18 Partial Orders and 22 Sequences and Summations are kept as-is | APPROVED. Known limitations recorded: Note 22's Q5 uses Theta notation the Note never defines; 14 and 18 carry intro-plus depth (Cantor; lattices); 8, 24, 9 carry moderate extra depth. Fixing any means editing a canonical Note BSCS also uses: a separate owner decision |
 | Root title | Used with a space after the emoji, `🖥️ BS Information Technology — 1st Year`, matching the existing TSV and builder convention and decision Q6. The approved message wrote it without the space; no second variant was created | Recorded convention |
 
 The exclusions apply only to the BSIT Year 1 journey. They do not invalidate the Notes or change their canonical metadata, and they are not reinstated to improve the Reuse percentage.
@@ -49,7 +50,7 @@ The exclusions apply only to the BSIT Year 1 journey. They do not invalidate the
 |---|---|---|
 | + Computer Science, + Information Technology | 3 GE Notes | Owner runs the SQL after STEP 0 guards |
 | + Information Technology | 2 DS Notes fully read (Boolean Algebra and Digital Logic, Mathematical Induction) | Curator confirmation, then a separate SQL |
-| + Information Technology | 29 DS Notes screened but not fully read | **No tag before individual curator approval (PASS)**. Record per `bsit-year1-curator-verification-manifest-conditional-29.tsv` |
+| + Information Technology | 29 DS Notes, reviewed and owner-approved | `bsit-year1-dm-it-applicability.sql` (prepared, not run; Note 9 is a separate strikeable statement) |
 | none | 3 held-out DS Notes | n/a |
 | none | the new Counting Note (it is created with Computer Science and Information Technology at authoring, so it is not an update) | n/a |
 
