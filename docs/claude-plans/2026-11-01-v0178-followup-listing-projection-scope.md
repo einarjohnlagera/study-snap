@@ -320,3 +320,19 @@ A public note's URL contains a slug **derived from its title** (`/public/library
 | 3 | **Stage B production deployment is NOT approved.** The approval does not cover merging Stage B into `main`; the owner separately authorizes the final merge and the deployment. No unrelated backend, infrastructure, crawler, caching or UX change. |
 | 4 | **Risk decisions:** 1 conditionally accepted (the function limit must be verified, no assumed 300 s); 2 the Stage A 72 h read stays a required gate and the 256.4 MB memory reading must be judged as growth, plateau or insufficient evidence with no new hard stop; 3 accepted with documented limitations (junk slug walks, 15 s backoff, de-dup skip, the 90 s deadline is a ceiling and not a target, first-hour log responsibility assigned, 24-hour `main` freeze); 4 per-instance dilution accepted provisionally; 5 note-link prefetch fan-out a monitoring item only; 6 static guard limits accepted; 7 the HTTP 200 shell and unknown-subject behaviour accepted temporarily, L1 not reopened; **8 the creator and profile 300 s cache is a confirmed privacy defect: the deferral is accepted, the defect is not**; 9 production environment check required before deploy; 10 the ruleset workflow accepted, no bypass. |
 | 5 | **Unchanged:** every hard stop in the deploy plan, the Stage A gates, the `w10p` threshold, the 120 s TTL, the 90 s and 240 s deadlines (the latter provisional), the 15 s backoff, the `main` freeze and the rollback plan. Next phase is release readiness, not further feature development. |
+
+---
+
+# FINAL PRODUCT UX DECISIONS 6 (2026-11-05 to 2026-11-06): the 72-hour gate, the creator/profile fix and the order of work
+
+**Recorded by the Release Implementor session from decisions the owner relayed. Detail: `docs/claude-plans/2026-11-06-v0179-stage-a-72h-read-report.md`, `docs/claude-plans/2026-11-05-creator-profile-freshness-plan.md`, `docs/claude-plans/2026-11-04-price-decrease-release-brief.md`.**
+
+| # | Decision |
+|---|---|
+| 1 | **Product UX, Option C (2026-11-05): the formal Stage A 72-hour gate was NOT shortened.** Preparation was allowed (report, go/no-go template, deploy checklists, off-peak analysis); no merge of Stage B and no deploy before the checkpoint and the owner's separate explicit approval; no new criteria or memory thresholds; do not infer peak memory from hourly samples. |
+| 2 | **The checkpoint was read 2026-11-06T10:56:40Z and PASSED** (H1, H2, H3). The report records one finding that bears on Stage B: a 15-minute memory sample of 265.5 MB (98.9%) during an ordinary burst, with no kill, which makes the Stage B hard stop's premise (highest ordinary reading 252.5 MB) out of date. The threshold is unchanged; Product UX and the owner decide whether to revisit it. |
+| 3 | **Creator and profile pages (owner, 2026-11-05): Option B, the 120 s hard-TTL single-flight cache, accepted; the defect row's wording widened** (bio, content and summary previews, tags and the profile's private toggle, not only titles). Order: Stage B, then this fix, then the price release, each at least 24 hours apart. |
+| 4 | **Price decrease (owner, 2026-11-04):** Plus ₱99 and Pro ₱149 (PH only); hide Pro yearly and the exam pass by flag; `INTRO-PH-*` vouchers stay inert; plain price without an end date; starts only after Stage B is signed off. |
+| 5 | **Correction recorded:** Web Analytics visitors are about 97% automated traffic (CN, HK, SG, US, MX desktop Chrome, no referrer), so Product UX's reading of 706 visitors as the "busiest real-visitor day" should read "busiest automated-traffic day". It did not change decision 1. |
+| 6 | **Still required for the Stage B deploy:** the owner's explicit approval with the wording in the report, a decision on every open docs PR before T0, a merge-forward and re-check of the stage branch, and the deploy-time checks. Nothing is approved or scheduled. |
+
