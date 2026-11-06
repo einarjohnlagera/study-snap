@@ -205,7 +205,7 @@ No evidence in the five curricula settles this (section 3). I do not decide it. 
 6. Read 20 to 30 of the 213 Note bodies for program-neutral framing; I read two.
 
 ## 11. Phase B (after your answers)
-TSV in `docs/curriculum/bsit-year1-preliminary-shaping.NOT-IMPLEMENTATION-READY.tsv` with `applicable_programs` on every row, workbook from the builder, Study Journey document, decision log and owner handoff, all under `docs/claude-plans/bsit-year1/` with Status headers. No ROADMAP row: the Release Implementor indexes it.
+TSV in `docs/curriculum/bsit-year1-shaping.tsv` with `applicable_programs` on every row, workbook from the builder, Study Journey document, decision log and owner handoff, all under `docs/claude-plans/bsit-year1/` with Status headers. No ROADMAP row: the Release Implementor indexes it.
 
 ## 12. Sources
 - CHED CMO 25 s.2015 (OCR mirror): https://archive.org/download/ched-bsis-bsit-bscs/CHED%20-%20BSIS%20BSIT%20BSCS_text.pdf
