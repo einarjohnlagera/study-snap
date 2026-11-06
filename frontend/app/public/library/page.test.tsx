@@ -21,19 +21,19 @@ describe("PublicLibrarySeoIndexPage", () => {
       title: "NoteLib Public Library – Free Study Notes, Summaries, and Quizzes",
       description: "Browse public study notes, summaries, and practice quizzes shared by the NoteLib community.",
       alternates: {
-        canonical: "https://notelib.app/public/library",
+        canonical: "https://www.notelib.app/public/library",
       },
       openGraph: expect.objectContaining({
         type: "website",
-        url: "https://notelib.app/public/library",
+        url: "https://www.notelib.app/public/library",
         siteName: "NoteLib",
         images: expect.arrayContaining([
-          expect.objectContaining({ url: "https://notelib.app/og-image-v2.png" }),
+          expect.objectContaining({ url: "https://www.notelib.app/og-image-v2.png" }),
         ]),
       }),
       twitter: expect.objectContaining({
         card: "summary_large_image",
-        images: ["https://notelib.app/og-image-v2.png"],
+        images: ["https://www.notelib.app/og-image-v2.png"],
       }),
     });
   });

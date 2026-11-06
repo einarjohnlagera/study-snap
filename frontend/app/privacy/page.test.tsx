@@ -16,7 +16,7 @@ describe("PrivacyPage", () => {
     expect(metadata).toMatchObject({
       title: "NoteLib Privacy Policy",
       alternates: {
-        canonical: "https://notelib.app/privacy",
+        canonical: "https://www.notelib.app/privacy",
       },
     });
   });

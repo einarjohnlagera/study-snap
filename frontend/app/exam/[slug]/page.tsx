@@ -32,7 +32,7 @@ import { getServerExamGoalCoursePrograms } from "@/lib/server-exam-goal-course-p
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import { buildCollectionPageStructuredData } from "@/lib/structured-data";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 type ExamHubPageProps = {
   params: Promise<{
@@ -157,6 +157,7 @@ function BrowseSubjectsSection({ subjects }: Readonly<{ subjects: BrowseSubjectE
           <Link
             key={subject}
             href={buildPublicLibrarySubjectPath(subject)}
+            prefetch={false}
             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 hover:text-blue-700 dark:hover:text-blue-300"
           >
             {subject}
@@ -166,13 +167,6 @@ function BrowseSubjectsSection({ subjects }: Readonly<{ subjects: BrowseSubjectE
       </div>
     </section>
   );
-}
-
-// ⚠️ DELIBERATELY EMPTY (v0.178.0 Step 0): prerendering the exam hubs fetched every exam program's catalog pages at
-// build time against the production API (about 125 requests). Hubs render on the first request and are cached by
-// `revalidate` above; an unknown slug still reaches `notFound()` below.
-export function generateStaticParams(): Array<{ slug: string }> {
-  return [];
 }
 
 export async function generateMetadata({ params }: ExamHubPageProps): Promise<Metadata> {

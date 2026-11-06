@@ -155,19 +155,19 @@ describe("PricingPage", () => {
       title: "NoteLib Pricing — Free, Plus, and Pro Plans",
       description: "A complete learning system, wherever you are in your studies. Start free, add guided study with Plus, or go all-in with Pro.",
       alternates: {
-        canonical: "https://notelib.app/pricing",
+        canonical: "https://www.notelib.app/pricing",
       },
       openGraph: expect.objectContaining({
         type: "website",
-        url: "https://notelib.app/pricing",
+        url: "https://www.notelib.app/pricing",
         siteName: "NoteLib",
         images: expect.arrayContaining([
-          expect.objectContaining({ url: "https://notelib.app/og-image-v2.png" }),
+          expect.objectContaining({ url: "https://www.notelib.app/og-image-v2.png" }),
         ]),
       }),
       twitter: expect.objectContaining({
         card: "summary_large_image",
-        images: ["https://notelib.app/og-image-v2.png"],
+        images: ["https://www.notelib.app/og-image-v2.png"],
       }),
     });
   });

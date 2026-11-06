@@ -1,5 +1,6 @@
 import {
   getServerPublicNoteCount,
+  getServerPublicNoteById,
   getServerPublicNotes,
   getServerPublicNotesByCourseProgramRecent,
   getServerPublicNotesByCoursePrograms,
@@ -7,8 +8,15 @@ import {
   getServerPublicNotesBySubjectSlug,
   getServerPublicNotesBySubjectSlugRecent,
 } from "./server-public-notes";
+import { CATALOG_FAILURE_BACKOFF_MS, CatalogBackoffError, CatalogDeadlineError, resetCatalogCacheForTests } from "./catalog-cache";
 
 const originalFetch = global.fetch;
+beforeEach(resetCatalogCacheForTests);
+afterEach(() => jest.restoreAllMocks());
+// Moves the wall clock past a failed key's backoff (cumulative: each call adds one more backoff).
+const advancePastBackoff = () => {
+  jest.spyOn(Date, "now").mockReturnValue(Date.now() + CATALOG_FAILURE_BACKOFF_MS);
+};
 
 describe("getServerPublicNoteCount", () => {
   afterEach(() => {
@@ -48,7 +56,7 @@ describe("getServerPublicNoteCount", () => {
     const nursingNote = { id: "nursing-note", courseProgram: "Nursing" };
     const response = {
       ok: true,
-      json: async () => ({ items: [nursingNote], total: 1 }),
+      json: async () => ({ items: [nursingNote], total: 1, hasMore: false }),
     };
     global.fetch = jest.fn().mockResolvedValue(response);
 
@@ -236,22 +244,271 @@ describe("public note fetches stay inside the 2MB data-cache limit", () => {
   });
 
   // Without this the loop would spin forever during a build against a backend that keeps claiming hasMore.
-  it("stops on an empty page even when the backend keeps claiming there is more", async () => {
+  it("rejects an empty page that claims there is more", async () => {
     global.fetch = jest.fn().mockResolvedValue(page([], true));
 
-    await expect(getServerPublicNotes()).resolves.toEqual([]);
+    await expect(getServerPublicNotes()).rejects.toThrow("Invalid public catalog response");
 
     expect((global.fetch as jest.Mock).mock.calls).toHaveLength(1);
   });
 
-  it("keeps what it has collected when a later page fails, rather than failing the build", async () => {
+  it("requires a boolean hasMore, but accepts an explicitly complete empty catalog", async () => {
     global.fetch = jest.fn()
-      .mockResolvedValueOnce(page(Array.from({ length: 250 }, (_, i) => ({ id: `note-${i}` })), true))
-      .mockResolvedValueOnce({ ok: false });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [], hasMore: "false" }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [], hasMore: null }) })
+      .mockResolvedValueOnce(page([], false));
+    for (let index = 0; index < 3; index++) {
+      advancePastBackoff();
+      await expect(getServerPublicNotes()).rejects.toThrow("Invalid public catalog response");
+    }
+    advancePastBackoff();
+    await expect(getServerPublicNotes()).resolves.toEqual([]);
+    expect(global.fetch).toHaveBeenCalledTimes(4);
+  });
 
-    const notes = await getServerPublicNotes();
+  it("completes on page 400 only with hasMore false and logs a guard breach otherwise", async () => {
+    const error = jest.spyOn(console, "error").mockImplementation();
+    global.fetch = jest.fn().mockImplementation((url: string) => Promise.resolve(page([{ id: new URL(url).searchParams.get("page") }], new URL(url).searchParams.get("page") !== "399")));
+    await expect(getServerPublicNotes()).resolves.toHaveLength(400);
+    expect(global.fetch).toHaveBeenCalledTimes(400);
+    resetCatalogCacheForTests();
+    global.fetch = jest.fn().mockResolvedValue(page([{ id: "note" }], true));
+    await expect(getServerPublicNotes()).rejects.toThrow("page guard");
+    expect(global.fetch).toHaveBeenCalledTimes(400);
+    expect(error).toHaveBeenCalledWith("CATALOG_WALK_GUARD_BREACH class=page entry=subject pages=400");
+    error.mockRestore();
+  });
 
-    expect(notes).toHaveLength(250);
+  it("does not cache empty subject walks or let 1,100 junk slugs evict a real subject", async () => {
+    const info = jest.spyOn(console, "info").mockImplementation();
+    const fetchMock = jest.fn().mockImplementation((url: string) => Promise.resolve(page(String(url).includes("subject=biology") ? [{ id: "real" }] : [], false)));
+    global.fetch = fetchMock;
+    await getServerPublicNotesBySubjectSlug("biology");
+    await getServerPublicNotesBySubjectSlug("junk-once");
+    await getServerPublicNotesBySubjectSlug("junk-once");
+    for (let index = 0; index < 1100; index++) await getServerPublicNotesBySubjectSlug(`junk-${index}`);
+    const calls = fetchMock.mock.calls.length;
+    await expect(getServerPublicNotesBySubjectSlug("biology")).resolves.toEqual([{ id: "real" }]);
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("subject=junk-once"))).toHaveLength(2);
+    info.mockRestore();
+  });
+
+  it("continues caching empty general, exam-hub and sitemap walks", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([], false));
+    await getServerPublicNotesBySubjectSlug("general");
+    await getServerPublicNotesBySubjectSlug("general");
+    await getServerPublicNotesByCoursePrograms(["Nursing"]);
+    await getServerPublicNotesByCoursePrograms(["Nursing"]);
+    await getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" });
+    await getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" });
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the first occurrence when a note repeats across a page boundary (a note published mid-walk shifts the offset)", async () => {
+    const info = jest.spyOn(console, "info").mockImplementation();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "a", title: "A first" }, { id: "b", title: "B first" }], true))
+      .mockResolvedValueOnce(page([{ id: "b", title: "B repeated" }, { id: "c", title: "C" }], false));
+    await expect(getServerPublicNotes()).resolves.toEqual([
+      { id: "a", title: "A first" },
+      { id: "b", title: "B first" },
+      { id: "c", title: "C" },
+    ]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(info).toHaveBeenCalledWith(expect.stringMatching(/CATALOG_WALK outcome=ok class=page entry=subject pages=2 notes=3 /));
+  });
+
+  it("de-duplicates the sitemap walk too, and keeps items that have no usable id", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "a" }, { title: "no id one" }], true))
+      .mockResolvedValueOnce(page([{ id: "a" }, { title: "no id two" }, { id: "z" }], false));
+    await expect(getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" })).resolves.toEqual([
+      { id: "a" },
+      { title: "no id one" },
+      { title: "no id two" },
+      { id: "z" },
+    ]);
+  });
+
+  it("aborts a stalled walk page at 15 seconds and logs only bounded fields", async () => {
+    jest.useFakeTimers();
+    const info = jest.spyOn(console, "info").mockImplementation();
+    global.fetch = jest.fn().mockImplementation((_url: string, options: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }));
+    try {
+      const pending = getServerPublicNotesBySubjectSlug("private-junk-slug");
+      const rejected = expect(pending).rejects.toThrow("aborted");
+      await jest.advanceTimersByTimeAsync(15_000);
+      await rejected;
+      expect(info).toHaveBeenCalledWith(expect.stringMatching(/^CATALOG_WALK outcome=error class=page entry=subject pages=0 notes=0 durationMs=\d+$/));
+      expect(info.mock.calls.flat().join(" ")).not.toContain("private-junk-slug");
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      info.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  it("ends a slow multi-page walk at 90 seconds even though each page takes less than 15", async () => {
+    jest.useFakeTimers();
+    const warn = jest.spyOn(console, "warn").mockImplementation();
+    const info = jest.spyOn(console, "info").mockImplementation();
+    global.fetch = jest.fn().mockImplementation(() => new Promise((resolve) => {
+      globalThis.setTimeout(() => resolve(page([{ id: "note" }], true)), 12_000);
+    }));
+    try {
+      const pending = getServerPublicNotes();
+      const rejected = expect(pending).rejects.toBeInstanceOf(CatalogDeadlineError);
+      await jest.advanceTimersByTimeAsync(90_000);
+      await rejected;
+      expect(global.fetch).toHaveBeenCalledTimes(8);
+      expect(warn).toHaveBeenCalledWith("CATALOG_CACHE_DEADLINE class=walk:page deadlineMs=90000");
+    } finally {
+      warn.mockRestore();
+      info.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  it("cuts a hung sitemap walk at its provisional 240-second deadline", async () => {
+    jest.useFakeTimers();
+    const warn = jest.spyOn(console, "warn").mockImplementation();
+    const info = jest.spyOn(console, "info").mockImplementation();
+    global.fetch = jest.fn().mockImplementation(() => new Promise(() => undefined));
+    try {
+      const pending = getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" });
+      const rejected = expect(pending).rejects.toBeInstanceOf(CatalogDeadlineError);
+      await jest.advanceTimersByTimeAsync(240_000);
+      await rejected;
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith("CATALOG_CACHE_DEADLINE class=walk:sitemap deadlineMs=240000");
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      warn.mockRestore();
+      info.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  it("rejects a later failed page and retries the whole walk instead of caching a partial catalog (e, h)", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "first" }], true))
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce(page([{ id: "new" }], false));
+    await expect(getServerPublicNotes()).rejects.toThrow("Could not load public catalog");
+    advancePastBackoff();
+    await expect(getServerPublicNotes()).resolves.toEqual([{ id: "new" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects malformed JSON and network failures without caching them", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => { throw new SyntaxError("bad JSON"); } })
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce(page([{ id: "healthy" }], false));
+    await expect(getServerPublicNotes()).rejects.toThrow("bad JSON");
+    advancePastBackoff();
+    await expect(getServerPublicNotes()).rejects.toThrow("network");
+    advancePastBackoff();
+    await expect(getServerPublicNotes()).resolves.toEqual([{ id: "healthy" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects a 200 response with no items array instead of ending the walk with a partial list (n)", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "first" }], true))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ error: "unexpected shape" }) })
+      .mockResolvedValueOnce(page([{ id: "healthy" }], false));
+    await expect(getServerPublicNotes()).rejects.toThrow("Invalid public catalog response");
+    advancePastBackoff();
+    await expect(getServerPublicNotes()).resolves.toEqual([{ id: "healthy" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry a failed walk for 15 s: it rejects with no fetch, then loads again", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce(page([{ id: "sitemap-class" }], false))
+      .mockResolvedValueOnce(page([{ id: "page-class" }], false));
+    await expect(getServerPublicNotes()).rejects.toThrow("Could not load public catalog");
+    await expect(getServerPublicNotes()).rejects.toBeInstanceOf(CatalogBackoffError);
+    // A different key (the sitemap class) is not blocked by the page-class failure.
+    await expect(getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" })).resolves.toEqual([{ id: "sitemap-class" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    advancePastBackoff();
+    await expect(getServerPublicNotes()).resolves.toEqual([{ id: "page-class" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("backs off the sitemap class after a failed sitemap walk and still never returns a short list", async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({ ok: false });
+    await expect(getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" })).rejects.toThrow("Could not load public catalog");
+    await expect(getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" })).rejects.toBeInstanceOf(CatalogBackoffError);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends allowlisted attribution only on walk misses, without Next fetch caching (g, i)", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([{ id: "note" }], false));
+    await getServerPublicNotes({ entry: "subject" });
+    await getServerPublicNotes({ entry: "exam-hub" }); // same query, same cache entry
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect((global.fetch as jest.Mock).mock.calls[0][1]).toMatchObject({
+      method: "GET", cache: "no-store", headers: { "X-NoteLib-Catalog-Walk": "subject" },
+    });
+    expect((global.fetch as jest.Mock).mock.calls[0][1].signal).toBeDefined();
+    await getServerPublicNotesByCoursePrograms(["Nursing"]);
+    expect((global.fetch as jest.Mock).mock.calls[1][1]).toMatchObject({
+      method: "GET", cache: "no-store", headers: { "X-NoteLib-Catalog-Walk": "exam-hub" },
+    });
+    await getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" });
+    expect((global.fetch as jest.Mock).mock.calls[2][1]).toMatchObject({
+      method: "GET", cache: "no-store", headers: { "X-NoteLib-Catalog-Walk": "sitemap" },
+    });
+  });
+
+  it("single-flights the entire paginated walk for concurrent metadata and page readers", async () => {
+    let releaseFirst!: () => void;
+    const firstPage = new Promise<ReturnType<typeof page>>((resolve) => {
+      releaseFirst = () => resolve(page([{ id: "first" }], true));
+    });
+    global.fetch = jest.fn().mockReturnValueOnce(firstPage).mockResolvedValueOnce(page([{ id: "second" }], false));
+    const metadataRead = getServerPublicNotesBySubjectSlug("biology");
+    const pageRead = getServerPublicNotesBySubjectSlug("biology");
+    await Promise.resolve();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    releaseFirst();
+    expect(await Promise.all([metadataRead, pageRead])).toEqual([
+      [{ id: "first" }, { id: "second" }],
+      [{ id: "first" }, { id: "second" }],
+    ]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps sitemap and page TTL classes separate", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([], false));
+    await getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" });
+    await getServerPublicNotes({ entry: "subject" });
+    await getServerPublicNotes({ ttlClass: "sitemap", entry: "sitemap" });
+    await getServerPublicNotes({ entry: "subject" });
+    expect((global.fetch as jest.Mock).mock.calls.map(([, options]) => options.headers["X-NoteLib-Catalog-Walk"])).toEqual(["sitemap", "subject"]);
+  });
+
+  it("keeps the count on the 300-second fetch while rails use uncached upstream reads without attribution", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([], false));
+    await getServerPublicNoteCount();
+    await getServerPublicNotesBySubject("Biology");
+    await getServerPublicNotesBySubjectSlugRecent("biology", 3);
+    await getServerPublicNotesByCourseProgramRecent("Nursing", 3);
+    const calls = (global.fetch as jest.Mock).mock.calls;
+    expect(calls).toHaveLength(4);
+    expect(calls[0][1]).toEqual({ method: "GET", next: { revalidate: 300 } });
+    calls.slice(1).forEach(([, options]) => {
+      expect(options).toMatchObject({ method: "GET", cache: "no-store" });
+      expect(options.signal).toBeDefined();
+    });
   });
 
   /**
@@ -382,5 +639,194 @@ describe("bounded, most-recent-first Public Note page rails (production-outage f
     await expect(getServerPublicNotesByCourseProgramRecent("Civil Engineering", 0)).resolves.toEqual([]);
 
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("public note rails use the page-class hard-TTL cache", () => {
+  const originalTtlOverride = process.env.NOTELIB_CATALOG_PAGE_TTL_MS;
+  let now = 0;
+
+  const page = (items: unknown[]) => ({
+    ok: true,
+    json: async () => ({ items, total: items.length }),
+  });
+
+  beforeEach(() => {
+    now = 0;
+    jest.spyOn(Date, "now").mockImplementation(() => now);
+    delete process.env.NOTELIB_CATALOG_PAGE_TTL_MS;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+    if (originalTtlOverride === undefined) delete process.env.NOTELIB_CATALOG_PAGE_TTL_MS;
+    else process.env.NOTELIB_CATALOG_PAGE_TTL_MS = originalTtlOverride;
+  });
+
+  it("caches each rail inside 120 s and refetches at the boundary without returning the old list", async () => {
+    const oldNote = { id: "old", title: "Withdrawn title", excerpt: "Withdrawn excerpt" };
+    const newNote = { id: "new", title: "Current title", excerpt: "Current excerpt" };
+    global.fetch = jest.fn().mockResolvedValueOnce(page([oldNote])).mockResolvedValueOnce(page([newNote]));
+
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([oldNote]);
+    now = 119_999;
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([oldNote]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    now = 120_000;
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([newNote]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect((global.fetch as jest.Mock).mock.calls[0][1]).toMatchObject({ method: "GET", cache: "no-store" });
+  });
+
+  it("clamps a raised page TTL override for rails to 120 s", async () => {
+    process.env.NOTELIB_CATALOG_PAGE_TTL_MS = "999999";
+    global.fetch = jest.fn().mockResolvedValueOnce(page([{ id: "old" }])).mockResolvedValueOnce(page([{ id: "new" }]));
+
+    await getServerPublicNotesBySubject("Biology");
+    now = 120_000;
+    await expect(getServerPublicNotesBySubject("Biology")).resolves.toEqual([{ id: "new" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns an empty rail after a failed expired refresh and retries instead of caching the failure", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "withdrawn", title: "Withdrawn title" }]))
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce(page([{ id: "replacement" }]));
+
+    await expect(getServerPublicNotesByCourseProgramRecent("Nursing", 4)).resolves.toEqual([{ id: "withdrawn", title: "Withdrawn title" }]);
+    now = 120_000;
+    await expect(getServerPublicNotesByCourseProgramRecent("Nursing", 4)).resolves.toEqual([]);
+    now = 120_000 + CATALOG_FAILURE_BACKOFF_MS;
+    await expect(getServerPublicNotesByCourseProgramRecent("Nursing", 4)).resolves.toEqual([{ id: "replacement" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("returns empty, uncached rails for malformed JSON, missing items, non-OK, and network errors", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => { throw new SyntaxError("bad JSON"); } })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 1 }) })
+      .mockResolvedValueOnce({ ok: false })
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce(page([{ id: "recovered" }]));
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await expect(getServerPublicNotesBySubject("Physics")).resolves.toEqual([]);
+      now += CATALOG_FAILURE_BACKOFF_MS;
+    }
+    await expect(getServerPublicNotesBySubject("Physics")).resolves.toEqual([{ id: "recovered" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(5);
+  });
+
+  it("returns an empty uncached rail after its 10-second request timeout", async () => {
+    jest.useFakeTimers();
+    global.fetch = jest.fn().mockImplementationOnce((_url: string, options: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    })).mockResolvedValueOnce(page([{ id: "fresh" }]));
+    try {
+      const pending = getServerPublicNotesBySubject("Biology");
+      const result = expect(pending).resolves.toEqual([]);
+      await jest.advanceTimersByTimeAsync(10_000);
+      await result;
+      await jest.advanceTimersByTimeAsync(CATALOG_FAILURE_BACKOFF_MS);
+      await expect(getServerPublicNotesBySubject("Biology")).resolves.toEqual([{ id: "fresh" }]);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("returns an empty rail at the whole-load deadline when fetch ignores abort", async () => {
+    jest.useFakeTimers();
+    const warn = jest.spyOn(console, "warn").mockImplementation();
+    global.fetch = jest.fn().mockImplementationOnce(() => new Promise(() => undefined))
+      .mockResolvedValueOnce(page([{ id: "fresh" }]));
+    try {
+      const pending = getServerPublicNotesBySubject("Biology");
+      const result = expect(pending).resolves.toEqual([]);
+      await jest.advanceTimersByTimeAsync(90_000);
+      await result;
+      await jest.advanceTimersByTimeAsync(CATALOG_FAILURE_BACKOFF_MS);
+      await expect(getServerPublicNotesBySubject("Biology")).resolves.toEqual([{ id: "fresh" }]);
+      expect(warn).toHaveBeenCalledWith("CATALOG_CACHE_DEADLINE class=rail deadlineMs=90000");
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    } finally {
+      warn.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  it("returns an empty rail without calling the backend for 15 s after a failed rail read", async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce(page([{ id: "later" }]));
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([]);
+    now = CATALOG_FAILURE_BACKOFF_MS - 1;
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    now = CATALOG_FAILURE_BACKOFF_MS;
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([{ id: "later" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("single-flights 10 concurrent cold rail reads", async () => {
+    let resolveFetch!: (response: ReturnType<typeof page>) => void;
+    const pending = new Promise<ReturnType<typeof page>>((resolve) => { resolveFetch = resolve; });
+    global.fetch = jest.fn().mockReturnValue(pending);
+
+    const reads = Array.from({ length: 10 }, () => getServerPublicNotesBySubjectSlugRecent("biology", 6));
+    await Promise.resolve();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    resolveFetch(page([{ id: "shared" }]));
+    expect(await Promise.all(reads)).toEqual(Array(10).fill([{ id: "shared" }]));
+  });
+
+  it("single-flights 10 failed expired rail reads, returning empty to every waiter", async () => {
+    let rejectFetch!: (error: Error) => void;
+    const pending = new Promise<ReturnType<typeof page>>((_, reject) => { rejectFetch = reject; });
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page([{ id: "withdrawn" }]))
+      .mockReturnValueOnce(pending)
+      .mockResolvedValueOnce(page([{ id: "recovered" }]));
+
+    await getServerPublicNotesBySubjectSlugRecent("biology", 6);
+    now = 120_000;
+    const reads = Array.from({ length: 10 }, () => getServerPublicNotesBySubjectSlugRecent("biology", 6));
+    await Promise.resolve();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    rejectFetch(new Error("network"));
+    expect(await Promise.all(reads)).toEqual(Array(10).fill([]));
+    now = 120_000 + CATALOG_FAILURE_BACKOFF_MS;
+    await expect(getServerPublicNotesBySubjectSlugRecent("biology", 6)).resolves.toEqual([{ id: "recovered" }]);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps 600 distinct small rail keys resident within the TTL", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page([{ id: "one" }]));
+
+    for (let index = 0; index < 600; index += 1) {
+      await getServerPublicNotesBySubjectSlugRecent(`subject-${index}`, 6);
+    }
+    for (let index = 0; index < 600; index += 1) {
+      await getServerPublicNotesBySubjectSlugRecent(`subject-${index}`, 6);
+    }
+    expect(global.fetch).toHaveBeenCalledTimes(600);
+  });
+
+  it("keeps the homepage count on the 300 s fetch cache with null failures and direct notes no-store", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ total: 7 }) })
+      .mockRejectedValueOnce(new Error("count unavailable"))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ id: "first" }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ id: "second" }) });
+
+    await expect(getServerPublicNoteCount()).resolves.toBe(7);
+    await expect(getServerPublicNoteCount()).resolves.toBeNull();
+    await expect(getServerPublicNoteById("same")).resolves.toEqual({ id: "first" });
+    await expect(getServerPublicNoteById("same")).resolves.toEqual({ id: "second" });
+    const calls = (global.fetch as jest.Mock).mock.calls;
+    expect(calls).toHaveLength(4);
+    expect(calls.slice(0, 2).map(([, options]) => options)).toEqual(Array(2).fill({ method: "GET", next: { revalidate: 300 } }));
+    expect(calls.slice(2).map(([, options]) => options)).toEqual(Array(2).fill({ method: "GET", cache: "no-store" }));
   });
 });

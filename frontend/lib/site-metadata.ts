@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const SITE_NAME = "NoteLib";
-export const SITE_URL = "https://notelib.app";
+export const SITE_URL = "https://www.notelib.app";
 // Versioned filename on purpose. Facebook, LinkedIn and X cache Open Graph images by URL and can
 // serve a stale copy for weeks; X has no public re-scrape tool. Overwriting og-image.png in place
 // would leave every previously-scraped link showing the old card. Bump the version to force a

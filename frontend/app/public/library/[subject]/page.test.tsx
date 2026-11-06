@@ -1,13 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import SubjectLandingPage, { generateMetadata, generateStaticParams } from "./page";
-import { getServerPublicNotesBySubjectSlug, getServerPublicSubjectSlugs } from "@/lib/server-public-notes";
+import { Suspense } from "react";
+import SubjectLandingPage, { dynamic, generateMetadata } from "./page";
+import { SubjectListingContent } from "./subject-listing-content";
+import { PublicListingSkeleton } from "@/components/public-page-skeleton";
+import { getServerPublicNotesBySubjectSlug } from "@/lib/server-public-notes";
 import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
 import type { NoteListItemResponse } from "@/lib/api";
 
 jest.mock("@/lib/server-public-notes", () => ({
   ...jest.requireActual("@/lib/server-public-notes"),
   getServerPublicNotesBySubjectSlug: jest.fn(),
-  getServerPublicSubjectSlugs: jest.fn(),
 }));
 
 type TestNote = NoteListItemResponse & { slug: string };
@@ -76,15 +78,28 @@ const subjectNotes = [
 describe("SubjectLandingPage", () => {
   beforeEach(() => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockReset();
-    (getServerPublicSubjectSlugs as jest.Mock).mockReset();
     window.sessionStorage.clear();
   });
 
-  // ⚠️ v0.178.0 Step 0: the list is deliberately empty. Prerendering every public subject made each production build
-  // walk the catalog against the production API; pages now render on the first request and are cached.
-  it("generates no static params and makes no backend call, so a build never walks the catalog", () => {
-    expect(generateStaticParams()).toEqual([]);
-    expect(getServerPublicSubjectSlugs).not.toHaveBeenCalled();
+  it("renders dynamically and rejects a failed walk for both metadata and page", async () => {
+    expect(dynamic).toBe("force-dynamic");
+    const error = new Error("walk failed");
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockRejectedValue(error);
+    const props = { params: Promise.resolve({ subject: "biology" }) };
+    await expect(generateMetadata(props)).rejects.toBe(error);
+    await expect(SubjectListingContent({ subject: "biology" })).rejects.toBe(error);
+  });
+
+  it("returns a Suspense shell with the skeleton fallback and does not walk the catalog itself", async () => {
+    const props = { params: Promise.resolve({ subject: "biology" }) };
+    const element = await SubjectLandingPage(props) as unknown as {
+      type: unknown;
+      props: { fallback: { type: unknown }; children: { type: unknown; props: unknown } };
+    };
+    expect(element.type).toBe(Suspense);
+    expect(element.props.fallback.type).toBe(PublicListingSkeleton);
+    expect(element.props.children.type).toBe(SubjectListingContent);
+    expect(element.props.children.props).toEqual({ subject: "biology" });
     expect(getServerPublicNotesBySubjectSlug).not.toHaveBeenCalled();
   });
 
@@ -97,7 +112,7 @@ describe("SubjectLandingPage", () => {
 
     expect(metadata.title).toBe("Free Biology Reviewer Notes & Practice Quizzes | NoteLib");
     expect(metadata.description).toContain("Biology");
-    expect(metadata.alternates?.canonical).toBe("https://notelib.app/public/library/biology");
+    expect(metadata.alternates?.canonical).toBe("https://www.notelib.app/public/library/biology");
   });
 
   it("marks a thin subject page noindex when it has fewer notes than the depth threshold", async () => {
@@ -128,7 +143,7 @@ describe("SubjectLandingPage", () => {
   it("renders ranked subject sections and canonical note links", async () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue(subjectNotes);
 
-    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+    render(await SubjectListingContent({ subject: "biology" }));
 
     expect(screen.getByRole("link", { name: "← Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByRole("heading", { name: "Biology" })).toBeInTheDocument();
@@ -148,7 +163,7 @@ describe("SubjectLandingPage", () => {
   it("saves this subject-landing page as the Public Library return URL when a note card is clicked", async () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue(subjectNotes);
 
-    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+    render(await SubjectListingContent({ subject: "biology" }));
 
     expect(window.sessionStorage.getItem(PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY)).toBeNull();
     fireEvent.click(screen.getByRole("link", { name: /Cell Structure/ }));
@@ -158,7 +173,7 @@ describe("SubjectLandingPage", () => {
   it("does not repeat notes across sections", async () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue(subjectNotes);
 
-    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+    render(await SubjectListingContent({ subject: "biology" }));
 
     expect(screen.getAllByText("Cell Structure")).toHaveLength(1);
     expect(screen.getAllByText("Genetics Basics")).toHaveLength(1);
@@ -186,7 +201,7 @@ describe("SubjectLandingPage", () => {
       }),
     ]);
 
-    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+    render(await SubjectListingContent({ subject: "biology" }));
 
     // Note preview wins when it clears the minimum length — the summary never shows alongside it.
     expect(screen.getByText("A concise public note preview about biology.")).toBeInTheDocument();
@@ -200,7 +215,7 @@ describe("SubjectLandingPage", () => {
   it("renders an empty state when no notes match the subject slug", async () => {
     (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([]);
 
-    render(await SubjectLandingPage({ params: Promise.resolve({ subject: "biology" }) }));
+    render(await SubjectListingContent({ subject: "biology" }));
 
     expect(screen.getByText("No notes yet for this subject.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "← Browse all subjects" })).toHaveAttribute("href", "/public/library");
