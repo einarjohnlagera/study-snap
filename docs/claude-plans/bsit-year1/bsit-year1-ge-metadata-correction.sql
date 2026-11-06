@@ -1,6 +1,9 @@
 -- ============================================================================
 -- BSIT Year 1: Applicable Programs correction for 3 GE Notes (Q3)
--- Status: PREPARED, NOT RUN. Prepared 2026-11-03 by the Note Strategist session.
+-- Status: RUN by the owner and VERIFIED read-only (SELECT) on 2026-11-05. Kept as a RECORD; idempotent, but DO NOT RE-RUN.
+--   Committed 2026-11-05 08:10:56Z (6 note_course_program rows: 3 Notes x Computer Science and
+--   Information Technology). Verified: each of the 3 Notes now has 8 programs. Prepared 2026-11-03 by the
+--   Note Strategist session.
 -- THE OWNER EXECUTES THIS. (CLAUDE.md: production writes are owner-only.)
 --
 -- WHAT IT DOES
