@@ -39,7 +39,7 @@ Related: the release plan `docs/claude-plans/2026-11-01-v0178-followup-listing-p
 | The merge path for the final PR into `main` (the `require_extra_approval_for_unattributed_changes` ruleset parameter blocked #1557) | PENDING owner |
 | No non-deploy kill in the 24 hours before the deploy (the section 5 rule, applied because Stage B changes the database load pattern) | check at deploy time |
 | Verified rollback target and an assigned person for first-hour log collection (Hobby keeps runtime logs 1 hour) | **Log owner DONE 2026-11-04: Claude, at +10, +30, +45 and +55 minutes.** Rollback target still PENDING: the production deployment current at T0 minus 1 (it was `dpl_81NyiV59QtAqGtAJo1GUdDvFmTa1` on 2026-11-06 and changes with every `main` merge) |
-| **Every open docs PR is merged or held BEFORE T0** (on Hobby any `main` merge after the deploy removes the one-step rollback target) | PENDING: #1562 to #1568 were open on 2026-11-06 |
+| **Every open docs PR is merged or held BEFORE T0** (on Hobby any `main` merge after the deploy removes the one-step rollback target) | PENDING: eight separate docs PRs (#1562 to #1569) were open on 2026-11-06 and have been consolidated into ONE docs PR; that PR is the only one to decide |
 | A recent database backup | Owner's call. Stage B writes nothing and changes no schema, so none is required by the change; the 2026-11-03 13:09 backup exists. Recommended anyway if the owner wants the same posture as Stage A |
 
 ## 2b. Product UX final sign-off (received 2026-11-04), recorded verbatim in substance
