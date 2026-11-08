@@ -115,3 +115,11 @@ Sign-off per `.claude/commands/signoff.md`: release notes file `docs/releases/v0
 - **Owner:** approves the deploy; merges the stack and the final PR; reads the platform limit; decides the off-peak time and whether to take a backup; runs any rollback; holds the `main` freeze; may run the smoke GETs.
 - **First-hour log collection (Product UX asked for an explicit owner of this):** the proposal is that Claude collects and saves the Vercel runtime-log excerpts at T0 plus 10 min, 30 min and 55 min of the first hour, because Hobby keeps logs for one hour only; **the owner confirms this assignment and must keep the session able to run in that hour, or names another person.** A checkpoint missed inside the hour cannot be recovered later.
 - **Claude (read-only):** the watch in sections 4 and 5, saving log excerpts within the hour, reporting every milestone, and telling the owner immediately if a hard stop fires. Claude does not merge, deploy, roll back, change environment variables or run a load test.
+
+## 10. Deploy record and status (2026-11-06 to 2026-11-08)
+- **Deployed:** PR #1571 merged 2026-11-06T15:55:02Z; T0 = 15:56:32Z (Vercel `dpl_3DYfi2WhryAmg8osG4wLtTBXKkN1` READY); slot chosen by the owner (near midnight PHT; the recommended slot was Saturday 05:00 PHT); rollback target `dpl_fZ7WPyhKuNpN4Tqs6faYqHz4Bvja`; first-hour logs saved at +10, +30, +45, +55 minutes as planned.
+- **+1 h:** clean; walk health not read (fewer than 10 page-class walks), extended.
+- **+24 h (2026-11-07T15:57:50Z):** PASSED as written; one item for Product UX (3 HTTP 503 in about two minutes, 8.3% of 36 requests in a five-minute window; section 5 wording "above 2% for 5 minutes" is ambiguous between a sustained and a window reading); highest memory sample 266.0 MB with a single reading above 260 MB, so the two-consecutive-reads stop did not fire. See `docs/claude-plans/2026-11-07-v0179-stage-b-24h-read-report.md`.
+- **Lesson for the watch plan:** a per-minute 5xx evaluation and 30-second memory samples around any reading above 250 MB are cheap and decisive; Vercel logs older than one hour are gone, so walk-side stops are verifiable only in the last hour of each check.
+- **Pending:** +72 h read 2026-11-09T15:56Z; Product UX's confirmation of the 503 reading; the `main` freeze ends only then.
+
