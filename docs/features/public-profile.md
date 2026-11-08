@@ -73,7 +73,7 @@ all of the creator's public notes. Only the union of ranked top-50 candidates is
 content and Study Pack summaries; Study Pack quiz JSON is never fetched for profile cards. The
 Public Library remains the place to browse every note. Learning Focus uses the separate grouped
 label read, since it describes the full catalog rather than just the ranked cards. Server-rendered
-profile reads retain their 300-second ISR cache and the client refresh remains owner-only.
+profile reads go through the 120-second hard-TTL `profile` partition of the catalog cache (`lib/server-public-profiles.ts`; no 300-second ISR cache, no stale fallback after expiry or failure, see `public-library.md`) and the client refresh remains owner-only.
 
 Portfolio polish:
 
