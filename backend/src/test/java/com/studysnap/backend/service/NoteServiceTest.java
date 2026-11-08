@@ -40,6 +40,7 @@ import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.PublicLibraryRankingSnapshot;
 import com.studysnap.backend.repository.NoteShareRepository;
 import com.studysnap.backend.repository.NoteStatusProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
@@ -127,6 +128,24 @@ class NoteServiceTest {
     private StudyPackGenerationContextResolver studyPackGenerationContextResolver;
     private NoteService noteService;
     private final Map<UUID, NoteEntity> noteFixtures = new HashMap<>();
+
+    @Test
+    void rankedPageAndCountUseTheSameSnapshotGeneration() {
+        PublicLibraryRankingSnapshot generation = new PublicLibraryRankingSnapshot(42,
+                OffsetDateTime.now(), Map.of(), Map.of(), Map.of(), Map.of(), 1, 0);
+        when(noteRepository.countPublicLibraryRankedSnapshotMatches(any(), any(), eq(generation)))
+                .thenReturn(1L);
+        when(noteRepository.findPublicLibraryRankedSnapshotPageIds(any(), any(), any(), anyInt(),
+                anyInt(), eq(generation))).thenReturn(List.of());
+
+        var response = noteService.listPublic(null, null, "recommended", null, List.of(), null,
+                null, null, null, 0, 20, false, List.of(), generation);
+
+        assertThat(response.totalMatching()).isEqualTo(1);
+        verify(noteRepository).countPublicLibraryRankedSnapshotMatches(any(), any(), eq(generation));
+        verify(noteRepository).findPublicLibraryRankedSnapshotPageIds(any(), any(), any(), anyInt(),
+                anyInt(), eq(generation));
+    }
 
     @BeforeEach
     void setUp() {

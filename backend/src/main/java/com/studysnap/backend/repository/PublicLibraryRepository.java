@@ -31,6 +31,17 @@ public interface PublicLibraryRepository {
      */
     long countPublicLibraryRankedMatches(PublicLibraryFilterCriteria criteria, PublicLibrarySort sort);
 
+    PublicLibraryRankingSnapshot buildPublicLibraryRankingSnapshot(long generation, int maxNotes, int maxTagEntries);
+
+    long countPublicNotesForRankingSnapshot();
+
+    long countPublicLibraryRankedSnapshotMatches(PublicLibraryFilterCriteria criteria,
+            PublicLibrarySort sort, PublicLibraryRankingSnapshot snapshot);
+
+    List<UUID> findPublicLibraryRankedSnapshotPageIds(PublicLibraryFilterCriteria criteria,
+            PublicLibrarySort sort, OffsetDateTime rankedAt, int offset, int limit,
+            PublicLibraryRankingSnapshot snapshot);
+
     /**
      * Returns ONE bounded page of note ids in ranked order, ordered and limited by the database.
      *

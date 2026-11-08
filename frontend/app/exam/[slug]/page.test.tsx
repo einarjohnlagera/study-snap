@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import ExamHubPage, { generateMetadata, generateStaticParams } from "./page";
+import ExamHubPage, { dynamic, generateMetadata } from "./page";
 import { EXAM_HUBS, EXAM_HUB_SLUGS } from "@/lib/exam-hub-config";
 import { getServerPublicNotesByCoursePrograms } from "@/lib/server-public-notes";
 import { getServerPublicStudyPlansByCoursePrograms } from "@/lib/server-public-study-plans";
@@ -111,6 +111,19 @@ describe("ExamHubPage", () => {
     window.sessionStorage.clear();
   });
 
+  it("renders dynamically and rejects failed notes or plans without notFound", async () => {
+    expect(dynamic).toBe("force-dynamic");
+    const error = new Error("upstream failed");
+    const props = { params: Promise.resolve({ slug: "ale" }) };
+    (getServerPublicNotesByCoursePrograms as jest.Mock).mockRejectedValue(error);
+    await expect(ExamHubPage(props)).rejects.toBe(error);
+    expect(notFoundMock).not.toHaveBeenCalled();
+    (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue(sectionNotes);
+    (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockRejectedValue(error);
+    await expect(ExamHubPage(props)).rejects.toBe(error);
+    expect(notFoundMock).not.toHaveBeenCalled();
+  });
+
   it("defines exactly the configured exam hubs and course program aliases", () => {
     expect(EXAM_HUB_SLUGS).toEqual(["ale", "pnle", "let", "cpale", "ce"]);
     expect(EXAM_HUBS.ale.coursePrograms).toEqual(["Architecture"]);
@@ -127,7 +140,6 @@ describe("ExamHubPage", () => {
       "Teacher Certification",
     ]);
     expect(EXAM_HUBS.cpale.coursePrograms).toEqual(["Accountancy"]);
-    expect(generateStaticParams()).toEqual([{ slug: "ale" }, { slug: "pnle" }, { slug: "let" }, { slug: "cpale" }, { slug: "ce" }]);
   });
 
   it.each([
@@ -223,7 +235,7 @@ describe("ExamHubPage", () => {
 
     expect(metadata.title).toBe(title);
     expect(metadata.description).toContain(EXAM_HUBS[slug as keyof typeof EXAM_HUBS].description);
-    expect(metadata.alternates?.canonical).toBe(`https://notelib.app/exam/${slug}`);
+    expect(metadata.alternates?.canonical).toBe(`https://www.notelib.app/exam/${slug}`);
   });
 
   it("returns notFound for unknown slugs", async () => {

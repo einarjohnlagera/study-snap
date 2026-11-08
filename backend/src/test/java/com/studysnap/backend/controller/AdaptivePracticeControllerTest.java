@@ -393,7 +393,8 @@ class AdaptivePracticeControllerTest {
                 mock(com.studysnap.backend.service.GeneratedQuizService.class),
                 mock(com.studysnap.backend.service.QuizSessionHistoryService.class),
                 mock(com.studysnap.backend.repository.NoteRepository.class),
-                new StudySnapProperties()
+                new StudySnapProperties(),
+                null
         );
     }
 

@@ -6,6 +6,8 @@ Public Library is the public, canonical discovery surface for shared notes. It s
 
 `/public/library` remains self-canonical and emits the notes-only `NoteLib Public Library` `CollectionPage`. `/explore` is separately self-canonical with a distinct composite `CollectionPage` for Official Study Plans plus public notes. This is not duplicate ownership of one collection: Public Library owns the public-note route family, including subject and note-detail canonicals, while Explore describes the cross-source discovery page. No Public Library route redirects as part of Public Explore.
 
+As of `v0.179.0` Stage B2, public page canonicals, structured-data URLs, sitemap entries, and the `robots.txt` sitemap line use `https://www.notelib.app`. The apex redirects to `www` through Vercel; route paths and indexing rules are unchanged.
+
 Routes:
 
 - canonical list route for signed-in and signed-out users: `/public/library`
@@ -34,6 +36,16 @@ Shareable filter URLs:
 The generic filtered no-results state offers both `Clear filters` and `Remove last filter`. The latter removes only the most recently changed filter when known, falling back to clearing filters when there is no recoverable target.
 
 The More Filters sheet includes a `Study Pack Ready` boolean toggle. Applied state is sent as `readyOnly=true` to the paginated public-note endpoint, so readiness filtering happens before page selection and can be switched off to restore the full server-filtered list.
+
+## Temporary public API diagnostics (v0.178.0)
+
+As of `v0.179.0` Stage A2, anonymous `listing` requests count `X-NoteLib-Catalog-Walk` by exact, case-sensitive value: `sitemap`, `exam-hub`, or `subject`; any other present value, including empty, duplicated, or over 32 characters, is `other`; absent is `none`. The existing minute line appends `walk=[sitemap:N,exam-hub:N,subject:N,other:N,none:N]` after `cfConnectingIp`, preserving every earlier field and its order. The raw header value is never stored or logged. This is **client-asserted diagnostic metadata**: scripts can forge it, and it is never used for authorization, rate limiting, blocking, or any response decision. The CORS allowlist does not include this header. Until Stage B sends it, listing requests count as `none` and the other four slots remain zero.
+
+The backend records one `PUBLIC_API_DIAGNOSTICS` line per non-empty UTC minute for public GET/HEAD traffic, plus an OPTIONS count. The aggregate includes request and anonymous/authenticated counts, exact status and path-group histograms, query **names** with counts, top user agents and normalized listing tag slugs, distinct anonymous /24 or /48 client networks, and the X-Forwarded-For entry-count distribution (0, 1, 2, 3+) and presence counts for True-Client-IP and CF-Connecting-IP. A request with any Authorization header contributes only to the total, the status histogram and the per-minute rate that gates sampling. The client key is truncated True-Client-IP when present, otherwise truncated **leftmost** X-Forwarded-For; this key is possibly forgeable. The correct client-address header behind Render is still unverified.
+
+Only above 30 public GET/HEAD requests in a minute, at most 20 anonymous `PUBLIC_API_SAMPLE` lines contain the path group, sorted query names, a sanitized user agent, status, and labelled truncated True-Client-IP, first and last X-Forwarded-For entries, and remote address. IPv4 is truncated to /24 and IPv6 to /48 (an IPv4-mapped IPv6 address is reported as its IPv4 /24). Truncated addresses are **still personal data**. No raw query, search or other free-text value, token, cookie, request body, or full address is logged. Address truncation is done by string parsing only: a header value is never passed to a resolver, because a value like `x.attacker.example:1` is a host name to the JDK and would trigger a blocking DNS lookup. Every caller-controlled value in a line (user agent, parameter names, tag slugs) is sanitised and then double-quoted with escaping, so it cannot add or overwrite a field. Caller-controlled strings have control characters removed and fixed length limits (user agent 120, tag slug and query name 60).
+
+The hard per-minute bounds are 5,000 distinct client keys, 500 user-agent keys, 500 tag-slug keys, 100 query-parameter-name keys, top 10 entries per reported map, and 20 samples. Excess clients report `>=cap`; excess agents and tags count under `<other>`. The diagnostic defaults to enabled and has a **2026-11-12 review-by date**; that date is a reminder, not an automatic switch. Turning it off (`PUBLIC_API_DIAGNOSTICS_ENABLED=false`) requires a redeploy. Render service-log retention is 7, 14 or 30 days according to workspace plan; the workspace's current plan has not been verified, and the logs are not copied elsewhere. Access is limited to Render workspace members and Render MCP read tools. Remove this temporary diagnostic in the release after its client-address and caller-pattern question is answered.
 
 ## Key Files
 
@@ -75,7 +87,7 @@ a bounded ranked query per subject, which is not built.
 **Frontend**
 - `frontend/components/notes/public-library-page-client.tsx` — main public library client; filter state; discovery/filter mode switching; section rendering (Featured / Popular / Recent)
 - `frontend/app/public/library/page.tsx` — server component entry; passes `searchParams` to client
-- `frontend/app/public/library/[subject]/page.tsx` — SEO subject landing page (server-rendered, ISR 300s, `generateStaticParams`)
+- `frontend/app/public/library/[subject]/page.tsx` — SEO subject landing page: a Suspense shell (fallback: the text-free skeleton) around `subject-listing-content.tsx`, dynamic rendering over the 120 s hard-TTL catalog cache; no `generateStaticParams`, so a production build does not prerender subjects or call the production API
 - `frontend/lib/public-library-url.ts` — canonical URL model: `PublicLibraryUrlFilters` type, `buildPublicLibraryUrl()`, `parsePublicLibraryFilters()`; single source of truth for public library URL construction
 - `frontend/lib/public-library-discovery.ts` — frontend discovery scoring and section deduplication helpers
 - `frontend/lib/api.ts` — `listPublicNotes(params?)`, `getPublicNote(id)`, `togglePublicNoteLike(id)`
@@ -303,7 +315,7 @@ Facet suggestion scope after F8:
 - The non-paginated public-note contract used by Dashboard, SSR discovery, and sitemap-shaped callers applies that same rule. It enriches the existing entity order through the shared list-item projection before in-memory filtering/search, so join-only curator notes retain badges and discovery while personal notes retain the scalar fallback.
 - Public search matches joined catalog program names. The legacy course/program string remains searchable only for notes with no join rows, so an explicitly curated set can remove the authored legacy program from discovery.
 - Existing shareable URLs for catalog-excluded legacy values (for example `software-engineering`) continue resolving through the zero-join-row fallback. An unmatched slug continues to produce the ordinary empty state.
-- Cards summarise reach rather than listing it: one program is named, several render as `Applies to N programs`, and notes with no join rows summarise the legacy string identically. The list projection supplies the names in the page query; rendering does not fetch them per card. The identity row above the title is the Subject badge alone — see `library.md` for why per-name rendering was removed and should not be restored.
+- Cards summarise reach rather than listing it: one program is named, several render as `Applies to N programs`, and notes with no join rows summarise the legacy string identically. The list projection supplies sorted program names with a per-note lookup in the page query; rendering does not fetch them per card. Recent and Title first page the note ids inside that statement, then read the projection only for those notes. The identity row above the title is the Subject badge alone — see `library.md` for why per-name rendering was removed and should not be restored.
 - A note may contribute to several program facets, so those counts can exceed the note total; the filter panel no longer explains this (corrected in `v0.71.1`/M11 — the explainer sat under a dropdown rendering no counts). The panel now says *"A note can apply to several programs, so it appears under each one it serves."* The counts claim remains true of the data; it is simply no longer stated in the UI.
 - Selecting a Course / Program still filters results server-side after `Apply`, but it does not narrow the modal's draft Subject or Tag suggestion lists; those retain the complete facet set.
 - This intentionally removes the former client-only co-occurrence maps rather than introducing a disproportionate new co-occurrence endpoint.
@@ -347,7 +359,7 @@ Response shape:
 - The four pagination fields are nullable and omitted from legacy JSON responses.
 - In legacy mode, `items` contains the public notes after the current filters, sorting, and optional `size` clamp; `total` is captured after the DB-level creator and Authored Depth pre-filters but before in-memory `search`, `subject`, `tag`, and `courseProgram` filters.
 - In paginated mode, `items` is the requested enriched page and `totalMatching` is the post-filter count. `total` mirrors that count for response compatibility.
-- Server-side Public Library helpers unwrap `items` and continue returning `NoteListItemResponse[]` to static/SSR callers.
+- Server-side Public Library helpers unwrap `items` and continue returning `NoteListItemResponse[]` to their callers.
 
 Supported query params:
 
@@ -663,11 +675,11 @@ A non-interactive "More ways to study when you copy this note" block showing Cha
 
 ### J — Subject landing pages (shipped in v0.14.0)
 
-The `/public/library/[subject]` route is now a server-rendered subject landing page instead of a redirect. It ships with per-subject metadata, CollectionPage structured data, ISR at `300` seconds, and `generateStaticParams()` from `getServerPublicSubjects()`.
+The `/public/library/[subject]` route is now a dynamically server-rendered subject landing page instead of a redirect. It has per-subject metadata, CollectionPage structured data, and a 120 s hard-TTL catalog walk. It has no `generateStaticParams` hook, so no subject is prerendered at build time (see "Build-time catalog walks" below).
 
 Final implementation:
 
-- static, server-rendered discovery page; no client filters or anonymous session state
+- dynamic, server-rendered discovery page; no client filters or anonymous session state
 - subject label resolves from matching note metadata with a slug fallback
 - three ranked sections: Featured Notes, Most Popular, Recently Added
 - section ordering and deduplication reuse the existing discovery helpers: Featured first, Popular excludes Featured, Recent excludes both
@@ -685,3 +697,51 @@ When a user hits their Study Pack limit, the limit modal should offer the Public
   - Dynamic upgrade CTA from `getUpgradeCtas(currentPlan)` — navigates to `/settings?section=plans`.
 
 This fallback turns the limit hit into a *content-discovery* moment rather than a hard wall, especially valuable for Free users early in their study journey.
+
+## Build-time catalog walks (v0.178.0 Step 0)
+
+A Vercel production build can call the production API, and the old prerender hooks used to walk the catalog while a deploy was in progress (measured on a counting mock backend in `v0.178.0`: **393 backend requests per `next build`** to **1**). The current dynamic routes avoid those walks:
+
+- `/public/library/[subject]` has no `generateStaticParams` hook (`app/public/library/[subject]/page.tsx`). The empty hook from `v0.178.0` was removed when the route became dynamic: Next's build still labeled the route SSG while that hook existed.
+- `/exam/[slug]` has no `generateStaticParams` hook (`app/exam/[slug]/page.tsx`); the five hub slugs render dynamically on request and an unknown slug still reaches `notFound()`.
+- `app/sitemap.ts` exports `dynamic = "force-dynamic"`, so the sitemap is rendered on request; its catalog walk is bounded by the 1 h hard-TTL in-process cache, not by the build.
+
+The subject pages and exam hubs are also dynamic and use the same in-process cache with a separate 120 s class. The TTL starts when a whole walk begins; a hit is served only before that deadline. On expiry, the first request waits for a fresh whole walk, shared by concurrent readers. A load that reaches its deadline rejects for the first reader and every waiter, and neither returns nor caches its result; failed refreshes never fall back to expired data. A failed key (error, malformed reply or deadline) then rejects for 15 s without calling the backend and never serves data (a rail renders empty), because aborting a frontend request does not cancel the backend query and a fresh walk on every request would stack work on a slow database. Whole-load deadlines are 90 s for page-class walks, rails and plans, and a provisional 240 s for the sitemap, always clamped to the effective TTL. Each walk-page request has a 15 s timeout; rail and plan requests have 10 s timeouts. Any failed page makes the entire walk fail, with no partial result or stale fallback; the sitemap request also fails rather than silently omitting note URLs. Only an explicit `hasMore: false` completes a walk, including an empty catalog. A missing or non-boolean `hasMore`, an empty page promising more, or 400 pages without completion fails; the 400-page bound is an internal guard, not a user-facing pagination cap. A completed walk is de-duplicated by note id, keeping the first occurrence, because a note published mid-walk shifts the offset and repeats one item across a page boundary; a note unpublished mid-walk can still make it skip one item. Exam-hub public study plans use the 120 s cache and fail the hub render if a read fails. The cache holds at most 1,024 keys and 15,000 list items, evicting least recently used entries. Empty subject-slug walks return the existing empty 200 page but do not enter the cache, so made-up slugs cannot displace real entries. The `general`, exam-hub and sitemap walks may still cache an empty complete result. It is per instance, so cold requests pay the sequential walk and several instances may rebuild independently. The walk's upstream fetch uses `cache: "no-store"` and sends `X-NoteLib-Catalog-Walk` only on a cache miss. The `general` subject page and the sitemap each walk the whole catalog under separate TTL classes, always with `sort=recent`. One `CATALOG_WALK` line per walk records outcome, class, entry, page count, note count and duration; `CATALOG_WALK_GUARD_BREACH` marks the page guard, and `CATALOG_CACHE_DEADLINE` marks the configured deadline with its cache class. These lines contain no slug, path or query.
+
+The subject listing and exam hub use the shared, text-free `PublicListingSkeleton` while their catalog data is pending: the exam hub through a route `app/exam/[slug]/loading.tsx`, the subject listing through a `<Suspense fallback={<PublicListingSkeleton />}>` in its page around the async `SubjectListingContent` (`subject-listing-content.tsx`). **The subject listing deliberately has no `loading.tsx` and the note route has none.** The shapes contain no note data and add no copy or live announcement. They do not shorten a cold walk. A failed or timed-out walk replaces the skeleton with the existing error shell (HTTP 200); a page-class skeleton lasts at most the 90 s deadline.
+
+**Prefetch rule.** Next.js 16.1.6 runs a route's `generateMetadata` when a `<Link>` to it is prefetched (verified in a real browser, with or without a `loading.tsx`), and the subject listing's metadata walks the subject catalog. **Every `<Link>` to a subject listing page must set `prefetch={false}`** (three sites today: the note page breadcrumb and its "See all" link, and the exam hub's subject chips); new links must do the same unless engineering has first verified in a real browser that prefetching no longer starts a catalog walk. `lib/subject-link-prefetch.static.test.ts` guards the known construction patterns; it cannot see a `router.prefetch()` call or an href assembled another way. The exam hub's metadata is static, so its links keep the default prefetch (its prefetch started no walk). Prefetching NOTE links is unchanged and runs each note page's metadata (one single-note backend fetch per visible link, not a walk). Re-verify on every Next.js upgrade; the Preview harness (`frontend/preview-verify/browser.mjs`) drives a real browser through prefetch and click, and its default-prefetch control link is the tripwire.
+
+`CATALOG_CACHE_STATS` counts cache reads by class (`rail`, `plans`, `walk:sitemap`, `walk:page:all`, `walk:page:subject`, `walk:page:program`, `walk:page:other`, `other`). Each line contains only `inst=<6 hex>`, `windowMs=<elapsed>`, and non-zero class groups in that order, each with `hit`, `miss`, `join`, `backoff`, `w1` (under 1 s), `w10` (1 to under 10 s), `w10p` (10 s or more), and `err` integer fields. A miss or join is timed from that read until settlement, including failures; hit and backoff are not timed. The per-instance 60 s window starts on the first read and flushes on the first read at or after its boundary, without a timer; an idle instance emits nothing until its next read, and its final unflushed window is lost if the instance ends. Reads are not requests: a cold subject request normally has one miss and one join because metadata and page share a walk; a hub makes two reads on different classes, and a note page makes three rail reads. No key, slug, path or query is logged. Vercel Hobby runtime logs last one hour, so the production watch saves these lines within the hour.
+
+The public note detail page's three related-note rails now use the same 120 s page-class hard-TTL cache, with `cache: "no-store"` upstream and no attribution header. An expired rail waits for a fresh read; a failed, timed-out or malformed read renders an empty rail, caches nothing and never returns the expired list. The homepage's public-note count still uses the 300 s stale-while-revalidate fetch cache; it has no user-authored text. Creator/profile pages also still use that 300 s data cache; this is a recorded defect outside B3. Direct public-note reads use `cache: "no-store"` and keep their immediate visibility behavior. Failed subject and hub loads retain the HTTP 200 error shell; the sitemap fails with HTTP 500. The page and sitemap URLs, canonicals, robots and subject `noindex` threshold are unchanged by this cache change. Vercel Preview verification is required before production frontend deployment; the bound has been verified only for the in-process layer and local Next.js behavior. The deadline numbers have not been tested against real walk durations; the walk logs will show their production timing. Do not restore the slug lists without reading `docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md`; `getServerPublicSubjectSlugs` in `lib/server-public-notes.ts` is unused by production code.
+
+## Ranked listing snapshot (v0.178.0 Release 1)
+
+Only the paginated ranked `GET /notes/public` path uses a process-local snapshot: the copy, like and
+view count maps, and a normalized-tag slug to public-note-ID index. PostgreSQL applies the existing
+slug normalization when building the index. The six ranked sorts are Recommended, Featured, Popular,
+Copied, Views and Most Copied. The paired count and page use one generation; visibility and the other
+filters remain live in SQL, so making a note private excludes it immediately. The SQL-orderable
+Recent and Title sorts, the legacy unpaginated caller, discovery ranking, facets, projections and
+creator-impact retain their existing queries.
+
+The snapshot refreshes asynchronously after 300 seconds; publish, unpublish and tag edits do not
+invalidate it. A newly published or retagged note may
+take about five minutes to enter a tag-filtered ranked list under steady traffic, and engagement rank inputs
+lag the same amount. The refresh starts when a request finds the snapshot older than 300 seconds, but that
+request is still served the old one, so after a quiet period the first requests can see data up to about 15
+minutes old (the 900-second ceiling). A failed refresh keeps the last good generation for at most 900
+seconds total, so those inputs can lag longer during a failure; after that ceiling, requests use the
+original SQL. A cold request waits at most 3 seconds for the single build. A build that hangs (for example on a dead socket, which the 50 s transaction timeout cannot cancel) is released after 55 seconds so the single-flight slot is not held forever. A new instance builds one generation at startup (`warm-up-on-startup`, default on; tests switch it off so a background build does not hold a pooled connection during connection-counting tests). Non-hit outcomes are logged at most once a minute. Fallback allows two
+concurrent ranked requests and immediately returns HTTP 503 with `Retry-After: 3` to further callers.
+Setting `studysnap.public-library-ranking-snapshot.ttl-seconds` to `0` bypasses the snapshot and its
+bulkhead. Builds refuse more than 50,000 public notes, 50,000 entries per metric map or 250,000
+tag entries (about 25 times today's catalog; the build holds every row in memory), and refuse a suspicious empty generation.
+
+EVERY snapshot statement, tagged or not, pins `force_custom_plan` within the request transaction.
+PostgreSQL otherwise may reuse a generic prepared plan after the driver's fifth execution, which cannot size
+the array-bound joins; the measured 66–74-ID tag case took 8–10 ms with that plan versus about 1 ms with a
+custom plan, and two PostgreSQL tests (tagged and untagged) fail if the pin is removed. This setting is transaction-local,
+not a datasource-wide driver change; it also applies to the remaining statements of that request's
+transaction (for example the listing projections), which only costs a little extra planning time.

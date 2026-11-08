@@ -8,8 +8,8 @@ jest.mock("./explore-page-client", () => ({
 describe("ExplorePage metadata", () => {
   it("is self-canonical with Open Graph metadata", () => {
     expect(metadata).toMatchObject({
-      alternates: { canonical: "https://notelib.app/explore" },
-      openGraph: { url: "https://notelib.app/explore" },
+      alternates: { canonical: "https://www.notelib.app/explore" },
+      openGraph: { url: "https://www.notelib.app/explore" },
     });
   });
 
@@ -21,7 +21,7 @@ describe("ExplorePage metadata", () => {
     expect(JSON.parse(script?.textContent ?? "{}")).toMatchObject({
       "@type": "CollectionPage",
       name: "NoteLib Explore — Official Study Plans and Public Notes",
-      url: "https://notelib.app/explore",
+      url: "https://www.notelib.app/explore",
     });
     expect(screen.getByText("Explore client")).toBeInTheDocument();
   });

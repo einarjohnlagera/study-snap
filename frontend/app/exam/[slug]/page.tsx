@@ -9,7 +9,7 @@ import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import type { NoteListItemResponse } from "@/lib/api";
-import { EXAM_HUB_SLUGS, getExamHubConfig, type ExamHubConfig } from "@/lib/exam-hub-config";
+import { getExamHubConfig, type ExamHubConfig } from "@/lib/exam-hub-config";
 import { buildLearnCategoryPath } from "@/lib/learn-guides";
 import {
   type BrowseSubjectEntry,
@@ -32,7 +32,7 @@ import { getServerExamGoalCoursePrograms } from "@/lib/server-exam-goal-course-p
 import { absoluteUrl, buildPageMetadata } from "@/lib/site-metadata";
 import { buildCollectionPageStructuredData } from "@/lib/structured-data";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 type ExamHubPageProps = {
   params: Promise<{
@@ -157,6 +157,7 @@ function BrowseSubjectsSection({ subjects }: Readonly<{ subjects: BrowseSubjectE
           <Link
             key={subject}
             href={buildPublicLibrarySubjectPath(subject)}
+            prefetch={false}
             className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-3 py-1.5 text-sm font-medium text-foreground/80 transition-colors hover:border-blue-500/50 hover:bg-blue-500/5 hover:text-blue-700 dark:hover:text-blue-300"
           >
             {subject}
@@ -166,10 +167,6 @@ function BrowseSubjectsSection({ subjects }: Readonly<{ subjects: BrowseSubjectE
       </div>
     </section>
   );
-}
-
-export function generateStaticParams() {
-  return EXAM_HUB_SLUGS.map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: ExamHubPageProps): Promise<Metadata> {

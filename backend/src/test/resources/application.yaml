@@ -30,6 +30,10 @@ notelib:
 # reproducible only by timing. Jobs are exercised by calling them directly; none of them should ever
 # run on a wall clock during a test.
 studysnap:
+  public-library-ranking-snapshot:
+    # ⚠️ A startup build holds a pooled connection while it runs, which made tests that count checked-out
+    # connections depend on startup timing. Tests that need a build trigger it explicitly.
+    warm-up-on-startup: false
   goal-adoption:
     recovery-cron: "-"
   generation:

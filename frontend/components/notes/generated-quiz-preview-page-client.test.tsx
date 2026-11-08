@@ -248,7 +248,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
     (createQuizShareLink as jest.Mock).mockResolvedValue({
       id: "link-1",
       token: "token-1",
-      shareUrl: "https://notelib.app/quiz/token-1",
+      shareUrl: "https://www.notelib.app/quiz/token-1",
       isActive: true,
       createdAt: "2026-04-17T09:00:00Z",
     });
@@ -267,7 +267,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
     await waitFor(() => {
       expect(createQuizShareLink).toHaveBeenCalledWith("quiz-1");
     });
-    expect(await screen.findByText("https://notelib.app/quiz/token-1")).toBeInTheDocument();
+    expect(await screen.findByText("https://www.notelib.app/quiz/token-1")).toBeInTheDocument();
   });
 
   it("loads an existing share link for a student on mount", async () => {
@@ -279,14 +279,14 @@ describe("GeneratedQuizPreviewPageClient", () => {
     (getQuizShareLinkByQuizId as jest.Mock).mockResolvedValue({
       id: "link-1",
       token: "token-1",
-      shareUrl: "https://notelib.app/quiz/token-1",
+      shareUrl: "https://www.notelib.app/quiz/token-1",
       isActive: true,
       createdAt: "2026-04-17T09:00:00Z",
     });
 
     render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
 
-    expect(await screen.findByText("https://notelib.app/quiz/token-1")).toBeInTheDocument();
+    expect(await screen.findByText("https://www.notelib.app/quiz/token-1")).toBeInTheDocument();
     expect(getQuizShareLinkByQuizId).toHaveBeenCalledWith("quiz-1");
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
   });
@@ -315,11 +315,11 @@ describe("GeneratedQuizPreviewPageClient", () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-2", role: "USER", profileType: "STUDENT" });
     (getQuizShareLinkByQuizId as jest.Mock)
       .mockResolvedValueOnce({
-        id: "link-1", token: "token-1", shareUrl: "https://notelib.app/quiz/token-1",
+        id: "link-1", token: "token-1", shareUrl: "https://www.notelib.app/quiz/token-1",
         isActive: true, createdAt: "2026-04-17T09:00:00Z",
       })
       .mockResolvedValueOnce({
-        id: "link-1", token: "token-1", shareUrl: "https://notelib.app/quiz/token-1",
+        id: "link-1", token: "token-1", shareUrl: "https://www.notelib.app/quiz/token-1",
         isActive: false, createdAt: "2026-04-17T09:00:00Z",
       });
 
@@ -333,7 +333,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
     });
 
     render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
-    await screen.findByText("https://notelib.app/quiz/token-1");
+    await screen.findByText("https://www.notelib.app/quiz/token-1");
 
     fireEvent.click(screen.getByRole("button", { name: "More quiz actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Regenerate quiz" }));

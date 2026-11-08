@@ -182,7 +182,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
           <li aria-hidden="true">/</li>
           <li><Link href="/public/library" className="hover:text-blue-700 hover:underline dark:hover:text-blue-300">Public Library</Link></li>
           <li aria-hidden="true">/</li>
-          <li><Link href={subjectPath} className="hover:text-blue-700 hover:underline dark:hover:text-blue-300">{subjectLabel}</Link></li>
+          <li><Link href={subjectPath} prefetch={false} className="hover:text-blue-700 hover:underline dark:hover:text-blue-300">{subjectLabel}</Link></li>
           <li aria-hidden="true">/</li>
           <li aria-current="page" className="max-w-56 truncate text-foreground/85 sm:max-w-md">{title}</li>
         </ol>
@@ -419,6 +419,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
               </h2>
               <Link
                 href={buildPublicLibrarySubjectPath(note.subject)}
+                prefetch={false}
                 aria-label={`See all in ${note.subject}`}
                 className="text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
               >

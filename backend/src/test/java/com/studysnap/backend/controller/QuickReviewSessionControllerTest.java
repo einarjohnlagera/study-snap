@@ -344,7 +344,8 @@ class QuickReviewSessionControllerTest {
                 mock(com.studysnap.backend.service.GeneratedQuizService.class),
                 mock(com.studysnap.backend.service.QuizSessionHistoryService.class),
                 noteRepository,
-                new StudySnapProperties()
+                new StudySnapProperties(),
+                null
         );
     }
 

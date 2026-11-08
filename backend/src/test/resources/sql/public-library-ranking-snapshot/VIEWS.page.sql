@@ -1,0 +1,1 @@
+select n.id as id from notes n  left join (select t.note_id, t.metric from unnest(:rankViewsIds::uuid[], :rankViewsValues::bigint[]) as t(note_id, metric)) rank_views on rank_views.note_id = n.id  where n.visibility = 'PUBLIC' and n.id = any(:rankTagIds::uuid[]) order by coalesce(rank_views.metric, 0) desc, n.created_at desc, n.id asc limit :rankLimit offset :rankOffset

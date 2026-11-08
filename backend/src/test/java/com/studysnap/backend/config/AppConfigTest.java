@@ -58,6 +58,24 @@ class AppConfigTest {
         }
     }
 
+    @Test
+    void publicRankingSnapshotExecutorIsBoundedAndRegistered() throws Exception {
+        InFlightRequestRegistry registry = new InFlightRequestRegistry();
+        ThreadPoolTaskExecutor executor = asThreadPool(new AppConfig().publicLibraryRankingSnapshotExecutor(
+                taskDecorator(registry)));
+        try {
+            assertThat(executor.getCorePoolSize()).isEqualTo(1);
+            assertThat(executor.getMaxPoolSize()).isEqualTo(1);
+            assertThat(executor.getQueueCapacity()).isEqualTo(1);
+            assertThat(executor.getThreadPoolExecutor().getRejectedExecutionHandler())
+                    .isInstanceOf(ThreadPoolExecutor.AbortPolicy.class);
+            assertThat(pathsWhileRunning(executor, registry)).singleElement().asString()
+                    .startsWith("public-ranking-snapshot-");
+        } finally {
+            executor.shutdown();
+        }
+    }
+
     /**
      * ⚠️ THE STUDY-PACK NUMBERS MOVED FROM 3/6 TO 2/2 IN v0.112.0, AND THAT IS POOL CONTENTION RATHER
      * THAN TUNING. Threads on that executor hold a JDBC connection for the whole of a generation
@@ -298,6 +316,7 @@ class AppConfigTest {
         AppConfig config = new AppConfig();
         Map<String, ThreadPoolTaskExecutor> decorated = Map.of(
                 "discovery-ranking-", asThreadPool(config.discoveryRankingTaskExecutor(decorator)),
+                "public-ranking-snapshot-", asThreadPool(config.publicLibraryRankingSnapshotExecutor(decorator)),
                 "study-pack-generation-", asThreadPool(config.studyPackGenerationTaskExecutor(decorator)),
                 "bulk-regeneration-", asThreadPool(config.bulkRegenerationTaskExecutor(decorator)),
                 "notification-fan-out-", (ThreadPoolTaskExecutor) config.notificationFanOutExecutor(decorator),

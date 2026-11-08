@@ -30,14 +30,24 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(AppException.class)
 	public ResponseEntity<ApiErrorResponse> handleAppException(AppException ex, HttpServletRequest request) {
 		String requestId = getRequestId(request);
-		log.warn(
-				"app_exception requestId={} code={} status={} message={}",
-				requestId,
-				ex.getCode(),
-				ex.getStatus().value(),
-				ex.getMessage()
-		);
-		return ResponseEntity.status(ex.getStatus()).body(
+		if (ex instanceof PublicLibraryRankingBusyException) {
+			// One WARN per rejected request would flood the log during exactly the burst that causes the rejections;
+			// the ranking snapshot cache already logs them as a counter at most once a minute.
+			log.debug("app_exception requestId={} code={} status={}", requestId, ex.getCode(), ex.getStatus().value());
+		} else {
+			log.warn(
+					"app_exception requestId={} code={} status={} message={}",
+					requestId,
+					ex.getCode(),
+					ex.getStatus().value(),
+					ex.getMessage()
+			);
+		}
+		ResponseEntity.BodyBuilder response = ResponseEntity.status(ex.getStatus());
+		if (ex instanceof PublicLibraryRankingBusyException) {
+			response.header("Retry-After", "3");
+		}
+		return response.body(
 				new ApiErrorResponse(requestId, new ApiErrorResponse.ApiError(
 						ex.getCode(),
 						ex.getMessage(),
