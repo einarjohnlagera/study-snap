@@ -1,6 +1,6 @@
 # RELEASES_ARCHIVE.md — NoteLib
 
-Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) and `v0.165.0` (moved at the `v0.171.0` kickoff) and `v0.166.0` (moved at the `v0.172.0` kickoff) and `v0.167.0` (moved at the `v0.173.0` kickoff) and `v0.168.0` (moved at the `v0.174.0` kickoff) and `v0.169.0` (moved at the `v0.175.0` kickoff; that pass did not extend this line) and `v0.170.0` (moved at the `v0.178.0` kickoff) and `v0.171.0` (moved at the `v0.179.0` kickoff) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
+Archived sections of `RELEASES.md`. **Contents are NOT one contiguous range:** `v0.41.0`–`v0.120.0`, plus `v0.126.0` (moved at the `v0.132.0` kickoff), `v0.127.0` (moved at the `v0.133.0` kickoff) `v0.128.0` (moved at the `v0.134.0` kickoff) `v0.129.0` (moved at the `v0.135.0` kickoff) `v0.130.0` (moved at the `v0.136.0` kickoff) `v0.131.0` (moved at the `v0.137.0` kickoff) `v0.132.0` (moved at the `v0.138.0` kickoff) `v0.133.0` (moved at the `v0.139.0` kickoff), `v0.134.0` (moved at the `v0.140.0` kickoff), `v0.135.0` (moved at the `v0.141.0` kickoff), `v0.136.0` (moved at the `v0.142.0` kickoff), `v0.137.0` (moved at the `v0.143.0` kickoff), `v0.138.0` (moved at the `v0.144.0` kickoff), `v0.139.0` (moved at the `v0.145.0` kickoff), `v0.140.0` (moved at the `v0.146.0` kickoff), `v0.141.0` (moved at the `v0.147.0` kickoff), `v0.142.0` (moved at the `v0.148.0` kickoff), `v0.143.0` (moved at the `v0.149.0` kickoff), `v0.144.0` (moved at the `v0.150.0` kickoff), `v0.145.0` (moved at the `v0.151.0` kickoff), `v0.146.0` (moved at the `v0.152.0` kickoff), `v0.147.0` (moved at the `v0.153.0` kickoff), `v0.148.0` (moved at the `v0.154.0` kickoff), `v0.149.0` (moved at the `v0.155.0` kickoff), `v0.150.0` (moved at the `v0.156.0` signoff — the first time this archive check ran at signoff rather than kickoff, since v0.156.0 folded two releases' worth of scope into one and crossed the cap without an intervening kickoff) and `v0.151.0` (moved at the `v0.157.0` kickoff) and `v0.152.0` (moved at the `v0.158.0` kickoff) and `v0.153.0` and `v0.154.0` (moved at the `v0.159.0` and `v0.160.0` kickoffs; earlier passes did not extend this line) and `v0.155.0` (moved at the `v0.161.0` kickoff) and `v0.156.0` (moved at the `v0.162.0` kickoff) and `v0.157.0` (moved at the `v0.163.0` kickoff) and `v0.158.0` (moved at the `v0.164.0` kickoff) and `v0.159.0` (moved at the `v0.165.0` kickoff) and `v0.160.0` (moved at the `v0.166.0` kickoff) and `v0.161.0` (moved at the `v0.167.0` kickoff) and `v0.164.0` (moved at the `v0.170.0` kickoff) and `v0.165.0` (moved at the `v0.171.0` kickoff) and `v0.166.0` (moved at the `v0.172.0` kickoff) and `v0.167.0` (moved at the `v0.173.0` kickoff) and `v0.168.0` (moved at the `v0.174.0` kickoff) and `v0.169.0` (moved at the `v0.175.0` kickoff; that pass did not extend this line) and `v0.170.0` (moved at the `v0.178.0` kickoff) and `v0.171.0` (moved at the `v0.179.0` kickoff) and `v0.172.0` and `v0.173.0` (moved at the `v0.179.0` sign-off) as the live file crossed its *current + last five* cap. Each version's own `## vX.Y.Z` heading is the index — search for it. `v0.40.1` and earlier moved here
 2026-07-10; **`v0.41.0` through `v0.120.0` moved here 2026-09-07** in the `v0.126.0` pass, which
 resumed this convention after it had lapsed for 85 releases — `RELEASES.md` had reached 116
 sections against its documented design of *current + last few versions*. Both passes are MOVES,
@@ -22946,3 +22946,430 @@ endpoint. `payer_email` is read-only existing data, not collected anew.
 - **The `v0.166.0` Hikari checkpoint (`due 2026-10-14T11:19:29Z`) was read at this kickoff and found a
   THIRD long-hold mechanism `v0.166.0` did not catch** — see `ROADMAP.md`'s Backlog Index for the full
   read and the new row it produced. Not in this release's scope; flagged to the owner as a candidate.
+
+
+## v0.172.0 - Headroom
+
+**Status: Released** (signed off 2026-10-15 on `releases/v0.172.0`; kicked off 2026-10-14, cut from
+`main` after `v0.171.0` merged as #1497. PRs #1498, #1499, #1500.)
+
+Theme: stop the production database being pushed past its 268 MB memory ceiling. The cheapest
+already-diagnosed code legs land here: stop the Explore discovery sections computing the same
+engagement aggregates twice per call, and stop them re-fetching on every tab switch. Close the
+Challenge `+5` duplicate-question HTTP 500 alongside them.
+
+**Why this release exists.** At this kickoff, the database I/O bursts the Backlog Index attributed to
+deploys were traced to the database itself. `notelib-db-prod` (`basic_256mb`) had **9 backend kills by
+signal 9 in 7 days** (2026-10-08 → 10-14), each followed by a full Postgres crash-recovery that drops
+every in-flight request. Daily memory peaks hit 251–268 MB against a 268,435,460-byte limit on **every
+day from 09-15 to 10-14**: a long-standing undersizing, not a regression. Prod Investigator root-caused
+two mechanisms (`docs/claude-findings/2026-10-14-db-oom-memory-ceiling-public-catalog.md`; fix plan at
+`docs/claude-plans/2026-10-14-db-oom-memory-ceiling-fix-plan.md`):
+- **Deploy overlap.** The old instance keeps its 20-connection pool open 39 s–2 min after the new
+  instance is live. All 4 deploy-adjacent kills fit this, but the overlap is not sufficient alone:
+  10-12 had the same overlap with no kill.
+- **CPU-saturated public-catalog reads.** These precede most, not all, non-deploy kills.
+
+Both are made worse by a memory floor sitting within ~45 MB of the ceiling.
+
+**Owner decisions, 2026-10-14:**
+- **Leg A (plan upgrade): not now.** There are no paying users yet.
+- **Leg B: yes**, as an owner `SET`.
+- **Leg D: yes**, as a single-statement rewrite, not Java-side ranking, because Java-side ranking
+  would duplicate the FEATURED/POPULAR scoring formula that the paginated Public Library listing
+  keeps in SQL.
+- **Durable aggregate cache: next release.**
+- **Legs C, E, F: not scoped.**
+
+### Planned Scope
+
+1. **Discovery sections: compute the engagement aggregates once (Leg D, Option 1), and stop
+   re-fetching on discovery-overview re-entry (backend + frontend, Tier H, Codex). `[shipped: #1498 4871be7e + follow-up #1500 fc7da866]`**
+   - **Re-tiered N → H (2026-10-15):** delivery introduced defects that this session then fixed, which is the charter's Tier H trigger. Pass 1 sorted the whole public catalog twice with ~2,437-byte rows (prod `EXPLAIN`, and Codex's own review). Pass 2 moved `n.content` into a 1,290-byte-wide hash join inside the ranking subquery (prod `EXPLAIN`). Pass 1's H2 oracle tie-check also sorted UUIDs in Java (signed `compareTo`), so it passed or failed depending on the random ids; Release Implementor rewrote that one assertion as `subList(0, 2).containsExactlyInAnyOrder(...)`. The oracle comparison itself is unchanged. A scoped cold falsification pass is owed at pre-signoff (it can be batched with item 2). The paginated listing's golden SQL files were verified against the pre-refactor code (`fcfae82b`) in a throwaway worktree.
+   - **Backend.** `NoteService.getPublicLibraryDiscoverySections` (`NoteService.java:953-960`) runs
+     the ranked query separately for `FEATURED` and `POPULAR`. Each run builds the
+     `RANK_COPIES_JOIN`/`RANK_LIKES_JOIN`/`RANK_VIEWS_JOIN` aggregates from scratch
+     (`PublicLibraryRepositoryImpl.java:534-564`). Rewrite it so the three aggregates are computed
+     once per call and both rankings read from them. `POPULAR` must still exclude `FEATURED`'s
+     returned IDs. Same results, same ordering, same thresholds.
+   - **One scoring definition.** The paginated listing (`NoteService.java:829`, `:915`) keeps using
+     the existing fragments, so there must be exactly one definition of the scoring formula.
+   - **Frontend.** `public-library-page-client.tsx:648-675` re-requests discovery sections each time
+     discovery overview is re-entered (`?view=` round-trip, filter cleared; Explore only `hidden`-toggles the tab, so its tab switch does not remount). Reuse the already-loaded response instead.
+   - **Guards.**
+     - A test asserting the aggregate computation runs at most once per call.
+     - The rewritten SQL covered by `NativeQueryPostgresIntegrationTest`.
+     - A result-equivalence test against the old two-query output on seeded data.
+2. **Challenge `+5`: duplicate bank question no longer 500s (backend, Tier N, Codex). `[shipped: #1499 89f4edad]`**
+   - **Audit (2026-10-15).** Both bank writers (`persistGeneratedQuestions`, which also serves
+     `seedTemplateAsync`, and `copyTemplateQuestions`) now go through one native
+     `insertIfAbsent … on conflict do nothing`. A skipped question is still served in its session but
+     is not banked or claimed for it. Real-PostgreSQL guards: same key twice at the same level, at a
+     NULL level and at a different level; a two-connection race; `+5` with a pre-existing duplicate;
+     bank rows present after start, `+5`, seed and copy; and a jsonb round-trip through the entity.
+     Removing `on conflict do nothing` fails three tests by name, including the end-to-end `+5` test.
+     Removing `flushAutomatically` fails nothing, so the start-path row-existence test guards the
+     outcome but does not prove the unflushed-session state was reproduced; the flag stays as a
+     harmless safeguard. The three claim queries gained `cast(:learnerLevel as string)`, which changes
+     no behaviour (verified by reverting it). It is needed only because `NativeQueryParameterTypingTest`
+     scans whole files and flags JPQL `:param is null` once a file holds a native query; narrowing
+     that lint is a follow-up. Full `./mvnw clean install` with Docker: 2685 tests, 0 failures.
+   - **The defect.** `ChallengeQuizQuestionBankService` de-duplicates new bank rows only within the
+     incoming batch (`:101-106`), never against rows already in the bank. A same-level repeat of
+     `question_key` therefore hits `uq_challenge_quiz_question_bank_user_pack_key` and rolls back the
+     request as HTTP 500. This is documented as a known limitation in `docs/features/challenge-quiz.md:119`.
+   - **The fix.** Make the insert itself skip duplicates, for example `ON CONFLICT DO NOTHING` on that
+     key, so a concurrent `+5` or `seedTemplateAsync` cannot race a pre-read. The exact mechanism is
+     settled in the brief.
+   - **Guard.** A real-PostgreSQL test inserting the same key twice.
+   - **Evidence.** No occurrence in the 7 retained days of logs, so this is a latent-defect fix, not
+     an active incident.
+
+**Owner action, outside the code release:** Leg B,
+`ALTER DATABASE notelib_db_prod SET max_parallel_workers_per_gather = 0;`. The statement, expected
+effect and verification are handed over in `docs/claude-plans/done/2026-10-14-db-leg-b-parallel-workers.sql`.
+It only applies to new sessions, so it is fully live after the next deploy cycles the pool.
+**Applied by the owner 2026-10-15** (before ~03:04Z). Verified read-only at signoff (05:39Z):
+`pg_db_role_setting` holds `max_parallel_workers_per_gather=0` for `notelib_db_prod`, a new connection
+reads `0` (source `database`), and all 20 app connections opened at or after 05:14Z, after the `ALTER`.
+The owner's IntelliJ console kept reading `1` because its connection predated the `ALTER` and
+"detach session" reuses it.
+
+**Kill criterion, stated before any leg lands:** count `*terminated by signal 9*` lines on
+`dpg-d6tvb8fkijhs73fda4m0-a` over 7 days after the release deploys and Leg B is applied. **Baseline: 9.**
+
+Anti-drift:
+- No Hikari `maximum-pool-size` or `minimum-idle` change. The pool size is pinned by the 2026-09-04
+  outage fix and `TomcatThreadPoolHikariAlignmentTest`.
+- No change to the FEATURED/POPULAR scoring weights, decay, thresholds or section limits. No change
+  to the paginated Public Library listing's results.
+- No new cache and no new dependency (the Caffeine cache is next release).
+- No checkout, payment or pricing path, so RC-4's baseline window is untouched. No public-note-page
+  or adoption-path change, so RC-5's read is untouched.
+- No migration.
+- No `statement_timeout`.
+
+### Shipped
+
+1. **Discovery sections compute the engagement aggregates once (Leg D), and stop re-fetching on
+   overview re-entry** — #1498 (`4871be7e`), Tier H.
+   - `PublicLibraryRepositoryImpl.findPublicLibraryFeaturedAndPopularIds` (`:314`) ranks Featured and
+     Popular in one statement. Each of the copies/likes/views aggregates appears once. A narrow
+     `featured_ids` CTE keeps `n.content`/`sp.summary`/`sp.quiz` in scan filters only. Each section
+     filters to eligible notes, then `ORDER BY … LIMIT`. Called from `NoteService.java:955`; RECENT
+     keeps its own query and still excludes both.
+   - One scoring definition, shared with the paginated listing via `rankedOrderKeys`/`rankScoreSql`.
+     14 golden files pin the paginated page/count SQL. The pin was verified against the pre-refactor
+     code.
+   - Prod `EXPLAIN` (read-only, planner estimate): old pair ~25,300 total cost, widest node 48 bytes;
+     final ~18,600, widest node 64 bytes. Two earlier Codex passes were rejected for wide sorts and
+     joins (see the re-tier note in Planned Scope).
+   - Frontend: `discoverySectionsLoadedRef` (`public-library-page-client.tsx:552`) reuses a successful
+     load across overview re-entry. Retry always fetches, and an error resets the flag.
+2. **Copy counts stay current on the reused overview** — #1500 (`fc7da866`), a follow-up to item 1
+   that the cold falsification pass found. Reusing the sections froze `copyCount` at first load.
+   `handleCopySuccess` (`public-library-page-client.tsx:774`) now adds one on the source card in the
+   browse list and all three sections. It skips a re-copy (the backend returns the existing copy) and
+   an owner's own copy, which is never counted. Copies recorded during the mount are merged over the
+   copied-notes load (`:510`), so an in-flight load cannot erase them. Each of the four guards is
+   mutation-checked against a named test.
+3. **Challenge bank duplicates are skipped at insert instead of returning HTTP 500** — #1499
+   (`89f4edad`).
+   - Both bank writers route through `ChallengeQuizQuestionBankRepository.insertIfAbsent`
+     (`:31`, `on conflict do nothing` at `:29`), called from `ChallengeQuizQuestionBankService.java:133`
+     and `OfficialChallengeQuizTemplateService.java:257`.
+   - A skipped question is still served but not banked or claimed for that session
+     (`challenge-quiz.md` "Per-user question bank").
+   - Real-PostgreSQL guards cover same, NULL and different level; a two-connection race; `+5` with a
+     pre-existing duplicate; rows persisted on every path; and a jsonb round-trip.
+
+**Pre-signoff pressure test: one scoped cold falsification agent (Opus), Tier H trigger.** Leg D's
+delivery introduced defects that the same session fixed. The agent tested 6 Leg D claims, 7 Item 2
+claims and 2 release-wide sweeps, using mutation testing in a throwaway worktree. **No code defect was
+found in either PR.** Confirmed findings and their disposition:
+- Frozen copy counts on the reused overview: **fixed in #1500**.
+- Stale Backlog rows (`v0.81.0` checkpoint, "Isolate Challenge bank writes properly"): **corrected in
+  this signoff**.
+- Two imprecise sentences in `challenge-quiz.md` (the seed path's transaction; the shortfall's dedup
+  scope): **corrected in this signoff**.
+- An unpinned flush flag and narrow golden coverage: recorded below.
+
+**Checkpoint:** `[CHECKPOINT — due 2026-10-22]` in `ROADMAP.md`'s Backlog Index carries the signal-9
+kill criterion (baseline 9 in 7 days).
+
+**Owner note, outside this release's scope:** the Official Challenge template seed for note
+`0c6b0be8-8b7d-41dc-9619-94cab1d52064` (pack `3deae879-…`) failed at 2026-10-13T03:32:35Z. A read-only
+log read at signoff traced it to an LLM output-validation failure: `AppException: Challenge quiz
+generation returned an invalid quiz format` from `validateGeneratedQuizItem`, after its one retry. It
+was **not** a duplicate-key violation, so it is not evidence against item 2 being latent. The pack has
+**0** bank rows and the note is `PUBLIC`, so the admin backfill seed will pick it up if re-run.
+
+### Known Limitations
+
+- **Shared-then-public copy count:** a learner who copied a note while it was privately shared, and
+  then copies it again after it goes public, reuses the old copy. That copy isn't counted publicly
+  (`copied_from_public = false`), but the card shows +1 until reload. Closing this needs the backend to
+  say whether a copy is new.
+- **`@Modifying(flushAutomatically = true)` on `insertIfAbsent` is not pinned by any test.** Removing it
+  fails nothing, most likely because Hibernate already flushes before native DML. The start-path test
+  proves bank rows land, but not that an unflushed session row was ever reproduced.
+- **The paginated golden files pin only the H2 dialect with empty criteria.** The PostgreSQL branch of
+  `rankScoreSql`, which #1498 edited, is unchanged by reading but not byte-pinned. Discovery's filter
+  parameters are oracle-tested on H2 only; production discovery always sends empty criteria.
+- **No end-to-end duplicate test on the start or template-copy paths.** They share `insertIfAbsent`
+  with the tested `+5` path, so they are covered by construction only.
+- **Non-duplicate bank write failures** (foreign-key, check-constraint or 512-character `question_key`
+  overflow) still poison the caller's transaction, as before.
+- **`NativeQueryParameterTypingTest` scans whole files**, so it flagged the JPQL `:learnerLevel is null`
+  in the bank repository once that file held a native query. The three claim queries now use
+  `cast(:learnerLevel as string)`, which is behaviour-neutral (verified on PG with a NULL level).
+  Narrowing the lint to native-query blocks is a follow-up.
+
+
+## v0.173.0 - Cached Catalog
+
+**Status: Released** (signed off 2026-10-16; **merged to `main` as #1505 (`ff2ea964`) on 2026-10-25 after the 2026-10-22 gate read (partial); the first deploy failed on a database kill, and the cache has been live since 2026-10-25T01:47:11Z**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
+(`3961383e`), which is `main` after `v0.172.0` merged as #1501 plus one docs commit.)
+
+Theme: take the remaining repeat load off the production database's Explore discovery reads by
+caching the copies/likes/views aggregates in-process for a short TTL, so most page views stop
+recomputing them at all.
+
+**Why this release exists.** `v0.172.0` made each discovery call compute the three engagement
+aggregates once instead of once per section. The fix plan's durable follow-up is to stop computing
+them on every call: an in-process Caffeine cache, TTL 60–300 s
+(`docs/claude-plans/2026-10-14-db-oom-memory-ceiling-fix-plan.md`, Leg D "Durable follow-up"). The
+owner deferred it to this release on 2026-10-14.
+
+**⚠️ MERGE GATE: the release PR merges to `main` only AFTER the `[CHECKPOINT — due 2026-10-22]` read.**
+- That checkpoint measures `v0.172.0` (Leg D) plus Leg B with **no** cache, over 7 days from the
+  2026-10-15T07:09:09Z deploy. Shipping the cache inside that window would make the read unattributable.
+- Every `main` merge also triggers a Render deploy, and the deploy double-pool overlap is itself a
+  known kill mechanism. So nothing merges to `main` before 2026-10-22T07:09Z.
+- **The read can redirect this release.** ≥ 5 kills: Leg A (plan upgrade) becomes the next lever and
+  the cache alone is not enough; the owner decides whether this release still ships. 2–4: proceed as
+  planned. 0–1: the checkpoint is silent on the cache; owner call after the read.
+- Work can be built, audited and merged into `releases/v0.173.0` before then.
+
+### Planned Scope
+
+1. **Discovery ranking cache (backend, Tier H, Codex). ✅ Merged #1503 (`70fdd019`), 2026-10-15; see Shipped.**
+   - **Tier N → H (2026-10-15, before the brief):** single-flight under concurrent load is the charter's concurrency trigger, and a waiter holding a JDBC connection under open-in-view would reproduce this method's own leak traces. A scoped cold falsification pass is owed at pre-signoff. Brief: `docs/codex-prompts/v0.173.0-discovery-ranking-cache.md` (no stale-on-error: `expireAfterWrite` 300 s keeps Product UX's bound).
+   - Add Caffeine and cache the copies/likes/views aggregates behind
+     `NoteService.getPublicLibraryDiscoverySections` for a short TTL (fix plan: 60–300 s).
+   - **Product UX decision, 2026-10-15 (APPROVED with safeguards; consultation prompt
+     `docs/claude-plans/done/2026-10-15-discovery-cache-product-ux-consultation-prompt.md`):**
+     - **Cache the ranked id lists of all three sections (Featured, Most Popular, Recently Added) as
+       one coherent snapshot, TTL 300 s.** Existing ranking and exclusion semantics are preserved.
+       Card counts and the viewer's liked state stay live per request, and are never cached.
+     - **No early invalidation**: not on publish, unpublish, copy, like or view.
+     - **The per-request `visibility = 'PUBLIC'` re-check stays on every response, cache hits
+       included.** A private or deleted note drops out at once, even if a section then shows fewer
+       than 6 cards.
+     - No user-facing freshness notice, and no promise that publishing lands a note in Recently Added
+       (it orders by creation date, which this release must not change).
+     - **Safeguards to verify:** concurrent misses must not each run the ranking query
+       (single-flight). A failing refresh must not cause a retry storm. Cold-start, expiry and
+       failure behaviour must be tested under concurrency. No per-copy or per-like invalidation, and
+       no expensive per-request backfill.
+     - **Post-deploy:** compare the 7-day signal-9 count against the baseline of 9. Add bounded
+       instrumentation for ranking computations, hit/miss, refresh failures, ranking duration and
+       short (< 6) sections.
+     - **Why the copy-count concern is gone:** counts are loaded per request by
+       `NoteService.toListItems`, not by the ranking, so #1500's in-page freshness is unaffected.
+   - **Re-read 2026-10-15, read-only:** backend `numInstances` = 1 (Render `get_service`), so an
+     in-memory cache is consistent across visitors.
+   - Guard (fix plan): a test asserting the aggregate computation runs at most once per TTL window
+     across repeated `getPublicLibraryDiscoverySections` calls, plus a real-request test if any
+     endpoint changes.
+2. **Carried docs commit (no code). `[merged-to-release: 3961383e]`** Stamps the `v0.172.0`
+   production deploy time (2026-10-15T07:09:09Z) into the `ROADMAP.md` Backlog rows. It rides in via
+   this release instead of PR #1502, so it does not trigger its own deploy mid-checkpoint window.
+
+Anti-drift:
+- **Caffeine is the one allowed new dependency.** No Redis, no HTTP cache headers, no Next.js
+  `revalidate` change.
+- No Hikari pool-size change (pinned by the 09-04 outage fix and
+  `TomcatThreadPoolHikariAlignmentTest`).
+- No change to FEATURED/POPULAR weights, decay, thresholds, or the paginated listing's SQL (pinned by
+  the 14 golden SQL files from #1498).
+- No checkout/payment path (RC-4 baseline) and no public-note/adoption path (RC-5 read).
+- No migration.
+
+**Open at kickoff, not scoped:**
+- `[CHECKPOINT — due 2026-10-22]` (signal-9 kills; read by 2026-10-29 at the latest, Render log
+  retention). RC-3 checkpoint due 2026-10-21.
+- Overdue checkpoint reads carried from `v0.172.0`: `v0.107.0`, `v0.90.0`, `v0.106.0`, `v0.97.0` (due
+  10-13); `v0.111.0`, `v0.96.0` (09-28); the `v0.74.0` conversion read (09-30).
+- The `v0.166.0` Hikari checkpoint row's title still reads open, though the `v0.171.0` kickoff read
+  it (cell contradiction, not re-read here).
+- Owner: re-run the admin Official Challenge backfill seed for note `0c6b0be8`.
+- Workflow redesign: `v0.172.0` ran two Tier-N items through the new worktree lifecycle, but no M5
+  pilot measurement was recorded. D4/D9 stay gated on it.
+
+### Shipped
+
+1. **Explore discovery rankings cached for 300 s** — #1503 (`70fdd019`), Tier H.
+   - `PublicLibraryDiscoveryRankingCache` holds one viewer-independent snapshot of the Featured /
+     Popular / Recent id lists. It is a Caffeine `AsyncLoadingCache` (`:51-55`): the 300 s TTL counts
+     from completion, concurrent misses share one computation and its failure, and a failure is not
+     cached.
+   - The ranking runs on `discoveryRankingTaskExecutor` (`AppConfig.java:35`) in its own read-only
+     transaction. `NoteService.getPublicLibraryDiscoverySections` (`:940-942`) is `NOT_SUPPORTED`, so
+     waiting requests hold no JDBC connection.
+   - Card projections, counts, the `visibility = 'PUBLIC'` re-check and the viewer's liked state run on
+     every request. There is no early invalidation and no stale-on-error. Repository SQL, ranking
+     formulas, the pool and migrations are unchanged; the one new dependency is Caffeine 3.2.3, from
+     the Boot BOM.
+   - Instrumentation:
+     - `DISCOVERY_RANKING_CACHE computed` (INFO): `durationMs`, the three list sizes, cumulative
+       hits/misses/failures, and `shortSectionResponses`. The line emits; it appeared 13 times in the
+       full build.
+     - `DISCOVERY_RANKING_CACHE failed` (WARN).
+     - A request that joins a ranking still in flight counts as a **hit**: in a cold-start burst of 8,
+       7 show as hits.
+   - Verification:
+     - Full `./mvnw clean install` with Docker: 2,694 tests, 0 failures.
+     - `concurrentHttpDiscoveryWaitersDoNotHoldJdbcConnections` (real HTTP, 8 concurrent requests,
+       ≤1 active connection) fails with **9** when the method is reverted to `readOnly = true`. That
+       mutation was run by Release Implementor.
+     - `inFlightRankingSurvivesTtlAndExpiresFromCompletion` fails with 2 rankings under insertion-time
+       expiry. That mutation was run by Codex; the test was read by Release Implementor.
+     - Two defects in Codex pass 1 were confirmed and fixed in fix-1: the TTL started at insertion, and
+       the connection guard bypassed the real request path.
+   - **Known gaps (as merged in #1503; the first two are closed by item 2):**
+     - No test asserts that `shortSectionResponses` rises.
+     - The HTTP test's identical-body check is trivial, because every section is stubbed empty.
+     - ~~`future.join()` has no timeout. That is no worse than the previous per-request query.~~
+       **Corrected 2026-10-16: this was wrong.** The old query failed alone. Here a stalled ranking left an
+       in-flight future that never expired, and every request pinned a Tomcat thread (25 total) on it.
+       Health checks starved, and Explore stayed frozen until restart. The cold pass found it (C8), and
+       item 2 fixes it.
+   - The Tier-H cold falsification pass (Opus, read-only) ran on 2026-10-15. It found no blockers;
+     its findings are resolved under item 2.
+
+2. **Stalled rankings bounded and the cache hardened** — #1504 (`ff555530`), Tier H, Codex at high
+   effort (D10).
+   - **C8 (stall):** the ranking transaction has a 50 s statement timeout
+     (`PublicLibraryDiscoveryRankingCache.java:40`, via `TransactionTemplate.setTimeout`). The loader
+     future has a 55 s `orTimeout` backstop (`:41`). Both are under the 60 s Hikari leak threshold.
+     - 50/55 rather than the 30/45 that was built: before `v0.172.0`, this endpoint held connections over
+       60 s three times during CPU spikes. A shorter cancel risks a cancel-and-retry loop with no backoff.
+       The owner chose this on 2026-10-16.
+     - A timed-out ranking is not cached, so the next request retries.
+   - **Rejection:** when the queue of 16 is full, the load fails at once and reports one failure, with
+     no orphan timer. A queued load whose future already timed out skips the ranking.
+   - **Accounting (both Codex-review P2s):**
+     - The success line and the `shortSectionResponses` reset happen only when `complete()` delivers
+       the snapshot.
+     - The counter is captured before publishing and added back if the snapshot is not delivered. That
+       last race can't be reproduced by a test, so this fix is unverified.
+     - Failures, including `Error`, are counted once per load.
+   - **Missing decorator:** `InFlightThreadRegisteringTaskDecorator` is now set on
+     `discoveryRankingTaskExecutor`, pinned by
+     `AppConfigTest.discoveryRankingExecutorIsBoundedAbortOnOverflowAndRegistered`.
+   - **C10 (test gaps):**
+     - The pagination fixture now has 7 notes, so a backfill would be detected, and it asserts
+       `shortSectionResponses`.
+     - The cold test is now `coldRequestsShareOneRanking`; its "no connection" half could not fail, so
+       that claim was dropped there and is left to the HTTP test.
+     - The HTTP test now sends one authenticated (JWT) request.
+   - The inert `invalidateAll` call in the pagination test was removed.
+   - **New tests:**
+     - `PublicLibraryDiscoveryTimeoutPostgresIntegrationTest.lockedNativeRankingIsCancelledServerSideAndNextRequestRetries`
+       (Docker): an `ACCESS EXCLUSIVE` lock on `notes` checks the server-side cancel, the worker being
+       released, and recovery after unlock.
+     - Unit tests for a late result after the wait timeout, a rejected submission, a timed-out queued
+       load, and a failure logged once.
+   - **Verification:**
+     - Full `./mvnw clean install` with Docker: 2,701 tests, 0 failures, at 30/45 and again at 50/55.
+     - Mutations run by Release Implementor:
+       - Removing the transaction timeout fails the lock test at "each caller sees PostgreSQL
+         cancellation before the 5 s backstop".
+       - Removing both bounds now fails in about 7 s. Before fix-1, the test hung instead.
+       - Removing `readOnly` gives 9 connections against 1 in the HTTP test.
+     - Codex killed the complete-guard, rejection-handling and decorator mutations.
+   - **D10 cost (gpt-6-sol), as 5h-window / weekly `used_percent`:**
+
+     | Run | Effort | 5h window | Weekly |
+     |---|---|---|---|
+     | Hardening pass | high | 49→72 | 8→11 |
+     | Review | medium | +2 | 11→12 |
+     | Fix-1 | high | 0→7 (after the 5h reset) | 12→13 |
+
+     That is two D10 runs this week on one item, and the owner was told.
+   - **Known limitations (cold-pass notes, not fixed):**
+     - **A dead socket can't be cancelled.** The worker stays stuck until restart. Each request fails
+       after 55 s, and requests fail at once once the queue of 16 fills. Tomcat threads stay free, so
+       health checks don't restart the service, but Explore is down until restart.
+     - **C2:** for a few microseconds after a failed ranking, a request can join the failed future.
+       Retries have no backoff.
+     - **C7 (log emitters):**
+       - One failure also emits Caffeine's own WARNING and one `unhandled_exception` ERROR per waiting
+         request. Count failures from `DISCOVERY_RANKING_CACHE failed` only.
+       - Joining an in-flight ranking counts as a hit.
+       - `shortSectionResponses` resets after each delivered computation.
+     - The HTTP test's identical-body check is still trivial.
+     - **C11:** the doc-wording notes were folded into `docs/features/public-library.md`.
+
+3. **Owner action: four residual pre-H4 answer-key defects repaired in `study_packs.quiz`** — 2026-10-16,
+   run by the owner with psql.
+   - Source: `docs/claude-findings/2026-10-15-quiz-quality-retention-llm-cost-production-read.md` §2
+     (Feature Planner / Prod Investigator).
+   - Script: `docs/claude-plans/done/2026-10-16-study-packs-residual-answer-key-defects-repair-tightened.sql`.
+     It is the Release Implementor's tightened copy of the Prod Investigator's
+     `done/2026-10-15-…-repair.sql`. It adds a question-text match (D3's choices are generic), keeps array
+     order (`WITH ORDINALITY … ORDER BY`), and runs as one transaction with checks that abort it.
+     Before production, it was tested in a throwaway local Postgres, with a decoy question sharing
+     D3's choices and wrong index.
+   - Corrections:
+     - D1 audit detection risk: 0.06/(0.4×0.5) = 0.3, so idx 3 → 0.
+     - D2 labor efficiency variance: (120−100)×$15 = $300 unfavorable, so idx 0 → 2.
+     - D3 weighted average cost: $10,000/500 = $20, so idx 2 → 1.
+     - D4 straight-line depreciation: ($50,000−$5,000)/9 = $5,000, so idx 3 → 0, on the source and
+       both public-note copies.
+   - Owner run: `UPDATE 1/1/1/3`, the check block passed ("6 packs corrected"), and `COMMIT`.
+   - **Verified read-only by Release Implementor, after commit:**
+     - In each of the 6 packs, only the targeted question's `correctIndex` changed, compared with a
+       per-question read taken before the repair.
+     - Question order is unchanged, and every quiz still has 5 questions.
+     - `quiz_stamp` (0) and `updated_at` are unchanged, so no Quick Review mastery was reset.
+     - A whole-table recount finds 0 wrong keys for all four defects, and 3 corrected D4 copies.
+   - Exposure: one incomplete owner test session existed on these packs. The real learner's D4 copy
+     had no sessions.
+   - Not repaired, by design: the APGAR, percentage-tax and grain-size candidates were re-derived as
+     correctly keyed (false positives).
+
+### Signoff (2026-10-16)
+
+- **Signed off ahead of the merge, owner decision 2026-10-16**, so `v0.174.0` can be cut from this
+  branch. The merge gate is unchanged: the release PR merges to `main` only after the
+  `[CHECKPOINT — due 2026-10-22]` signal-9 read (by 2026-10-29 at the latest). If that read shows
+  ≥ 5 kills, the owner decides whether this release still ships, and any change made here is merged
+  forward into `v0.174.0`.
+- **Interim reads at signoff (read-only, NOT the verdict):**
+  - 0 `terminated by signal 9` lines from 2026-10-15T07:09:09Z to 2026-10-16T03:14Z. The filter was
+    checked against the known 07:08:54Z kill.
+  - 1 `Apparent connection leak` trace since the `v0.172.0` deploy: 2026-10-15T14:25:32Z on
+    `PublicProfileController.getByUsername`, returned to the pool about 70 s after acquire. That is a
+    `v0.166.0` method, not discovery, and is recorded on its checkpoint row.
+- **Scope completeness:**
+  - Item 1 shipped: #1503 plus the #1504 hardening, file:line anchors under Shipped.
+  - Item 2 shipped: the carried deploy-time stamp `3961383e` is on this branch.
+  - Item 3 is an owner action, done and verified.
+  - Nothing was planned and left unbuilt.
+- **Pressure test:** one scoped cold falsification agent (Opus, read-only), Tier H for concurrency.
+  It found no blockers; every finding is fixed or listed as a known limitation under item 2.
+- **Feature-doc drift:** `docs/features/public-library.md`'s cache paragraph was re-read against the
+  final `PublicLibraryDiscoveryRankingCache`. These all match:
+  - the 50 s / 55 s bounds (`:40-41`);
+  - a failure is not cached;
+  - immediate rejection when the queue is full;
+  - no viewer id;
+  - no backfill;
+  - the log and counter semantics.
+- **Backlog:**
+  - The "Production DB memory ceiling" and discovery long-hold `[DECISION]` rows are updated: cache
+    built, deploy held.
+  - The `v0.166.0` Hikari checkpoint row carries the `getByUsername` recurrence.
+  - A new `[CHECKPOINT]` row covers the cache itself, dated from its deploy.
