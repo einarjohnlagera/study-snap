@@ -4,7 +4,7 @@ Written 2026-11-09 by the Claude Code session. **This is the full verification r
 
 **Kickoff (2026-11-10):** `v0.180.0` was confirmed free and kicked off on `releases/v0.180.0`, cut from `main` at `2cf895f6`; the condensed record is in the `v0.180.0` section of `RELEASES.md` and this file keeps the full verification record and both cold reviews. All seven version references are bumped (`backend/pom.xml` included).
 
-**State (as of 2026-11-10):** frontend only (no backend code change, no migration; the only `backend/` change is the `pom.xml` version bump made at the kickoff), built on `feat/public-pages-followup-frontend` (pushed) and being integrated into `releases/v0.180.0`; **not merged to `main`, not deployed, not approved for production.** Merge and deployment order and approvals are in the Product UX decision of 2026-11-09 (the `main` freeze and the Stage B +72 h checkpoint stay independent and mandatory).
+**State (as of 2026-11-10):** frontend only (no backend code change, no migration; the only `backend/` change is the `pom.xml` version bump made at the kickoff), built on `feat/public-pages-followup-frontend` (pushed) and merged into `releases/v0.180.0` as #1574 (`847c30d8`, 2026-11-10T11:58Z); **not merged to `main`, not deployed, not approved for production.** Merge and deployment order and approvals are in the Product UX decision of 2026-11-09 (the `main` freeze and the Stage B +72 h checkpoint stay independent and mandatory).
 
 ## Shipped on the branch
 

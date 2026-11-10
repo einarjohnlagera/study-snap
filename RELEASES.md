@@ -2,7 +2,7 @@
 
 ## v0.180.0 - Public Page Reliability and Privacy
 
-**Status: In Progress** (kicked off 2026-11-10 on `releases/v0.180.0`, **cut from `main` at `2cf895f6`** after `v0.179.0` was signed off, merged (#1573) and tagged, and `v0.176.0` and `v0.177.0` merged (#1547); **frontend only, one merge, one separately approved deploy, nothing deployed**. The scope below is already BUILT and VERIFIED on `feat/public-pages-followup-frontend` (three commits on `cd6bd183`, pushed) and is **NOT yet merged into this branch**.)
+**Status: In Progress** (kicked off 2026-11-10 on `releases/v0.180.0`, **cut from `main` at `2cf895f6`** after `v0.179.0` was signed off, merged (#1573) and tagged, and `v0.176.0` and `v0.177.0` merged (#1547); **frontend only, one merge, one separately approved deploy, nothing deployed**. The scope below is BUILT and VERIFIED and was merged into this branch as #1574 (`847c30d8`, 2026-11-10T11:58Z); the sign-off, the release PR and the deploy are still to come.)
 
 Theme: creator and profile pages stop serving a withdrawn note, an edited bio or a profile switched to private for longer than two minutes, fail closed instead of showing old data, and show a calm, safe state when they cannot load; the exam hub keeps its notes when only its review sets fail.
 
@@ -24,10 +24,10 @@ Theme: creator and profile pages stop serving a withdrawn note, an edited bio or
 
 Anti-drift: no backend code change (the only `backend/` change is the version in `pom.xml`), no migration, no prompt, no pricing, quota or entitlement change, no new infrastructure, no change to the 120 s privacy bound or any hard stop, no Render environment or deploy action by Claude. **All seven version references are bumped to `0.180.0` at kickoff, `backend/pom.xml` included (owner's decision, 2026-11-10).** The merge therefore changes a file under `backend/`, and Render will redeploy unchanged code unless `[skip render]` in the merge commit message works; that makes this release the safe place to test the phrase, since both earlier redeploys of unchanged code were clean.
 
-### Verification so far (on the feature branch)
+### Verification (recorded on the feature branch, merged as #1574)
 
 - Full frontend suite 241 suites, 2,921 passed, 1 skipped; `tsc` clean; lint 0 errors. The 12-check freshness harness passes locally and fails against the old `revalidate: 300` reader (6 checks); a real headless Chrome shows the error state, a still-failing retry and in-place recovery, and fails without the `error.tsx` files. **An isolated Vercel Preview (2026-11-10, two runs, 13 instances) passed all checks**: old content gone within the 135 s bound, the private page rendered, no expired content during a 240 s upstream failure, `x-vercel-cache` MISS and `cache-control: private, no-cache, no-store` on every response, in-place recovery in a real browser (run 1's one formal failure was the driver's sampling cadence, fixed with the criterion unchanged; run 2 passed 13 of 13). Two independent cold falsification reviews found no defect in the code; their findings are fixed or recorded.
-- Full record, including both reviews and the Product UX decisions: `docs/claude-plans/2026-11-09-v0180-public-page-reliability-release-notes-draft.md` (arrives with the feature branch).
+- Full record, including both reviews and the Product UX decisions: `docs/claude-plans/2026-11-09-v0180-public-page-reliability-release-notes-draft.md` (on this branch since #1574).
 
 ### Open risks and decisions
 
@@ -40,7 +40,9 @@ Anti-drift: no backend code change (the only `backend/` change is the version in
 
 ### Shipped
 
-_(nothing merged into this release branch yet)_
+- **PR #1574 (`847c30d8`, merged 2026-11-10T11:58Z): the four scope items above**, frontend only: 11 non-test frontend files, 7 test files, the three feature docs (`public-library`, `public-profile`, `exam-hub`), the ROADMAP row and the verification record. Release-tip checks after the merge: see the next line.
+- **Release-tip checks (2026-11-10, on `847c30d8`):** `tsc --noEmit` exit 0; lint 0 errors (20 warnings, not triaged against the files this release touches); full suite 241 suites, 2,921 passed, 1 skipped; production build exit 0. Not repeated: the Preview harness (it ran on the feature branch's code, unchanged by the merge).
+- **Deploy-state record:** the one-hour database read after the #1573 redeploy (`dep-dbpei55g1s2s73cb6o7g`, 09:48 to 10:53Z) is clean: no signal, terminated or recovery lines (each searched alone), no 5xx, memory peak 212.1 MB, connections one sample of 41 at 09:53Z during the deploy overlap, traffic low so not a load test.
 
 ## v0.179.0 - Lighter Listings
 
