@@ -13,7 +13,14 @@ Theme: creator and profile pages stop serving a withdrawn note, an edited bio or
 - **Exam hub degradation (frontend).** When only the review-sets request fails the hub keeps its notes and shows "Official review sets are temporarily unavailable" (no Retry).
 - **Dot-segment guard and a comment fix (frontend).** `.` and `..` usernames return not-found without a request (URL normalization would rewrite the backend path); the stale subject-page comment is corrected.
 
-Not in this release: the signed-in back-link prefetch protection (not reproduced in a real browser), the other `revalidate: 300` fetches, a negative cache or sequential profile fetching (not approved), mapping a backend 400 or 401 to not-found (the backend answers a container 400 for `/`, `\` and NUL and a 401 for `%` and `;`, which identify no profile identifier), server-side error status semantics.
+### Not in this release (folded 2026-11-10; each is for the next release or the other planned items, none is claimed here)
+
+- **Signed-in back-link prefetch protection.** Not reproduced in a real browser, so there is nothing to fix or to claim. Reopens only if it is reproduced.
+- **The other `revalidate: 300` fetches.** `frontend/lib/server-public-notes.ts` (lines 77 and 290, the homepage note count among them) and `frontend/lib/server-exam-goal-course-programs.ts:49` stay on the 300 s data cache. Only the creator and profile pair carried the recorded privacy defect, so the other fetches are not changed here.
+- **A negative cache or sequential profile fetching.** Not approved. A 404 still costs two concurrent backend requests (profile plus Learning Focus), and the head and body can each read the cache.
+- **Mapping a backend 400 or 401 to not-found.** The backend answers a container 400 for `/`, `\` and NUL and a 401 for `%` and `;`, which identify no profile identifier; they stay on the failure state (decision D2).
+- **Server-side error status semantics.** The HTTP status of a failed page stays 200 (the root layout's `<Suspense fallback={null}>` at `frontend/app/layout.tsx:88` commits it early); no crawler-visible error handling is claimed.
+- **Measuring the per-instance cache's effect on backend profile reads.** Accepted and unmeasured; a `[CHECKPOINT]` row is owed at sign-off.
 
 Anti-drift: no backend code change (the only `backend/` change is the version in `pom.xml`), no migration, no prompt, no pricing, quota or entitlement change, no new infrastructure, no change to the 120 s privacy bound or any hard stop, no Render environment or deploy action by Claude. **All seven version references are bumped to `0.180.0` at kickoff, `backend/pom.xml` included (owner's decision, 2026-11-10).** The merge therefore changes a file under `backend/`, and Render will redeploy unchanged code unless `[skip render]` in the merge commit message works; that makes this release the safe place to test the phrase, since both earlier redeploys of unchanged code were clean.
 
