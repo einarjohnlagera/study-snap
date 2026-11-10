@@ -4,7 +4,7 @@ Written 2026-11-10 by the Claude Code release session. Paste this whole file to 
 
 ## 1. Where we are, in plain words
 
-`v0.180.0 — Public Page Reliability and Privacy` is built, verified and merged into its release branch (`releases/v0.180.0`, tip `e93e56d3`). It is **frontend only** and nothing is deployed. It does four things:
+`v0.180.0 — Public Page Reliability and Privacy` is built, verified and merged into its release branch (`releases/v0.180.0`, tip `d598a1e2`). It is **frontend only** and nothing is deployed. It does four things:
 
 1. **Fixes a recorded privacy defect.** Creator and profile pages could show a withdrawn note, an old bio or a profile switched to private for up to 5 minutes. They now read through a strict 120-second in-memory cache that never serves data older than that, and fails closed instead of showing old data.
 2. Shows a calm "We couldn't load this profile" state (with "Try again") and a `noindex` head when a profile cannot be loaded. The HTTP status of such a page stays 200 (no crawler-visible error handling is claimed).
@@ -19,7 +19,7 @@ It was verified locally, on an isolated Vercel Preview (13 of 13 checks on the s
 
 - **Timing:** the 24-hour gate after the last deploy opens 2026-11-11T09:52Z (17:52 PHT); the first slot that is also off-peak is **Thursday 2026-11-12 05:00 PHT**. The owner picks the slot.
 - **`main` is held** from the merge until the 24-hour watch ends (the queued Pricing release and the Note Strategist docs PRs wait), because any later merge removes Vercel's one-step rollback.
-- **Hard stops (pause and decide, never automatic rollback):** any Postgres signal-9 kill; backend 5xx above 2% sustained across five consecutive one-minute periods; connections above 25 for 5 minutes; memory above 260 MB at two consecutive reads; **plus two new ones for this release:** a production creator or profile response whose `cache-control` is not `private, no-cache, no-store` or whose `x-vercel-cache` is `HIT` or `STALE`; and the profile-read error share above 20% in any 15 minutes that contain at least 10 reads.
+- **Hard stops (pause and decide, never automatic rollback):** any Postgres signal-9 kill; backend 5xx above 2% sustained across five consecutive one-minute periods; connections above 25 for 5 minutes; memory above 260 MB at two consecutive reads; **plus two new ones for this release:** a production creator or profile response whose `cache-control` lacks `no-store` or contains `public` or `s-maxage` (tested on meaning, not the exact string), or whose `x-vercel-cache` is `HIT` or `STALE`; and the profile-read error share above 20% in any 15 minutes that contain at least 10 reads.
 - **Findings, not stops:** a `CATALOG_CACHE_DEADLINE class=profile` line, any `EXAM_HUB_REVIEW_SETS_UNAVAILABLE` line, wait buckets of 10 seconds or more, and the backend-load observation below.
 - **Order:** sign-off commit on the release branch before the merge (so there is exactly ONE merge to `main`), merge with `[skip render]`, watch for 72 hours, then tag `v0.180.0` and publish the GitHub Release.
 - **A required production smoke check:** one request each to a real creator page and a real profile page at about 5 minutes after the deploy, checking that the response is not cacheable (`no-store`, no `public`, no `s-maxage`, not a cache `HIT` or `STALE`). The owner picks the pages and runs it or authorizes Claude to issue exactly those two requests.
