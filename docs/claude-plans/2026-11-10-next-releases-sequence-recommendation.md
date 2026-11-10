@@ -69,7 +69,7 @@ Written 2026-11-10 by the Claude Code release session, answering the Product UX 
 ## 6. Decisions needed (minimum)
 
 1. **Approve the order** (pricing, then migration, then Challenge Quiz quality), or name the reason to change it.
-2. **Stop bumping `backend/pom.xml` on frontend-only or env-only releases from `v0.181.0` on?** Each bump costs a Render restart on a 256 MB database whose history is kills after restarts. Recommended: yes. (`v0.180.0` keeps its bump as decided, as the planned test of `[skip render]`.)
+2. **Stop bumping `backend/pom.xml` on frontend-only or env-only releases from `v0.181.0` on?** Each bump costs a Render restart on a 256 MB database whose history is kills after restarts. Recommended: yes. (`v0.180.0` keeps its bump and is a normal release with no `[skip render]`, owner decision 2026-11-10; this question is still open for `v0.181.0` onward.)
 3. **Pricing deploy order:** frontend first, then the env save at least 24 hours later (recommended), versus the brief's same-day order.
 4. **Whether the Redo Missed fix moves up** to right after pricing (recommended: yes, as its own small release or the first item of the next one).
 
