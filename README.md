@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.179.0 - Lighter Listings` (Released — deployed and signed off; stabilization closure pending the +72-hour checkpoint, 503 reconciliation and final release tag; signed off 2026-11-08; cut from `main` at `v0.178.0`; Stage A backend deployed 2026-11-03, Stage B frontend deployed 2026-11-06, the Stage B +72 h read due 2026-11-09T15:56Z; `v0.176.0` and `v0.177.0` are Released on their own branches, to be merged without a Render redeploy once the `main` freeze ends)
+Current release baseline: `v0.179.0 - Lighter Listings` (Released — deployed and signed off; stabilization closure pending the 503 reconciliation and final release tag; the +72-hour checkpoint passed 2026-11-10; signed off 2026-11-08; cut from `main` at `v0.178.0`; Stage A backend deployed 2026-11-03, Stage B frontend deployed 2026-11-06, the Stage B +72 h read passed 2026-11-10; `v0.176.0` and `v0.177.0` are Released on their own branches, to be merged without a Render redeploy once the `main` freeze ends)
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
