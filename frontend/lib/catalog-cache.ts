@@ -3,11 +3,14 @@ export const CATALOG_PAGE_TTL_CAP_MS = 120_000;
 export const CATALOG_SITEMAP_TTL_CAP_MS = 3_600_000;
 export const CATALOG_CACHE_MAX_KEYS = 1024;
 export const CATALOG_CACHE_MAX_ITEMS = 15_000;
+export const CATALOG_PROFILE_CACHE_MAX_KEYS = 512;
 export const CATALOG_PAGE_WALK_DEADLINE_MS = 90_000;
 export const CATALOG_SITEMAP_WALK_DEADLINE_MS = 240_000;
 export const CATALOG_WALK_PAGE_REQUEST_TIMEOUT_MS = 15_000;
 export const CATALOG_RAIL_REQUEST_TIMEOUT_MS = 10_000;
 export const CATALOG_PLAN_REQUEST_TIMEOUT_MS = 10_000;
+export const CATALOG_PROFILE_REQUEST_TIMEOUT_MS = 10_000;
+export const CATALOG_PROFILE_DEADLINE_MS = 15_000;
 export const CATALOG_WALK_MAX_PAGES = 400;
 /** After a failed load the key rejects for this long without calling the backend (never serves data). */
 export const CATALOG_FAILURE_BACKOFF_MS = 15_000;
@@ -42,14 +45,23 @@ export function createRequestSignal(parent: AbortSignal, timeoutMs: number): { s
 }
 
 type Entry = { value: unknown; startedAt: number; itemCount: number };
-const entries = new Map<string, Entry>();
-const inFlight = new Map<string, Promise<unknown>>();
-// key -> start of the failure, so a backwards clock cannot extend a backoff. Bounded like `entries`.
-const failures = new Map<string, number>();
-let totalItems = 0;
+type CachePartition = {
+  entries: Map<string, Entry>;
+  inFlight: Map<string, Promise<unknown>>;
+  // key -> start of the failure, so a backwards clock cannot extend a backoff.
+  failures: Map<string, number>;
+  totalItems: number;
+  maxKeys: number;
+  maxItems: number;
+};
+function createPartition(maxKeys: number): CachePartition {
+  return { entries: new Map(), inFlight: new Map(), failures: new Map(), totalItems: 0, maxKeys, maxItems: CATALOG_CACHE_MAX_ITEMS };
+}
+const catalogState = createPartition(CATALOG_CACHE_MAX_KEYS);
+const profileState = createPartition(CATALOG_PROFILE_CACHE_MAX_KEYS);
 
 const CACHE_STATS_WINDOW_MS = 60_000;
-const CACHE_STATS_CLASSES = ["rail", "plans", "walk:sitemap", "walk:page:all", "walk:page:subject", "walk:page:program", "walk:page:other", "other"] as const;
+const CACHE_STATS_CLASSES = ["rail", "plans", "walk:sitemap", "walk:page:all", "walk:page:subject", "walk:page:program", "walk:page:other", "profile", "other"] as const;
 type CacheStatsClass = (typeof CACHE_STATS_CLASSES)[number];
 type CacheStats = { hit: number; miss: number; join: number; backoff: number; w1: number; w10: number; w10p: number; err: number };
 type CacheDecision = "hit" | "miss" | "join" | "backoff";
@@ -67,6 +79,7 @@ function statsFor(name: CacheStatsClass): CacheStats {
 }
 
 export function catalogKeyClass(key: string): CacheStatsClass {
+  if (key.startsWith("profile:")) return "profile";
   if (key.startsWith("rail:")) return "rail";
   if (key.startsWith("plans:")) return "plans";
   if (key.startsWith("walk:sitemap:")) return "walk:sitemap";
@@ -136,18 +149,20 @@ export function catalogTtlMs(capMs: number, override: string | undefined): numbe
 }
 
 export function resetCatalogCacheForTests(): void {
-  entries.clear();
-  inFlight.clear();
-  failures.clear();
-  totalItems = 0;
+  for (const state of [catalogState, profileState]) {
+    state.entries.clear();
+    state.inFlight.clear();
+    state.failures.clear();
+    state.totalItems = 0;
+  }
   stats.clear();
   statsWindowStart = undefined;
 }
 
-function remove(key: string): void {
-  const entry = entries.get(key);
-  if (entry) totalItems -= entry.itemCount;
-  entries.delete(key);
+function remove(state: CachePartition, key: string): void {
+  const entry = state.entries.get(key);
+  if (entry) state.totalItems -= entry.itemCount;
+  state.entries.delete(key);
 }
 
 export async function getCatalogCached<T>(
@@ -162,6 +177,8 @@ export async function getCatalogCached<T>(
     failureBackoffMs?: number;
   } = {},
 ): Promise<T> {
+  const state = key.startsWith("profile:") ? profileState : catalogState;
+  const { entries, inFlight, failures } = state;
   const now = options.now ?? Date.now;
   const effectiveTtl = Math.min(ttlMs, options.hardCapMs ?? ttlMs);
   const effectiveDeadline = Math.min(options.deadlineMs ?? effectiveTtl, effectiveTtl);
@@ -175,7 +192,7 @@ export async function getCatalogCached<T>(
       return entry.value as T;
     }
   }
-  if (entry) remove(key);
+  if (entry) remove(state, key);
 
   const pending = inFlight.get(key);
   if (pending) {
@@ -203,7 +220,7 @@ export async function getCatalogCached<T>(
   const deadlineError = () => {
     const logClass = key.startsWith("walk:page:") ? "walk:page"
       : key.startsWith("walk:sitemap:") ? "walk:sitemap"
-        : key.startsWith("rail:") ? "rail" : "plans";
+        : key.startsWith("rail:") ? "rail" : key.startsWith("profile:") ? "profile" : "plans";
     console.warn(`CATALOG_CACHE_DEADLINE class=${logClass} deadlineMs=${effectiveDeadline}`);
     return new CatalogDeadlineError();
   };
@@ -222,21 +239,21 @@ export async function getCatalogCached<T>(
       const value = await Promise.race([Promise.resolve().then(() => load(controller.signal)), deadline]);
       if (now() - startedAt >= effectiveDeadline) throw deadlineError();
       const itemCount = Array.isArray(value) ? value.length : 0;
-      if (itemCount <= CATALOG_CACHE_MAX_ITEMS && (!options.shouldCache || options.shouldCache(value))) {
-        remove(key);
+      if (itemCount <= state.maxItems && (!options.shouldCache || options.shouldCache(value))) {
+        remove(state, key);
         entries.set(key, { value, startedAt, itemCount });
-        totalItems += itemCount;
-        while (entries.size > CATALOG_CACHE_MAX_KEYS || totalItems > CATALOG_CACHE_MAX_ITEMS) {
-          remove(entries.keys().next().value as string);
+        state.totalItems += itemCount;
+        while (entries.size > state.maxKeys || state.totalItems > state.maxItems) {
+          remove(state, entries.keys().next().value as string);
         }
       }
       return value;
     } catch (error) {
-      remove(key);
+      remove(state, key);
       if (backoffMs > 0) {
         failures.delete(key);
         failures.set(key, now());
-        while (failures.size > CATALOG_CACHE_MAX_KEYS) failures.delete(failures.keys().next().value as string);
+        while (failures.size > state.maxKeys) failures.delete(failures.keys().next().value as string);
       }
       throw error;
     } finally {

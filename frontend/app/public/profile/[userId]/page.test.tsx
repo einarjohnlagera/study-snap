@@ -338,4 +338,32 @@ describe("PublicProfilePage", () => {
       PublicProfilePage({ params: Promise.resolve({ userId: "missing-user" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
+
+  describe("generateMetadata when the profile read fails", () => {
+    it("returns the static unavailable title and noindex, with no profile data", async () => {
+      (getServerPublicProfile as jest.Mock).mockRejectedValue(new Error("upstream down"));
+
+      const metadata = await generateMetadata({ params: Promise.resolve({ userId: "owner-id" }) });
+
+      expect(metadata).toEqual({ title: "Profile temporarily unavailable | NoteLib", robots: { index: false } });
+      expect(JSON.stringify(metadata)).not.toContain("upstream down");
+    });
+
+    it("keeps the private and not-found metadata unchanged", async () => {
+      (getServerPublicProfile as jest.Mock).mockResolvedValueOnce({ status: "private" });
+      await expect(generateMetadata({ params: Promise.resolve({ userId: "p" }) })).resolves.toMatchObject({
+        title: "This Profile Is Private | NoteLib", robots: { index: false, follow: false },
+      });
+      (getServerPublicProfile as jest.Mock).mockResolvedValueOnce({ status: "not_found" });
+      await expect(generateMetadata({ params: Promise.resolve({ userId: "n" }) })).resolves.toMatchObject({
+        title: "Public Profile Not Found | NoteLib", robots: { index: false, follow: false },
+      });
+    });
+
+    it("still lets the page body fail so the route's error boundary renders", async () => {
+      (getServerPublicProfile as jest.Mock).mockRejectedValue(new Error("upstream down"));
+
+      await expect(PublicProfilePage({ params: Promise.resolve({ userId: "owner-id" }) })).rejects.toThrow("upstream down");
+    });
+  });
 });

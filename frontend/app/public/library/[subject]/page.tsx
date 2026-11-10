@@ -37,10 +37,10 @@ export async function generateMetadata({ params }: SubjectLandingPageProps): Pro
 }
 
 /**
- * The shell returns immediately; the catalog walk happens inside the Suspense child. There is deliberately NO `loading.tsx`
- * for this route: a route with one makes Next run `generateMetadata` (which walks the catalog) when a `<Link>` is merely
- * prefetched, so a link scrolling into view would start a walk (v0.179.0 B4 audit, real-browser run). Without it a prefetch
- * of this dynamic route renders nothing.
+ * This route has no `loading.tsx`; its Suspense child shows the skeleton. Next.js 16.1.6 runs
+ * `generateMetadata` on prefetch of a dynamic route with or without `loading.tsx` (v0.179.0 B4,
+ * real browser). Every subject-listing `<Link>` must set `prefetch={false}`; see the rule above
+ * `buildPublicLibrarySubjectPath` in `frontend/lib/public-note-path.ts`.
  */
 export default async function SubjectLandingPage({ params }: Readonly<SubjectLandingPageProps>) {
   const { subject } = await params;

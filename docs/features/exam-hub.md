@@ -68,7 +68,7 @@ Exam hubs also perform a best-effort Official Review Set enrichment:
 - Each configured `courseProgram` is looked up independently through the existing public collection catalog.
 - Matching uses the backend's normalized exact `courseProgram` lookup only. There is no subject-level, partial, or fuzzy matching.
 - Results are deduplicated by collection id. If more than one set matches, the shared plan picker lets the visitor select which set to preview.
-- Lookup failures are swallowed for this enrichment only; public notes and the rest of the anonymous hub continue rendering.
+- A failed review-sets lookup is contained to this section: the hub keeps its public notes and shows `Official review sets are temporarily unavailable` with `Your study notes are still available. Please try loading the review sets again in a little while.` (no Retry control; one `EXAM_HUB_REVIEW_SETS_UNAVAILABLE` log line). An empty result still renders nothing. A failure of the notes read still fails the page.
 - No matches means no additional section or empty state.
 
 Exam practice launched from adopted content follows the note's curriculum axis rather than the hub visitor's profile level. On the single-Study-Pack paths, Long Exam and Board Exam question pools are stamped and sampled by the note's effective curriculum level (`notes.learner_level` -> reader level -> `COLLEGE`). Changing the reader's profile level therefore does not invalidate a pool for a note with an authored level. A plan-sourced Long Exam is assembled from a representative deterministic sample of its whole ready-Study-Pack pool, never a learner-picked handful, and does not use this single-note pool key. If source fan-out leaves it above the configured assembly floors, it is presented as a shorter valid exam **on the completion report**; the exam itself is not annotated mid-session; below them it fails without retaining quota.
@@ -227,7 +227,7 @@ Event names must exist in both the frontend `AnalyticsEventType` union and backe
 
 Each exam hub is server-rendered with:
 
-- `revalidate = 300`.
+- `export const dynamic = "force-dynamic"` over the 120 s hard-TTL in-process catalog cache (not ISR; the earlier `revalidate = 300` was replaced in v0.179.0 Stage B).
 - Per-exam title and meta description.
 - Canonical URL under `/exam/{slug}`.
 - CollectionPage structured data, including an `ItemList` (`mainEntity`) of every member note's name and canonical URL — not just the visible Featured/Popular/Recent cards — so the structured data proves the hub's real depth even where the page caps visible cards.
