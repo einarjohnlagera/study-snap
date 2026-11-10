@@ -1,8 +1,43 @@
 # RELEASES.md - NoteLib
 
+## v0.180.0 - Public Page Reliability and Privacy
+
+**Status: In Progress** (kicked off 2026-11-10 on `releases/v0.180.0`, **cut from `main` at `2cf895f6`** after `v0.179.0` was signed off, merged (#1573) and tagged, and `v0.176.0` and `v0.177.0` merged (#1547); **frontend only, one merge, one separately approved deploy, nothing deployed**. The scope below is already BUILT and VERIFIED on `feat/public-pages-followup-frontend` (three commits on `cd6bd183`, pushed) and is **NOT yet merged into this branch**.)
+
+Theme: creator and profile pages stop serving a withdrawn note, an edited bio or a profile switched to private for longer than two minutes, fail closed instead of showing old data, and show a calm, safe state when they cannot load; the exam hub keeps its notes when only its review sets fail.
+
+### Planned Scope (owner and Product UX decisions 2026-11-08 and 2026-11-09)
+
+- **Creator and profile reads bounded at 120 s (frontend).** Both requests leave the 300 s Next data cache for a separately bounded `profile` partition of the in-process hard-TTL cache: 120 s maximum, single flight, 15 s failure backoff, 15 s deadline, `ok` and `private` cached, `not_found` never cached, no stale value after expiry or failure, its own 512-key bound and failure map so it cannot evict a catalog entry; both routes `force-dynamic`.
+- **A calm failure state (frontend).** A route-level `error.tsx` on `/public/creator/[username]` and `/public/profile/[userId]` (heading "We couldn't load this profile", "Try again" = `router.refresh()` plus `reset()`), and a static `Profile temporarily unavailable | NoteLib` head with `noindex` when the read fails. Client-side boundary only: the HTTP status stays 200 and no crawler-visible error handling is claimed.
+- **Exam hub degradation (frontend).** When only the review-sets request fails the hub keeps its notes and shows "Official review sets are temporarily unavailable" (no Retry).
+- **Dot-segment guard and a comment fix (frontend).** `.` and `..` usernames return not-found without a request (URL normalization would rewrite the backend path); the stale subject-page comment is corrected.
+
+Not in this release: the signed-in back-link prefetch protection (not reproduced in a real browser), the other `revalidate: 300` fetches, a negative cache or sequential profile fetching (not approved), mapping a backend 400 or 401 to not-found (the backend answers a container 400 for `/`, `\` and NUL and a 401 for `%` and `;`, which identify no profile identifier), server-side error status semantics.
+
+Anti-drift: no backend code change (the only `backend/` change is the version in `pom.xml`), no migration, no prompt, no pricing, quota or entitlement change, no new infrastructure, no change to the 120 s privacy bound or any hard stop, no Render environment or deploy action by Claude. **All seven version references are bumped to `0.180.0` at kickoff, `backend/pom.xml` included (owner's decision, 2026-11-10).** The merge therefore changes a file under `backend/`, and Render will redeploy unchanged code unless `[skip render]` in the merge commit message works; that makes this release the safe place to test the phrase, since both earlier redeploys of unchanged code were clean.
+
+### Verification so far (on the feature branch)
+
+- Full frontend suite 241 suites, 2,921 passed, 1 skipped; `tsc` clean; lint 0 errors. The 12-check freshness harness passes locally and fails against the old `revalidate: 300` reader (6 checks); a real headless Chrome shows the error state, a still-failing retry and in-place recovery, and fails without the `error.tsx` files. **An isolated Vercel Preview (2026-11-10, two runs, 13 instances) passed all checks**: old content gone within the 135 s bound, the private page rendered, no expired content during a 240 s upstream failure, `x-vercel-cache` MISS and `cache-control: private, no-cache, no-store` on every response, in-place recovery in a real browser (run 1's one formal failure was the driver's sampling cadence, fixed with the criterion unchanged; run 2 passed 13 of 13). Two independent cold falsification reviews found no defect in the code; their findings are fixed or recorded.
+- Full record, including both reviews and the Product UX decisions: `docs/claude-plans/2026-11-09-v0180-public-page-reliability-release-notes-draft.md` (arrives with the feature branch).
+
+### Open risks and decisions
+
+- Crafted usernames containing `/`, `\`, NUL, `%` or `;` reach the error state and write a failure-backoff record (documented, deferred); the failure head and the page body each read the cache, so on a confirmed 404 a second request pair can be issued; the per-instance cache may raise backend profile reads (accepted in D2, unmeasured); a 512-key partition can hold about 882 keys in the worst case (refetch cost only).
+- **Merge and deploy:** separate Product UX and owner approval, at least 24 hours from any other deploy; both previous merges redeployed Render because the merge commit lacked `[skip render]`, and the second even though its diff touched nothing under `backend/`, so expect a backend restart on merge and watch the database for an hour.
+
+### Kickoff checks (2026-11-10)
+
+- Version check before the bump: all seven references at `0.179.0`. Backlog Index file coverage: 223 of 248 tracked plan and finding files covered by name or directory, 13 are release artifacts of `v0.176.0`, `v0.177.0` and `v0.179.0` (exempt by the Index's own rule), and the 12 remaining `authored-bodies/` files sit inside journey folders the BSCS and BSIT rows already cover; no gap. **Checkpoint scan:** 64 rows carry a due date on or before 2026-11-10 and 49 are not visibly closed by a crude header check (for example the `v0.172.0` Leg D read, the `v0.91.0` to `v0.95.0` reads due 2026-10-27, and the owner action due 2026-10-29); not actioned here, listed for the next scan.
+
+### Shipped
+
+_(nothing merged into this release branch yet)_
+
 ## v0.179.0 - Lighter Listings
 
-**Status: In Progress** (**Stage A DEPLOYED 2026-11-03: PR #1551 merged as `e8c380f3`, Render live 2026-11-03T10:56:13Z; Stage B not merged, not deployed; see the Deploy record below**). Kicked off 2026-11-02 on `releases/v0.179.0`, **cut from `main` at `a521a667` (`v0.178.0`)**. **One release milestone, two staged merges and two separately approved deploys: Stage A (backend) first, Stage B (frontend) second.** Owner decisions 2026-11-02, taken with Product UX, are recorded in `docs/claude-plans/2026-11-01-v0178-followup-listing-projection-scope.md` (the release plan: sections A to F, the first decision round and the second round with its implementation-readiness summary).)
+**Status: Released** — deployed and signed off; stabilization closed 2026-11-10: the +72-hour checkpoint passed, the 503 reconciliation was accepted by Product UX on 2026-11-08, the sign-off merged as #1573 and `v0.179.0` was tagged on `cd6bd183`. (signed off 2026-11-08; **Stage A DEPLOYED 2026-11-03: PR #1551 merged as `e8c380f3`, Render live 2026-11-03T10:56:13Z, +72 h read PASSED; Stage B DEPLOYED 2026-11-06: PR #1571 merged as `cd6bd183`, Vercel READY 15:56:32Z, +24 h read passed as written, +72 h read passed 2026-11-10; see the Deploy records below**; release notes `docs/releases/v0.179.0.md`; the `v0.179.0` tag is cut on `cd6bd183` after the +72 h read passes). Kicked off 2026-11-02 on `releases/v0.179.0`, **cut from `main` at `a521a667` (`v0.178.0`)**. **One release milestone, two staged merges and two separately approved deploys: Stage A (backend) first, Stage B (frontend) second.** Owner decisions 2026-11-02, taken with Product UX, are recorded in `docs/claude-plans/2026-11-01-v0178-followup-listing-projection-scope.md` (the release plan: sections A to F, the first decision round and the second round with its implementation-readiness summary).)
 
 Theme: cut the database cost of every public-catalog listing request, and stop a withdrawn note's title or excerpt lingering in cached public pages, after `v0.178.0`'s stability gate failed (non-deploy kills 2026-10-31T07:41:01Z and 2026-11-01T20:49:13Z, a backend restart 2026-10-31T14:08Z) and the owner ruled the database upgrade out for now.
 
@@ -85,6 +120,17 @@ Anti-drift: no database upgrade, paid service or new infrastructure; no crawler 
 - **B4 prefetch investigation and fix (2026-11-04; the full record is on the B4 branch, PR #1558).** A real browser's link prefetch runs a route's `generateMetadata`, with or without a `loading.tsx`, and the subject listing's metadata walks the subject catalog, so a visible link started walks for pages nobody opened; this predates B4. A header-based guard was built and rejected (Next.js 16.1.6 does not expose the router headers to `headers()`); the fix is `prefetch={false}` on the three subject-listing links (the note page breadcrumb and its "See all" link, the exam hub's subject chips; the first inventory said two and missed an alias variable), a static test for the known link patterns, and the subject listing's skeleton as an in-page Suspense fallback (no `loading.tsx` there; the exam hub keeps its own). **Vercel Preview of the final code, real Chrome: 13 of 13 scenarios pass, with 11 catalog-walk starts in the whole run read from the runtime logs: one per cold navigation, none from a viewport or a prefetch.** A control link with the default prefetch starts a walk from the viewport on Vercel too (the upgrade tripwire). The T-series on the same Preview was still running when this was written.
 - **Not proven, and blocking the Stage B deploy recommendation:** the 240 s sitemap deadline against the real platform limit; Stage A's 24 h and 72 h reads; Product UX's acknowledgement of the D3 constraints, the 240 s deadline and the backoff; the cache hit rate under real bursts (the cache is per instance and the Preview reached 19 to 21 instances in one burst, so the estimate of about 2.5x the rail queries per instance may be optimistic); creator and profile pages (D4).
 
+### Deploy record - Stage B (2026-11-06)
+
+- **Deployed 2026-11-06 (owner-approved, "lets do it now", about 23:40 PHT).** PR #1571 (`releases/v0.179.0-stage-b` into `main`, tip `bf62857d`, 38 files, nothing under `backend/`, no version or package file) merged 15:55:02Z as `cd6bd183`; Vercel `dpl_3DYfi2WhryAmg8osG4wLtTBXKkN1` READY 15:56:32Z (T0); Render did not redeploy; rollback target `dpl_fZ7WPyhKuNpN4Tqs6faYqHz4Bvja`. Integrated-branch checks before the merge: tsc clean, lint 0 errors, 237 suites with 2,884 tests passed and 1 skipped (one earlier run had 14 suites fail to run for an uncaptured, non-reproduced reason; two reruns passed), production build.
+- **First hour clean** (logs saved at +10, +30, +45 and +55 minutes): three `CATALOG_WALK outcome=ok` subject walks of 1 page (555 to 972 ms), first cache hits at 16:21Z, `w10p` 0, no error, deadline or guard-breach line.
+- **+24 h read (2026-11-07T15:57:50Z): PASSED as written, one item for Product UX.** Zero kills; connections 20. 3 HTTP 503 at 06:24 to 06:26Z (8.3% of 36 requests in a five-minute window; cause unknown; no walk, no database pressure; "5xx above 2% for 5 minutes" is met only under a window reading). Highest database memory sample 266.0 MB (99.1%) at 15:20:00Z: one reading above 260 MB, not walk-driven; spikes recovered. Walkers are fully attributed (`other:0`): three 52-page `exam-hub` walks and three 44-page `sitemap` walks in 24 h (the first sitemap walk took 23.5 s for 44 pages and 2,186 notes), all HTTP 200. **Database-load efficiency is not established:** `courseProgram` calls about 24% and unfiltered about 20% above Stage A's average over the comparison window (a first quoted figure of 14 an hour against 6 used a window containing all three hub walks and is withdrawn), and the per-instance cache is not shown to save walks (six instances in one hour). Full report: `docs/claude-plans/2026-11-07-v0179-stage-b-24h-read-report.md`.
+- **Sign-off record:** signed off 2026-11-08 at the owner's request, ahead of the +72 h read (the deploy plan's section 8 expected it after). Pre-signoff review: one `advisor()` call plus the scope-completeness, feature-doc drift and Backlog-closure gates and `version-check`; **the scoped cold falsification review that the repo's rule calls for when a privacy boundary moves was run on 2026-11-08** (cold Sonnet agent, read-only, against production commit `cd6bd183`; earlier, two cold reviews had covered B1 to B3). It tried to disprove nine claims about the cache and the routes: eight HELD (hard TTL never serves expired data, fail-closed walks, single-flight, 15 s backoff, de-duplication, caps, sitemap bounds, backend header allowlist) and one held only in part (the prefetch guard). **Findings, none fixed in this release (Product UX authorized no change to the deployed frontend), all recorded as known limits:** (1) **Exam hubs lost graceful degradation.** `frontend/lib/server-public-study-plans.ts` used `Promise.allSettled` and returned an empty list on any failure in `v0.178.0`; it now goes through `getCatalogCached` with `Promise.all` and throws ("Could not load public study plans." / "Invalid public study plans response."), and `frontend/app/exam/[slug]/page.tsx` awaits notes and plans together with no catch. A failure of the plans request therefore now shows the hub's busy page and starts the 15 s backoff, where it used to show the notes without the official review sets. A test pins the new behaviour, so it looks deliberate, but it is not documented as a trade-off. (2) **One subject-link prefetch path escapes the guard.** `PublicLibraryBackLink` (`frontend/components/notes/public-library-back-link.tsx`, rendered at `frontend/app/public/library/[subject]/[slug]/page.tsx:190`) passes a saved return URL to `BackLink` (`frontend/components/ui/back-link.tsx`), a plain `<Link>` without `prefetch={false}`. The saved URL can be a subject listing (any path under `/public/library/`), so a signed-in reader who came from a subject page can prefetch it, which a real browser turns into a catalog walk. It shows only to signed-in users, so the exposure is small, and `subject-link-prefetch.static.test.ts` cannot see it because it only matches literal `<Link` tags. The same applies to the `?ref=` back link in `published-plans-page-client.tsx`. (3) The comment at `frontend/app/public/library/[subject]/page.tsx:36-43` says omitting `loading.tsx` makes a prefetch render nothing; the real-browser control experiment in B4 showed the metadata runs either way, and `frontend/lib/public-note-path.ts` states the correct rule. The comment is stale. (4) Caches are per instance (six instances were seen in one hour) and the routes export no `maxDuration`, so the 90 s and 240 s walk deadlines rely on the platform's 300 s limit that the owner confirmed. (5) The 15,000-item cap is shared by all keys. (6) Junk subject slugs are uncached by design. **Not exercised by any test:** a real Next.js prefetch of a route, the BackLink path, and a real HTTP request to the routes (component and unit tests only). These findings go to a separate follow-up that needs owner and Product UX review. The tag is cut on `cd6bd183` after the +72 h read passes.
+- **503 reconciliation and request-volume comparison (Product UX accepted, 2026-11-08; full record `docs/claude-plans/2026-11-08-v0179-503-reconciliation-and-request-volume.md`).** The 2026-11-07 06:24 to 06:26Z episode (3 x HTTP 503, 8.3% of 36 requests) came from v0.178.0's ranking-snapshot fallback bulkhead (`PUBLIC_LIBRARY_RANKING_BUSY`): cumulative `bulkheadRejections` 0 at 06:24:07Z, 3 at 06:55:03Z, unchanged since; recompute took 7.6 s. The rejected requests were not individually identified and the expired-snapshot trigger is inferred. 40 of the 41 requests in that minute were direct browser-user-agent clients, one was the frontend server; no Stage B rollback is requested. The stop "5xx above 2% for 5 minutes" is read from now on as sustained across five consecutive one-minute periods; **both readings are preserved: sustained NOT triggered, five-minute aggregate TRIGGERED**, and no new threshold was added. Request-volume comparison (same clock hours on Nov 6, 7 and 8): frontend-server non-walk requests were 189, 168 and 635 over two hours (the Nov 6 baseline hours sit in a quiet stretch); the step is not explained by the cache design alone and is not shown to be caused by Stage B; about 440 requests in the peak Render bucket were outside the public diagnostics (352 notes were created in the 02:00Z hour); inconclusive on cause, investigation stopped per Product UX.
+- **+72 h read (2026-11-10, read-only): PASSED.** Report `docs/claude-plans/2026-11-10-v0179-stage-b-72h-read-report.md`. T0 is 2026-11-06T15:56:32Z (the production alias was repointed to `dpl_3DYfi2WhryAmg8osG4wLtTBXKkN1` at that instant). Over about 86 hours: zero `signal`, `terminated` or `recovery` lines in the production database log (each term searched alone, search verified to work); no backend restart or deploy (newest Render deploy still Stage A); no 5xx after the three known 503s of 2026-11-07; connections 20 to 21; highest 30-minute database memory sample 256.0 MB (below the 260 MB stop; finer samples were not re-read); the walk-burst clause was met in the first day (six attributed walk episodes of 38 to 59 listing requests a minute, all HTTP 200). **Stated limits:** Stage B is held and stable, not shown to have reduced database load (no full-window workload comparison against Stage A; cache hit rates are unrecoverable beyond Vercel's one-hour logs); the walk-side stops are verified directly only for the last hour; the sitemap was not smoke-tested (no artificial production traffic); a six-and-a-half-hour overnight lull of requests (2026-11-08 to 2026-11-09) is unexplained but the backend stayed up. **The owner stated on 2026-11-10 that the `main` freeze is lifted**; that authorizes no merge or deploy.
+- **Tag and GitHub Release (2026-11-10).** `v0.179.0` was tagged on `cd6bd183` (the Stage B merge commit, `origin/main`'s tip at the time and the commit Vercel production served) and a GitHub Release was published from `docs/releases/v0.179.0.md`, marked Latest; the notes file itself reaches `main` when this sign-off PR (#1573) merges.
+- **Pending:** the merge of this sign-off, which waits for PR #1547 (`v0.176.0` and `v0.177.0`) to merge and for `main` to be merged forward into this branch with the archive move, the "NOT merged" wording for those releases flipped, and the `CLAUDE.md` deploy-state block updated; then the `v0.179.0` tag on `cd6bd183`. The +72 h read and the freeze condition that were pending here passed or were met on 2026-11-10 (see the bullet above). Follow-up release (working identifier `v0.180.0`, branch `feat/public-pages-followup-frontend`, built and verified locally and on an isolated Vercel Preview, NOT merged, NOT deployed, no kickoff yet): the creator/profile 120 s hard-TTL fix failing closed, exam-hub graceful degradation with the approved copy, the stale subject-page comment, a calm failure state with a `noindex` head, and a dot-segment guard; the signed-in back-link prefetch protection was not reproduced in a real browser and is not included.
+
 ## v0.178.0 - Production Stabilization
 
 **Status: Released** (kicked off and signed off 2026-10-29 on `releases/v0.178.0`, **cut from `main` at `06a09f7c` (`v0.175.0`), NOT from `releases/v0.177.0`; closed on its branch, merged to `main` by PR #1546 (2026-10-30T14:48:10Z, `a521a667`) and DEPLOYED (see the Deploy record below) and its EFFECT ON THE SIGNAL-9 KILLS IS UNPROVEN**. Owner decisions, 2026-10-29: approve the final scope of `docs/claude-plans/2026-10-29-v0178-production-stabilization-plan.md`, take **Option B** (metrics plus tag-id snapshot, accepting up to 5 minutes of tag-membership lag in tag-filtered ranked listings), and cut from `main`.)
@@ -141,12 +187,193 @@ Kickoff notes: the Backlog Index scan (checklist steps 8 and 9) was **not perfor
 - **Lag correction (found by the release-level pass; the owner accepted "up to 5 minutes", and the worst case is longer):** the snapshot refreshes when a request finds it older than 300 s, but that request is still served the old snapshot while the refresh runs, and a snapshot is served until 900 s old. Under steady traffic the lag is about 5 minutes; after a quiet period the first requests can see data up to about 15 minutes old; beyond 900 s requests use the live SQL. This affects tag membership and engagement ordering only, never visibility. **For the owner's confirmation**: it is rare (it needs a gap in traffic) and cheap to tighten (lower `max-age-seconds`) at the cost of more fallback during failures.
 - **Known limitations (carried):** Gate A was measured on RECOMMENDED only, on a laptop-hosted container (20 to 30% noise) that reproduces neither Render's CPU limit nor a cold cache; the Vercel function max duration was NOT readable and a cold sitemap, the `general` subject page or an exam hub now walks the catalog inside a function (about 41 sequential pages); tag-filtered ranked listings may lag a new or retagged note by about 5 minutes under traffic and up to about 15 minutes after a quiet period (the owner accepted 5 minutes; the worst case is longer, see the lag correction above); the `tag` parameter has no count limit; a build thread blocked on a dead socket still occupies the single snapshot executor thread; the diagnostics nits listed in the item 3 bullet.
 - **Deploy prerequisites (owner; none of them is mine to run):** a verified backup and a completed restore rehearsal into an isolated database; an off-peak window; a health read just before (database memory under 200 MB at rest, connections about 20, no non-deploy kill in the previous 24 hours); the Vercel function max duration and Fluid compute setting read in the dashboard (if under about 60 s, add `export const maxDuration = 60` to `app/sitemap.ts` BEFORE merging); the owner's explicit approval of the merge. During the deploy: watch database memory and connections each minute for 30 minutes, the kill log, backend 5xx, the first `PUBLIC_LIBRARY_RANKING_SNAPSHOT computed` line (`durationMs`) and the `bulkheadRejections` counter. Stop conditions: memory above 250 MB, a kill, 5xx above 2% for 5 minutes, connections not back to about 20 within 5 minutes. After the merge: wait at least 5 minutes, then run `scripts/check-deploys.sh` (the owner supplies the Render key; exit 0 means both platforms serve `origin/main`, **exit 2 means "could not check" and is NOT a pass**; a merge is not a deploy, and `v0.136.0` once merged and deployed on neither platform); then one GET each of `/sitemap.xml`, `/public/library/general` and `/exam/ale` (owner's call).
-- **PR to `main` (next step, NOT yet opened at signoff; it needs the owner's word):** a DRAFT marked DO NOT MERGE; **merging it deploys both platforms** (Render redeploys because `backend/` changed; Vercel redeploys on the same push), so it merges only on the owner's word after the prerequisites above. `v0.176.0` and `v0.177.0` stay Released on their own branches, unmerged; expect doc and version conflicts when they merge (merge `main` forward then).
+- **PR to `main` (at signoff: the next step, not yet opened; it was opened as #1547 and MERGED on 2026-11-10, see the merge record below):** a DRAFT marked DO NOT MERGE; **merging it deploys both platforms** (Render redeploys because `backend/` changed; Vercel redeploys on the same push), so it merges only on the owner's word after the prerequisites above. `v0.176.0` and `v0.177.0` stay Released on their own branches, unmerged; expect doc and version conflicts when they merge (merge `main` forward then).
+
+## v0.177.0 - Challenge Quiz Quality, Continued
+
+**Status: Released** (kicked off 2026-10-28 on `releases/v0.177.0`, cut from `releases/v0.176.0` at `5e2db468`, not from `main`; **closed 2026-10-29 on its branch; MERGED to `main` on 2026-11-10 as #1547 (`842baab8`, together with `v0.176.0`; test harness and documentation only, no production behavior change; tags `v0.177.0` and `v0.176.0`)**; the evaluation outcome was HOLD, so this release changes no production behavior and no PR to `main` is opened by this signoff). At kickoff, `v0.176.0` was Released on its branch, unmerged, deploy on HOLD, and draft `DO NOT MERGE` PR #1538 kept its diff against `main` visible (still open and draft when read 2026-10-28). **The theme name is proposed by the Release Implementor and the owner may rename it. It is deliberately model-neutral: this repo's docs are internal, but the name travels into the README baseline, the release notes and the PR title, and customer copy never names a model or implies a plan quality difference.**
+
+Theme: close the Challenge Quiz quality gap the `v0.176.0` evaluation found on the free plan. On today's prompt Luna scored distractors 3.23 against Sol's 3.75, a giveaway estimate of 10.5% against 4.5%, and 5 confirmed critical defects of 300 against 0; the proposed wording lowered difficulty on Sol and so was not shipped. This release decides which lever to test, under the same blind pipeline, and changes the production prompt only if a new evaluation passes for BOTH Luna and Sol. Internal only: customer copy never names a model and implies no plan quality difference.
+
+**Selection record.** The owner selected "Luna-first quality follow-up" as the theme on 2026-10-28 (answer to a scope question in the kickoff session). No plan file is marked `Status: ready for release`; the Backlog row and the report's section 6 list levers, not a contract. **Scope locked by the owner on 2026-10-28 (after the kickoff commit `3d70da87`, answer to a scope question): items 1 to 3, with item 4 gated on the evaluation result.**
+
+**Deploy gate (carried unchanged):** on HOLD for deployment until the operational gate clears (four Postgres signal-9 kills after four deploys; first input is the 2026-11-01 cache read). Every `main` merge deploys. Nothing merges to `main` before the final deploy decision. **Re-read at kickoff (Render deploy list, 2026-10-28):** the newest deploy is still `v0.175.0`, live 2026-10-26T14:58:47Z; none since.
+
+**Sources:**
+- `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md` (section 6, the levers), the pre-registration `docs/claude-plans/2026-10-27-challenge-quiz-quality-preregistration.md`, the frozen scorer instructions and the rubric (v3), all from `v0.176.0`.
+- The `v0.176.0` harness (PRs #1536, #1537), reusable as is: alternate prompt directory, five generation arms plus an Official stock arm, blind export, leak check, per-arm prompt hash.
+- `ROADMAP.md` Backlog row "Challenge Quiz Luna-first quality follow-up".
+- `docs/claude-plans/2026-10-28-challenge-quiz-g5-reword-proposal.md` (item 1's options, awaiting the owner).
+
+### Planned Scope
+
+Items 1 to 3 are locked (owner, 2026-10-28); item 4 is gated. Status per item: `[queued | with-Codex | in-audit | merged-to-release | blocked: <reason>]`.
+
+**Final status at signoff (2026-10-29): item 1 SHIPPED (PR #1539, `ab69e72b`, merged as `deba8e46`); item 2 SHIPPED (PR #1540, `b32a2f41`, merged as `9c669442`); item 3 DONE, outcome HOLD; item 4 NOT SHIPPED (the gate failed; the production prompt is unchanged; the next step is the owner's decision in the evaluation report section 6); item 5 DONE.**
+
+1. **Reword G5 and re-pre-register. Docs plus a small test-scope calculator change (Tier N, Codex). `[DECIDED 2026-10-28: Option A with a NOT EVALUATED disclosure, $4 cap (record `docs/claude-plans/2026-10-28-v0177-g5-decisions-product-ux.md`). v2 rubric (`docs/claude-plans/2026-10-28-challenge-quiz-quality-scoring-rubric-v2.md`) SIGNED by the owner 2026-10-28; arms unchanged; the whole-arm re-review of the proposed arms is pre-registered in the draft `docs/claude-plans/2026-10-28-challenge-quiz-quality-preregistration-v0177.md` (Amendment 4b's skip withdrawn; on-trigger reading, the owner may rule unconditional). Calculator built by Codex and audited, MERGED to the release branch 2026-10-28 as PR #1539 (`deba8e46`, commit `ab69e72b`). Item 1 is complete except the pre-registration freeze (item 3's gate), which waits on the owner's read of the run sheet.]`** G5 ("no format below 3.5 with at least 20 items") was "harsh by construction" (evaluation report section 4) and is one of the three gates Sol failed. The reword needs the owner's sign-off before any paid run, and a new pre-registration is committed before the first paid command; the frozen `v0.176.0` rubric and scorer instructions stay as the record and are not edited.
+2. **Proposed-prompt variant for the evaluation arms: Variant G+ (the five approved Change B bullets only, without Change A and Change C). Test scope, Tier N (Codex). `[DECIDED 2026-10-28 by the owner and Product UX (record `docs/claude-plans/2026-10-28-v0177-item2-gplus-decision.md`); built by Codex and audited, MERGED to the release branch 2026-10-28 as PR #1540 (`9c669442`, commit `b32a2f41`); resource SHA-256 `019c5bdf9f868c0aa206490a345b91020e588c1afe993f8930ecd1eed1029f16`]`** An alternate Challenge prompt file that carries only the giveaway fix (absolute words, parallel choices), so the arms can be attributed. The exact wording goes to the owner before the brief. The production file `challenge-quiz-developer.txt` is not touched by this item.
+3. **Evaluation run. Owner-run generation (about $3.13 metered, $2.53 on the dashboard), agent-run scoring and review. `[✅ DONE 2026-10-29, outcome HOLD: neither Luna nor Sol passes; report `docs/claude-plans/2026-10-29-challenge-quiz-quality-v0177-evaluation-report.md`]`** Luna and Sol judged separately, same blind pipeline, owner-set generation cap (about $3 to $4 per rerun last time), gates re-registered in item 1. The scorer pipeline uses the harness's own validator.
+4. **Production prompt change. Tier N, gated by item 3. `[NOT SHIPPED: the gate did not pass (HOLD); the production prompt is unchanged]`** Only if the new evaluation passes for BOTH models and the owner gives final approval; otherwise HOLD, with no measurement-only deploy without separate owner approval.
+5. **Backlog rows and checkpoints. Docs. `[done at kickoff, extended at signoff]`**
+
+**Levers the report lists that this release's anti-drift EXCLUDES, so the owner is not offered them as scope:** routing free-plan Challenge to a stronger model (a pricing and entitlement change), and a Luna-specific verifier pass (the three verifier switches stay OFF). Either needs its own owner decision and release.
+
+Anti-drift: no learner-facing difficulty selection; no change to the 10/12/15 question counts; no Phase 2 bank selection or Phase 3 question reporting; no mass regeneration or bank migration; Board Exam and Long Exam untouched (deferred by the owner, 2026-10-27); no pricing, quota or entitlement change; customer copy never names a model; no production prompt change before a new evaluation passes for both models and the owner approves; the +5 signed-prompt file, its byte-parity test and the three verifier switches untouched (switches stay OFF); no deployment until the operational gate clears; the `v0.176.0` frozen rubric, scorer instructions and pre-registration are never edited.
+
+### Owner items carried at kickoff
+
+- **Overdue `[CHECKPOINT]` rows, carried unread, not actioned at this kickoff** (same convention as the `v0.176.0` kickoff). Crude filter: a dated `[CHECKPOINT — due …]` title on or before 2026-10-28 with no `✅`, `READ`, `CLOSED`, `RESOLVED`, `VERDICT`, `DISCHARGED`, `SUPERSEDED` or strikethrough marker in its title or the first 400 characters of its Status. **12 rows, and the filter over- and under-counts (it reads titles, not verdicts), so none is claimed open or closed:** `v0.111.0` and `v0.96.0` (due 2026-09-28), the `v0.74.0` conversion read (09-30), the `v0.119.1` public-read row (10-04), `v0.107.0`, `v0.90.0`, `v0.106.0` and `v0.97.0` (10-13), the `v0.166.0` Hikari row (10-14), **RC-3's Xendit payment reminder (10-21, `v0.171.0`; an owner action, a real unpaid test checkout, with no instrumentation possible)**, the `v0.160.0` bulk-notification read (10-25) and `v0.92.0` (10-27). No `Last reviewed` was advanced on any of them. A real read of each is owed before any is called overdue-and-open.
+- **Dated reads:** 2026-10-29 (set `CHALLENGE_QUIZ_STATEMENT_PAIR_LEGACY_CUTOFF`), 2026-11-01 (cache and kill read), 2026-11-03 (`v0.110.0` distal checkpoint), 2026-11-08 (`v0.174.0` model read, last day logs exist), 2026-11-09 (`v0.175.0` Challenge read).
+- **Rotate the OpenAI key in `backend/.env`:** a line of it appeared in the 2026-10-27 session transcript. **DONE by the owner before the paid generation (a new key was created; Claude never saw it).**
+- **Decide what happens to draft PR #1538** (close or merge) when this release's own PR goes in. A merge to `main` auto-deploys. **Still open and draft at signoff; carried. This signoff opens no PR.**
+- **Do not run `./mvnw clean` while the `v0.176.0` evaluation data is in `backend/target/llm-benchmark`** (backup at `~/quality-eval-v0176-backup/`). **The `v0.177.0` data is in `backend/target/llm-benchmark-v0177/`; a full backup (250 files, hashes verified, scoring inputs and gates included) is at `~/quality-eval-v0177-backup-final/`. The earlier `~/quality-eval-v0177-backup/` holds generation files only.**
+
+### Shipped
+
+- **Item 1, G5 v2 gate calculator (PR #1539, `ab69e72b`, merged as `deba8e46`; test scope only).** The offline gate report takes an explicit rubric version (`v1` or `v2`, no default; a missing or invalid value fails before anything is read or written). `v1` is the frozen `v0.176.0` rule and, replayed on the real `v0.176.0` data into a scratch folder, matches the recorded `gates.json` in content (member order differs per run because the code builds JSON with `Map.of`, as the recorded file does) and `gates.md` in content; it is pinned by pre-change golden resources. `v2` G5 compares each format with the same model's current arm on exact integer sums (fail only if below 3.5 AND declined by more than 0.2 on distractor plausibility or mode alignment, at least 20 items in both arms; cognitive demand never participates), reports `NOT_EVALUATED` formats with counts, means and shares, is `INCONCLUSIVE` when nothing is evaluated, and raises an owner-review flag (a `NOT_EVALUATED` format with 20+ items in either arm) in the model's reasons, a top-level `ownerReview` list and the report headline without changing any verdict. Files: `QualityGateReport.java`, `QualityGateParameters.java`, `RubricVersion.java`, `QualityGateG5Test.java`, `QualityGateIntegrationTest.java`, `golden-v1/`, the harness README. Verification: full backend suite with Docker 3,061 tests and 0 failures (118 Postgres integration tests included; the follow-up that added the headline flag changed report-writing code only and was re-verified with the focused tests and a real-data replay); eleven mutants of the G5 rule and the report code each caught by a named test; Codex's read-only review found nothing. Not verified: native SQL (unchanged).
+- **Item 2, Variant G+ evaluation prompt (PR #1540, `b32a2f41`, merged as `9c669442`; test scope only).** `challenge-quiz-developer.gplus.txt` is the production Challenge prompt plus exactly the five owner-approved Change B bullets (no Change A, no Change C; the `{DIFFICULTY}` line and every format rule untouched). SHA-256 `019c5bdf9f868c0aa206490a345b91020e588c1afe993f8930ecd1eed1029f16`, git blob `9efa83a86068c40f276f47a15059ac0a849897c3`. `ChallengeQualityGPlusPromptGuardTest` (7 tests) pins its exact bytes against production plus the bullets taken from the pinned `v0.176.0` file, the production prompt hash, the pinned proposed file's blob, the existing MULTI_SELECT, assertion and MATCHING lines, and loading through the harness for both the G+ and current-prompt paths. Verification: full backend suite with Docker 3,044 tests and 0 failures (118 Postgres integration tests); I rebuilt the expected file independently and it is byte-identical (5 lines added, none removed); five mutants caught. The production prompt is unchanged.
+- **Process note.** Full-suite runs add `verifier/*-stage2-*` files to `backend/target/llm-benchmark`, so a raw fingerprint of that folder changes; the check that matters is that the hash of the original 1,658 files is unchanged (`20920689aec97df1…`, verified after each run).
+- **Docs.** Product UX decisions for G5 and for G+ saved verbatim; rubric v2 signed 2026-10-28; draft pre-registration `docs/claude-plans/2026-10-28-challenge-quiz-quality-preregistration-v0177.md` with every hash pinned, a fresh output root `backend/target/llm-benchmark-v0177/`, seed 177, the `v0.176.0` input files reused, and the whole-arm re-review of the proposed arms pre-registered on trigger; run sheet `docs/claude-plans/2026-10-28-v0177-run-sheet.md` (draft).
+
+### Signoff record (2026-10-29)
+
+- **Scope completeness.** Item 1: shipped, `QualityGateReport.java`, `QualityGateParameters.java`, `RubricVersion.java` (explicit `v1`/`v2`, no default) with `QualityGateG5Test` and the golden-v1 resources. Item 2: shipped, `challenge-quiz-developer.gplus.txt` (SHA-256 `019c5bdf9f868c0aa206490a345b91020e588c1afe993f8930ecd1eed1029f16`) and `ChallengeQualityGPlusPromptGuardTest`, both under `backend/src/test`. Item 3: done, outcome HOLD (report `docs/claude-plans/2026-10-29-challenge-quiz-quality-v0177-evaluation-report.md`). **Item 4: not shipped** (reason: the gate failed for both models; where it lives: the owner options in the report's section 6 and the Backlog row "Challenge Quiz Luna-first quality follow-up"). Item 5: done.
+- **No production change, mechanically checked.** Against `main` the only non-test, non-doc file changed is `frontend/package.json` (the version bump); `backend/src/main` is untouched, including the production Challenge prompt (SHA-256 `5bf4a8e9…`, pinned by `ChallengeQualityPromptGuardTest`), and nothing in `backend/src/main` references the evaluation classes. No migration, no feature doc touched.
+- **Feature-doc drift gate:** no `docs/features/*` file was touched by this release and no behavior changed, so there is nothing to re-read against final code. **Backlog-row closure:** the "Luna-first quality follow-up" row (title, Status and Gate, which were stale: it still said "levers pending" and "owner decides G5 Option A, B or C" after Option A was decided on 2026-10-28) is updated in the signoff commit; the `v0.176.0` row was checked and remains accurate. **Checkpoint gate:** nothing shipped ahead of its evidence (no production change), so no checkpoint is owed.
+- **Pressure test, sized to the release.** The release has no production code, no authorization or privacy boundary, no shared method touched by two PRs and no money, quota or production-data semantics, so the full three-agent test was not run. Run instead: `advisor()` on the signoff, and **one scoped cold falsification agent (Sonnet, read-only, no maven)** that independently recomputed G1 to G7 and checked the hashes and the post-freeze history. **Result: all five claims confirmed (HOLD; the per-gate verdicts; the G5 flag; the pinned hashes; no frozen input, rule or threshold changed after the freeze). One material finding, now written into the report's section 8:** Sol G3 and part of Sol G2 depend on the reviewer source (Opus re-review on B3 against Codex primary on most of A3), so the report's "measurably worse on Sol" is largely a reviewer asymmetry; it cannot change Sol's HOLD.
+- **Known limitations (carried):** small samples; model reviewers, not humans; Sol latency confounded by the re-run timing; G7 on 9 to 18 items (Luna G7 flips with one item); Luna G6 close to its limit; the reviewer-source asymmetry above. Process counts only were read before the freeze.
+- **What this branch carries besides its own scope:** it is built on `releases/v0.176.0`, so it includes the `v0.176.0` harness (the harness reaches `main` inside the release that merges this branch); and it carries one commit that belongs to `v0.178.0`, `a84d8fc8` (the production stabilization plan and the operational-gate prompt supersession), which `releases/v0.178.0` (cut from `main`, kickoff `ef8086ff`) also holds. **This release's notes do not claim the plan.** Expect a trivial add/add overlap on that plan file when both branches merge.
+- **Not done:** no PR opened, no merge, no deploy (HOLD). `scripts/check-deploys.sh` does not apply. The Backlog scan of overdue `[CHECKPOINT]` rows stays carried unread (see the kickoff list). `v0.178.0 — Production Stabilization` is the next release and was kicked off on its own branch from `main` before this signoff.
+- **Merge record, 2026-11-10 (PR #1547, this release plus `v0.176.0`).** Merged by the owner at 07:16:03Z as merge commit `842baab8` (parents `cd6bd183` and `9922bde8`); the PR was renamed and marked ready first, and draft #1538 (`v0.176.0`) was closed as superseded after checking that all 24 of its commits, and its release notes file, are inside #1547. Against `main` it adds only 24 test-scope files under `backend/src/test` and documentation (0 files under `backend/src/main`, the prompts, `frontend`, `pom.xml` or migrations, checked against `origin/main`). **The merge commit message did NOT carry `[skip render]`** (the default "Merge pull request #1547 from ..." subject; the PR plan relied on the phrase), so Render auto-deployed: `dep-dbpc9dgae00c73e5tisg` (trigger `new_commit`) started 07:16:06Z and went live 07:18:35Z, replacing `dep-dbkrqbp5efls73etm3i0`; the production code is identical (test-only change), but it was a backend restart. **The skip phrase is therefore still UNTESTED on this service.** Vercel rebuilt production as for every docs-only merge: `dpl_BVBi9c2VEeTEHK9h5xLG6YQysSXD` READY for `842baab8`; the previous production deployment (Stage B, `dpl_3DYfi2WhryAmg8osG4wLtTBXKkN1`) is now the one-step rollback target. Database watch after the deploy (read-only): zero `signal` and zero `recovery` lines in the production database log from 07:10Z to 07:23Z (each term searched alone), memory 148 to 178 MB and connections 20 beforehand. **One-hour read after that deploy (2026-11-10, 07:15Z to 08:19Z, read-only): CLEAN.** Zero `signal`, `terminated` and `recovery` lines in the production database log (each term searched alone; the same search returns the Postgres `checkpoint` lines, so it works); no further Render deploy; no 5xx (the only non-200 responses were two 403 and one 404); database memory 147 to 206 MB (peak 206.2 MB at 08:03Z, 76.8% of the limit); connections 20 to 21 apart from one 2-minute sample of 40 at 07:19Z, when the old and new backend instances overlapped at the deploy swap (back to 20 by 07:21Z, so the stop of more than 25 connections for 5 minutes was not met). Traffic was low (7 to 26 requests per ten minutes), so this hour proves the redeploy of unchanged code was harmless, not that it was load-tested. Tags `v0.176.0` (on `5e2db468`) and `v0.177.0` (on `842baab8`) were pushed and GitHub Releases published for `v0.176.0`, `v0.177.0` and `v0.179.0` on 2026-11-10. **For any future merge that touches `backend/`, the skip phrase must be put in the merge commit message (for example `gh pr merge --merge --subject "...[skip render]"`); the default message does not carry it.**
+
+## v0.176.0 - Challenge Quiz Quality
+
+**Status: Released** (kicked off 2026-10-27 on `releases/v0.176.0`, cut from `main` at `06a09f7c` after `v0.175.0` merged as #1533; **closed 2026-10-28 on its branch; MERGED to `main` on 2026-11-10 inside #1547 (`842baab8`; draft #1538 closed as superseded; tag `v0.176.0` on its closing commit `5e2db468`); no production behavior change**; the evaluation outcome was HOLD, so this release changes no production behavior).
+
+Theme: Challenge Quiz should test meaningful understanding with accurate answers and believable distractors, without a difficulty
+setting or any new learner flow. A learner's feedback ("Distractors are easily spotted", "Too easy", 2026-10-23) led to a read-only audit
+that found the Challenge prompt carries no distractor rule and a bare, undefined difficulty word. This release improves **newly
+generated** questions, and only if an owner-run evaluation proves it safe.
+
+**⚠️ DEPLOY GATE:** this release is **on HOLD for deployment** until the operational gate below clears. Every `main` merge deploys, so
+nothing merges to `main` before the final deploy decision; the evaluation harness runs from this branch. A failed, incomplete or
+inconclusive evaluation means HOLD, with **no measurement-only deploy without separate owner approval** (Product UX, 2026-10-27).
+
+**Sources:**
+- Feature Planner's audit `docs/claude-findings/2026-10-26-challenge-quiz-quality-audit-distractors-and-difficulty.md` and Phase 1
+  proposal `docs/claude-plans/2026-10-26-challenge-quiz-quality-phase1-proposal.md` (both uncommitted in the shared checkout at kickoff; the
+  owner commits them from Feature Planner's session), which record the owner's 2026-10-27 approval of the exact prompt wording (Changes A, B, C),
+  the evaluation with a $4 generation cap run by the owner, and the reframed correctness criterion. I have the record, not the owner's own words.
+- This release's scope `docs/claude-plans/2026-10-26-challenge-quiz-quality-scope.md`, with Product UX's final review applied (its sections 7 and 8).
+- The deferred Board Exam / Long Exam follow-up scope `docs/claude-plans/2026-10-26-board-long-exam-follow-up-scope.md` (owner deferral,
+  2026-10-27: no paying learners yet).
+
+### Planned Scope
+
+1. **Evaluation harness (test scope). Tier N. `[✅ SHIPPED to the release branch: PR #1536 (harness), PR #1537 (batch builder follows the rubric for an invalid primary row)]`** Extends the existing Leg E (cell `S15`) with a quality mode: an alternate Challenge
+   prompt file (`challengeResources` replaces `challengeQuizDeveloperPromptTemplate`), five generation arms (current prompt on `gpt-4.1-mini`, Luna, Sol;
+   proposed prompt on Luna and Sol) plus a stock arm of about 100 Official template questions, with blind export, a leak check and a per-arm
+   prompt hash. Official notes only. No production code.
+2. **Evaluation run. Owner-run, no agent paid call. `[✅ DONE 2026-10-27, outcome HOLD: Sol fails G2, G3 and G5; see `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md`]`** **20 Official notes, 10 `COLLEGE` + 10 `BOARD_EXAM_REVIEW` by each note's own level** (owner decision, design A,
+   2026-10-27; each level at least 4 strata and 2 quantitative notes, overall at least 6 and 4), with template stock, all `hard` (cell `S15`),
+   one fresh 15-question start per note per arm, bank off, **$4 generation cap**. Blind Codex scoring (D11), independent Opus review of a stratified
+   sample including unflagged items against the source notes, disputes adjudicated. **Finalized gates (Luna and Sol judged separately, both must
+   pass):** G1 correctness (no more confirmed critical defects than the same-model current arm, zero attributable to the new wording; owner-approved);
+   G2 distractor plausibility at least 4.0 and at least +0.3; G3 mode alignment at least 4.0 of 5 (cognitive demand reported separately, no multi-step
+   requirement); G4 independently confirmed serious giveaways at most 5% of reviewed choice-based items with no recurring pattern (mechanical indicators
+   diagnostic only); G5 no format below 3.5 with at least 20 items; G6 collateral (clarity and faithfulness within 0.2, delivered count and retry rate
+   within 2 points, latency and tokens within 15%); G7 MULTI_SELECT cardinality and scoring unchanged; G8 inconclusive counts as not passing (a stratum
+   with fewer than 150 reviewed choice-based items is inconclusive). Feasibility is stated before the run: about 200 choice-based items per arm cannot
+   prove 5%, so G4 is applied to the observed rate with the interval reported.
+3. **Prompt change. Tier N code, gated by item 2. `[NOT SHIPPED: the gate did not pass (HOLD); the production prompt is unchanged]`** The single file `challenge-quiz-developer.txt` (Changes A, B, C as approved);
+   the Java `{DIFFICULTY}` substitution stays; the 10/12/15 counts are untouched. **The one-sentence reword in
+   `challenge-more-no-statement-pair-developer.txt` is DEFERRED** (it is pinned byte for byte to the owner-signed wording document by
+   `StatementPairProductionParityTest`, and the +5 exclusion switch is OFF, so the file is never sent). Tests: a prompt-contract test pinning the
+   MULTI_SELECT cardinality sentence, and a test that a normal +5 still uses the updated Challenge template. Update
+   `docs/features/challenge-quiz.md:238` and the "Balancing difficulty…" loading line (`quiz-generation-overlay.tsx:9`) under `VOICE_AND_TONE.md`.
+4. **Measurement log. Tier N. `[NOT BUILT: HOLD allows no measurement-only deploy without separate owner approval; awaiting the owner's decision]`** Extend `challenge_quiz_delivery_counts` with prior bank outcomes at delivery time (separate from the current
+   attempt), actual delivered counts, fresh versus bank or template reuse, and the model, with **unknown provenance kept as unknown**; no question text,
+   private-note content or unnecessary learner identifiers; a failure to log never affects correctness, availability or quota; a real-database or
+   log-contract test. It also makes the `model_used` read in the `[CHECKPOINT — due 2026-11-09]` row readable.
+5. **Backlog rows and checkpoints. Docs. `[done at kickoff, extended at signoff]`**
+
+**Owner decisions and corrections recorded 2026-10-27 (evaluation design).**
+- **Design A (owner):** 10 `COLLEGE` + 10 `BOARD_EXAM_REVIEW` notes by each note's own level; the difficulty stays `hard`. Gates are read **overall**; per-level results are
+  descriptive only (10 notes each).
+- **Why:** the prompt's `{LEARNER_LEVEL_GUIDANCE}` comes from `StudyPackGenerationContextResolver.effectiveCurriculumLevel`, which uses the **note's own level first**, so a viewer-level pin
+  only affects notes with no level. For `BOARD_EXAM_REVIEW` the guidance already says "plausible distractors, multi-step thinking". Real completed Challenge sessions run at
+  `BOARD_EXAM_REVIEW` for 128 of 215 (about 59%); the Official eligible pool is 875 `COLLEGE`, 447 `BOARD_EXAM_REVIEW`, 207 with no level.
+- **Correction:** Official template rows carry a **NULL** `generation_stamp` and are claimable (`findClaimableForUpdate`); an early draft of the selection filtered on the pack's current stamp and found only 33
+  notes in 4 strata. The corrected pool is 1,529 notes in 41 strata, and the per-level selection validated read-only against production (counts only): 10 + 10 notes, 12 strata, 4 quantitative.
+- **The drift guard must be retired or updated by item 3.** `ChallengeQualityPromptGuardTest` pins production's current prompt hash, so the prompt-change commit breaks it by design.
+- **Spend stops (README run sheet):** smoke 0.33 + full 3.28 = 3.61, worst case about 3.95 under the $4 cap; the Sol full stops are 1.40 against an expected spend of about $1.20 per Sol arm.
+- **Scoring rubric v3 (SIGNED and frozen 2026-10-27, with its pre-registration committed before any paid call):** `docs/claude-plans/2026-10-27-challenge-quiz-quality-scoring-rubric.md`. Product UX's three decisions and four sign-offs of 2026-10-27 (relayed by the owner) are in it: grounding is
+  scored against the generator's inputs (summary and key concepts) with the full note as a consistency safeguard; **G4 decides on a sampling-adjusted estimate** (at most 5%, 90% one-sided bound, `UL` at most 10% as a tolerance,
+  at least 60 randomly sampled unflagged items per arm stratified across notes and formats, 3-items-across-2-notes pattern rule, `N` at least 150); a **missed critical defect in a proposed arm triggers a whole-arm independent
+  re-review**; the **wording-sensitive regression rule** (excess over the same-model current arm for four defect types; a mechanical screen, not proof of causation); **G7 tolerance 10 percentage points**, absolute. Denominators and
+  missing-data handling were written by the Release Implementor and are not separately signed.
+- **Done before the paid run (kept for the record):** the owner signed and froze the rubric (its SHA-256, the 20 pack ids, the SHA-256 of `quality-e.jsonl`, the review-order seed and the gate calculator's commit SHA are committed to a
+  pre-registration file on this branch before the first paid command; the review-order manifest hash follows as an addendum after generation and before scoring).
+
+**Operational deployment gate (Product UX, 2026-10-27):** the four Postgres signal-9 kills that followed four deploys are investigated before any
+production approval: cause and current database health (the `[CHECKPOINT — due cache deploy + 7 days]` read of 2026-11-01 is the first input),
+capacity and pre-deploy health checks, a documented rollback and recovery, and post-deploy checks of the core quiz and study flows. A single deploy
+reduces exposure but does not resolve the risk; **unexplained with no credible recovery plan means HOLD.**
+
+**Not in this release:** a learner-facing difficulty selector; any change to the 10/12/15 counts; Phase 2 outcome-aware bank selection and Phase 3
+per-question reporting (indexed as Backlog rows); a difficulty-aware bank (it needs a migration); mass regeneration; Board Exam and Long Exam; pricing,
+quota or entitlement; the +5 reword; retiring `resolveGenerationProfile` or the stored difficulty label.
+
+**Verification tier:** about four code and test items, and the risky one (the prompt) is gated by the evaluation rather than by code review.
+`advisor()` before the harness brief and on the diff, a real-PostgreSQL or log-contract test for item 4, and a scoped cold agent only if item 3 or 4
+touches a shared method beyond the log line.
+
+**Kickoff scan (2026-10-27):**
+- **Docs carried in.** The diffs of PR #1534 (dated checkpoints) and PR #1535 (deploy state of `v0.173.0` to `v0.175.0`) were applied inside this
+  kickoff commit, as the owner chose (no extra deploys). Their PRs are closed with a note, unmerged.
+- **Production facts re-read before carrying them in:** no Render deploy since `v0.175.0` (2026-10-26T14:56 to 14:58Z) and one Postgres signal-9 kill
+  since (14:58:07Z, during that deploy), so "4 of 4 deploys followed by a kill" stands.
+- `v0.170.0` was archived from `RELEASES.md` and the ROADMAP baseline (verified verbatim at the end of each archive); the `RELEASES_ARCHIVE.md`
+  header now also names `v0.169.0` (moved at the `v0.175.0` kickoff, omitted from it then).
+- **Planning files with no Backlog row:** 7 `v0.175.0` files are now indexed in its Backlog row (two are one-off Product UX consultation prompts, the
+  release-artifact exemption). The Challenge quality files and the deferred Board/Long Exam scope each have a row.
+- **Checkpoint scan, carried unread, not actioned at this kickoff.** Crude filter (a dated `[CHECKPOINT — due …]` title in the past, with no
+  `✅`, `READ`, `CLOSED` or similar marker in its title or the first 400 characters of its Status): **10 of 36 past-due rows** (`v0.111.0` and
+  `v0.96.0` of 2026-09-28; the public-read pool row of 10-07; `v0.106.0`, `v0.107.0`, `v0.90.0`, `v0.97.0` of 10-13; `v0.166.0` Hikari of 10-14;
+  RC-3's reminder of 10-21; the bulk-notification read of 10-25), plus five rows due today (`v0.91.0` to `v0.95.0`). The filter overcounts. Rows
+  due inside this release are `[CHECKPOINT — due 2026-10-29]` (the cutoff variable, reported set by the owner), the cache read of 2026-11-01, and
+  the `v0.174.0` and `v0.175.0` reads of 2026-11-08 and 2026-11-09.
+
+Anti-drift: no learner-facing difficulty selection; no change to the 10/12/15 question counts; no Phase 2 or Phase 3 implementation; no mass
+regeneration or bank migration; Board Exam and Long Exam untouched; no pricing, quota or entitlement change; customer copy never names a model and
+implies no plan quality difference; **no production prompt change before the evaluation passes for both Luna and Sol and the owner gives final
+approval**; the +5 signed-prompt file, its parity test and the three verifier switches (all OFF) are untouched; **no deployment is authorized by any
+review so far**; feature PRs never edit this file.
+
+### Shipped
+
+- **Evaluation harness and method (test scope, no production code).** `QualityEvaluation*`, the blind export, the review plan, the review-batch builder and the offline gate report under `backend/src/test/java/com/studysnap/backend/benchmark/` (PR #1536; PR #1537 fixed the batch builder so an invalid primary row marks only that arm incompletely scored). Rubric signed and pre-registered, with Amendments 1 to 4 and Addenda A to D recording every deviation.
+- **Evaluation result (2026-10-27): HOLD.** 20 Official notes, five generation arms plus stock, 1,600 blind questions, Codex primary scoring, 497 items independently re-scored by cold Opus reviewers, 144 disagreements adjudicated; about $3.03 spent of the $4 cap. **Sol, proposed against current prompt: G1 PASS, G2 FAIL (distractors 3.59 against 3.75), G3 FAIL (mode alignment 3.81 against 4.23), G4 PASS, G5 FAIL, G6 to G8 PASS.** The proposed wording reduced giveaways but made questions easier. Both models must pass, so HOLD; Luna's proposed arm was deliberately not interpreted (a whole-arm re-review could not change the outcome). **The prompt change (item 3) is not shipped and the production prompt is unchanged.**
+- **Product finding for the owner:** on today's prompt Luna (free plan) scored distractors 3.23, mode alignment 3.36, a 10.5% giveaway estimate and 5 confirmed critical defects, against Sol's 3.75, 4.23, 4.5% and 0 (internal only; customer copy still never names a model). Full report: `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md`.
+- **Not shipped:** item 3 (prompt change, gate failed), item 4 (measurement log, awaiting the owner's decision), and no deploy of any kind.
+
+### Signoff record (2026-10-28)
+
+- **Scope completeness.** Item 1 shipped: the harness (`backend/src/test/java/com/studysnap/backend/benchmark/`, PR #1536) and the batch-builder fix (`QualityReviewBatches.java`, PR #1537). Item 2 done: pre-registration `docs/claude-plans/2026-10-27-challenge-quiz-quality-preregistration.md` and gate report `gates.json` (SHA-256 `fc6875e7…`), outcome HOLD. Item 3 **not shipped**: the gate failed; it lives on as the candidate row "Challenge Quiz Luna-first quality follow-up" in the Backlog. Item 4 **not built**: HOLD allows no measurement-only deploy without separate owner approval (owner chose to leave it unbuilt, 2026-10-28). Item 5 done.
+- **Feature-doc drift.** No feature doc was touched and no behavior changed (`git diff origin/main...HEAD` shows nothing under `backend/src/main` or any frontend source), so there is nothing to re-read; `docs/features/challenge-quiz.md:238` is unchanged because the prompt change did not ship.
+- **Backlog closure.** The Challenge quality row is marked EVALUATED: HOLD with the evidence; a new candidate row indexes the follow-up; Phase 2, Phase 3 and the Board/Long Exam deferral rows are unchanged.
+- **Checkpoint gate.** Nothing shipped ahead of its own evidence (no production change), so no new `[CHECKPOINT]` row is owed. Existing checkpoints are unchanged (2026-10-29 cutoff variable, 2026-11-01 cache and kill read, 2026-11-08 and 2026-11-09 model reads).
+- **Pre-signoff check.** The "delivery introduced a defect the same session then fixed" trigger fired (the batch-builder abort and a wrong "all rows valid" claim, both corrected in the pre-registration). One scoped cold claim-checker (Sonnet) tried to falsify 8 claims of the evaluation report against the real files: **all 8 held**; it found four wording imprecisions in the report, all corrected. Mutation checks were run on the late harness rounds (round 5: 7 mutants, round 6: 5 mutants) and every mutant was killed by a named test.
+- **Known limitations, carried.** 20 notes and one start per arm; model reviewers only, no human review; reviewer isolation by scratch directory and self-report, weaker than the command-transcript audit used for the primary pass; G5 is harsh by construction and should be reworded before a rerun; the test cannot attribute the drop to Change A, B or C; Luna's proposed arm (B2) was deliberately not interpreted and the 300-item whole-arm re-review was not run (it could not change the outcome); the `gpt-4.1-mini` arm is incompletely scored (2 rows) and is no gate's arm; the orchestrator once printed Luna's failed-gate list it had said would stay uninterpreted; **the 20% missing-telemetry threshold is hard-coded (`>.20`) in `QualityGateReport.java:563` and not a named constant in `QualityGateParameters`** as the Round 3 acceptance criteria required (it matches the signed value and changed no verdict).
+- **Handoff.** `releases/v0.176.0` is closed and **not merged to `main`** (no production change; the deploy gate and the unexplained Postgres kills stand). **A held draft PR keeps the diff visible: #1538 (`DO NOT MERGE`, draft so it cannot be merged by accident; mergeable against `main` at 2026-10-28).** The next release is cut from this branch, as `v0.175.0` was cut from `v0.174.0`. Private evaluation data stays git-ignored under `backend/target/llm-benchmark/` with a backup at `~/quality-eval-v0176-backup/`; **do not run `./mvnw clean` until it is archived.**
 
 ## v0.175.0 - Quiz Ready
 
-**Status: Released** (kicked off 2026-10-20, signed off 2026-10-25 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
-(`e539b045`, signed off, NOT yet on `main`)**, the same stacking pattern `v0.174.0` used on `v0.173.0`.
+**Status: Released and deployed** (kicked off 2026-10-20, signed off 2026-10-25 on `releases/v0.175.0`, **cut from `releases/v0.174.0`
+(`e539b045`)**, the same stacking pattern `v0.174.0` used on `v0.173.0`. **Merged to `main` as #1533 (`06a09f7c`) on 2026-10-26;
+Render live at 14:58:47Z, Vercel at 15:02:51Z.** `v0.174.0` had been squash-merged to `main` with a tree identical to `e539b045`, so #1533 carried a
+no-op `ours` merge (`bff16fbd`) to clear the conflict.
 Anything that changes on `releases/v0.174.0` after this cut is merged forward.)
 
 Theme: a learner who starts a Challenge Quiz is never stuck watching a spinner or racing a timer that
@@ -154,8 +381,9 @@ started without them. The quiz is prepared in the background, waits on a "Your q
 starts only when they press Start Quiz. Challenge also moves to each plan's model, behind a guard that
 catches wrong answer keys.
 
-**⚠️ MERGE GATE:** this release's PR merges to `main` only after `v0.174.0`'s PR #1512 has merged (itself
-held behind `v0.173.0`'s #1505 and two checkpoints).
+**MERGE GATE (discharged 2026-10-26):** this release's PR merged to `main` only after `v0.174.0`'s PR #1512 (2026-10-25), which in turn
+followed `v0.173.0`'s #1505 (2026-10-25). The owner overrode #1512's "wait for the cache read" hold on 2026-10-25; the cost is attribution,
+recorded in the cache checkpoint row in `ROADMAP.md`.
 
 **Sources, all owner-approved:**
 - plan: `docs/claude-plans/2026-10-19-v0175-challenge-quiz-preparation-plan.md` (Feature Planner; §1
@@ -760,841 +988,6 @@ prepared quiz" line on secondary notes.
   readiness notification does nothing.
 
 
-## v0.174.0 - Enhanced Generation
-
-**Status: Released** (signed off 2026-10-19; **merge to `main` HELD behind the v0.173.0 gates, so NOT yet
-deployed, and the new models go live only with the owner's post-merge Render switch**; see the merge-day
-handoff in the signoff record below. Kicked off 2026-10-16 on `releases/v0.174.0`, **cut from
-`releases/v0.173.0` (`7d1407a1`, signed off, NOT yet on `main`)** — owner decision 2026-10-16, the same pattern `v0.111.0`
-and `v0.120.0` used. Anything that changes on `releases/v0.173.0` after this cut is merged forward.)
-
-Theme: paid plans get the stronger model they were always tagged for. FREE moves to a newer model,
-Plus and Pro to the stronger one, and official NoteLib curation is routed on purpose rather than by
-the admin account's subscription tier, all before `gpt-4.1` retires on 2027-01-14.
-
-**Why this release exists.**
-- Every generation path ignores the plan tier. `ModelTier.PREMIUM` is written for paid plans
-  (`StudyPackService.java:721`), but nothing reads it to pick a model. Nine `LlmStudyPackService`
-  methods always use `LLM_MODEL_FREE` (`OpenAiLlmStudyPackService.java:231,251,288,1793,2199,2273`);
-  premium is used only at `:273` (companion) and `:1860` (Interview Practice).
-- The owner chose the new models on 2026-10-16: FREE → `gpt-6-luna`, Plus/Pro → `gpt-6.1-sol`.
-- The planning package is in `docs/claude-plans/2026-10-16-v0174-llm-tiering-remediation-tightened.md`
-  (plan), `…-audit-and-scope.md` (audit, 5a/5b trace) and
-  `docs/claude-plans/2026-10-16-llm-model-migration-benchmark-design.md` (benchmark).
-- Cost context (`docs/claude-findings/2026-10-16-study-packs-plantype-distribution-original-generations.md`):
-  2,002 of 2,234 original Study Packs come from the owner's ADMIN account, which holds a
-  non-billable PRO grant. No paid subscription is active. So the real Sol exposure is official
-  curation, not subscribers.
-
-**⚠️ MERGE GATE: this release's PR merges to `main` only after BOTH:**
-1. `v0.173.0`'s PR #1505 has merged, with a merge commit (it is held for the
-   `[CHECKPOINT — due 2026-10-22]` signal-9 read); and
-2. the `[CHECKPOINT — due cache deploy + 7 days]` read of `v0.173.0`'s cache. Owner decision
-   2026-10-16. Any `main` merge, and any Render env-var change, redeploys the backend. A deploy
-   briefly runs two connection pools, which is a known kill mechanism and would muddy that read.
-   `gpt-4.1` retires 2027-01-14, so waiting costs nothing.
-- The owner's Render env-var change for the new models is held to the same gate.
-
-### Planned Scope
-
-1. **Model benchmark (read-only, owner-approved $10 spend cap). Runs FIRST, and gates item 3.**
-   - Candidates: `gpt-4.1-mini` (baseline), `gpt-6-luna`, `gpt-6.1-sol`. Design in
-     `docs/claude-plans/2026-10-16-llm-model-migration-benchmark-design.md`: deterministic metrics
-     plus blind-adjudicated quality.
-   - Sol runs at its documented default reasoning effort. Measure billed reasoning tokens, quality,
-     latency and retries; tune effort afterwards.
-   - **$10 is a maximum, not an allowance for unlimited runs.** The execution plan (who runs it,
-     where the API key lives, the per-run cost estimate) goes to the owner before any spend. No
-     production writes.
-   - It also verifies API compatibility of both new models with the current request shape.
-2. **Tier routing for the Study Pack family, and pins for every interactive path.** Delivered as **three
-   pieces**, so each verification stays proportionate:
-   - **2a:** routing, pins, the log line and the `model_used` fix. Backend, Tier H, Codex at high effort;
-     brief `docs/codex-prompts/v0.174.0-item2a-tier-routing-and-pins.md`.
-   - **2b:** the cost alert (item 4). Tier N, Codex; brief `docs/codex-prompts/v0.174.0-item2b-curation-cost-alert.md`.
-   - **2c:** the `/study` and note-editor error-and-retry state. Frontend, Tier S, inline.
-
-   Both briefs were approved 2026-10-19 and shipped: #1508 (2b), #1509 (2a), #1510 (2c), plus the
-   pre-signoff fixes in #1511. **Revised 2026-10-19** by the owner's final decisions A1–A7,
-   verbatim in `docs/claude-plans/2026-10-19-owner-final-decisions-v0174-a1-a7.md`. Plan:
-   `docs/claude-plans/2026-10-19-v0174-v0175-consolidated-implementation-plan.md`.
-   - **Routed by tier** through one resolver that reads `SubscriptionService.resolvePlan` (expiry-aware):
-     FREE → `LLM_MODEL_FREE` (Luna); Plus/Pro → `LLM_MODEL_PREMIUM` (Sol); `UserRole.ADMIN` → Sol whatever
-     its plan (A1).
-     - Do NOT use `CuratorAuthoringPredicate.isCurator()`: it also matches TEACHER profiles.
-     - Two separate checks, one destination: `model_tier` stays `planType.isPaid()`
-       (`StudyPackService:721`).
-     - **Paths:**
-       - Study Pack generation: async, plus the synchronous `/study` routes;
-       - summary regeneration;
-       - note-from-topic, single and bulk;
-       - the Official template seed (its owner is the Official author, so Sol);
-       - the malformed-quiz repair, using **the pack owner's current effective tier** (A3), resolved inside
-         the async task. A missing or deleted owner routes as FREE and logs a warning.
-     - The tier is resolved once per generation, and that one snapshot sets both the model sent and the
-       `model_tier` label.
-     - The benchmark harness sets all four model keys, so every leg still sends the candidate model.
-   - **Pinned to today's model for every plan** (A1, A2):
-     - new `LLM_MODEL_INTERACTIVE_QUIZ` = `gpt-4.1-mini`: Challenge start, "+5" and multi-note; Adaptive
-       Practice; the Quick Review study tip; the teacher quiz; Board Exam and Long Exam, sessions and pools;
-     - new `LLM_MODEL_PAID_INTERACTIVE` = `gpt-4.1` (the production value of `LLM_MODEL_PREMIUM`, owner
-       verified, A7): Interview Practice quiz and the companion.
-     - `LLM_MODEL_CRITIQUE` is unchanged: Interview critique and Ask Companion.
-   - **The model is passed in by the caller.** Challenge start, "+5" and the template seed share
-     `generateChallengeQuizWithSchema`, and `generateStudyPack` is shared by learner routes and the repair.
-   - **`/study` conditions (A5):**
-     - keep the existing loading feedback and duplicate-submit guard (`use-study-pack.ts:191`);
-     - **add an actionable error-and-retry state** (the error card at `study-page-client.tsx:156-162` has no
-       retry action);
-     - no copy that promises a completion time;
-     - no new automatic retry.
-   - **Monitoring:**
-     - one structured log line per LLM call (data only, read by a Render log search);
-     - fix the Study Pack `model_used` fallback (`StudyPackService:722-723`), which records the free model
-       when a response lacks `model`;
-     - repaired packs keep their original `model_used` / `model_tier`. That is a documented known
-       limitation, not a rewrite (A3).
-   - **Shipped in #1509:** a test per path asserting the model **actually sent** for FREE, Plus, Pro, ADMIN on a FREE
-     plan and a lapsed paid plan, on every routed and pinned row. Pinned paths must ignore changes to
-     `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM`.
-     - The test surface spans all 11 caller services, even though routing changes only the Study Pack
-       family.
-3. **Model defaults to Luna / Sol (config + an OWNER env-var handoff).** The benchmark is complete and
-   adoption is approved (2026-10-17, as amended 2026-10-19).
-   - `application.yaml`: `LLM_MODEL_FREE` = `gpt-6-luna`, `LLM_MODEL_PREMIUM` = `gpt-6.1-sol`, plus the two
-     new pin keys at today's models.
-   - **The production env vars are an owner action.** Claude never calls the Render MCP's env-var update.
-     They change only after the merge gate.
-   - **Owner-verified Render state (2026-10-19):** `LLM_MODEL_FREE=gpt-4.1-mini` and
-     `LLM_MODEL_PREMIUM=gpt-4.1` are set; `LLM_MODEL_CRITIQUE` is unset (YAML default `gpt-4.1-mini`).
-     - **[CORRECTED 2026-10-19, pre-signoff falsification]** The earlier "the merge changes no model" claim was
-       WRONG. Before this release, every Study Pack path read `LLM_MODEL_FREE` (`gpt-4.1-mini` on Render) for
-       every plan. After it, Plus/Pro and ADMIN read `LLM_MODEL_PREMIUM`, which Render sets to `gpt-4.1`.
-       - **So merging to `main` with today's Render values moves Plus/Pro and all official curation from
-         `gpt-4.1-mini` to `gpt-4.1`**, at about 5× the per-token price. That covers Study Pack generation, summary
-         regeneration, repair, note-from-topic and the template seed.
-       - FREE and every pinned path are unchanged.
-       - **Rollback to today's behaviour** is `LLM_MODEL_PREMIUM=gpt-4.1-mini`, not "back to its current value".
-         Interview Practice and the companion are now pinned separately (`LLM_MODEL_PAID_INTERACTIVE`).
-       - **Owner decision 2026-10-19:** keep the Render overrides and change their values right after the
-         merge. Do not remove them, so that no future code default can switch production models on its own.
-         The steps are in the merge-day handoff in the signoff record.
-     - The two new pin keys stay unset and fall back to today's models.
-   - **The Long Exam pool stays at 48 in v0.174.0** (A4). Effective value confirmed 2026-10-19:
-     `application.yaml:249` `${LONG_EXAM_POOL_SIZE:48}`, the Java default `StudySnapProperties:169`, no
-     `application-prod.yaml` override, no Render override (owner, A7). All 626 production Long Exam pools
-     have `pool_size` 48. The reduction to 30 moves to v0.175.0.
-4. **Official curation cost alert (backend, Tier N, brief 2b).**
-   - **$10 per calendar month (A6). It alerts and never blocks.**
-   - The estimate is computed by a scheduled read-only job from **persisted** tokens on ADMIN-owned Study
-     Packs (`input_tokens`, `output_tokens`, `cached_input_tokens`), at configured per-token rates with the
-     cached-input discount.
-   - **It is labelled as partial, never as total curation spend.** Note generation from topics, template
-     seeding, summary regeneration and repair persist no tokens, so their cost is reviewed on the OpenAI
-     billing dashboard.
-   - **Delivery:** one in-app notification to the ADMIN account through `NotificationService.deliver`, with
-     a per-month dedup key, so a threshold crossing alerts once per month. `type` is a plain `VARCHAR(64)`
-     (`V139`), so a new `NotificationType` needs no migration.
-   - **The temporary pins expire:** `gpt-4.1` and `gpt-4.1-mini` shut down 2027-01-14. Every pinned path
-     needs its own replacement, not only Challenge (A2). Tracked by a `[CHECKPOINT]` row in `ROADMAP.md`.
-
-**Owner decision on the benchmark (2026-10-17, verbatim in
-`docs/claude-plans/2026-10-17-owner-conditional-approval-challenge-quiz-ux.md`). Conditional approval of the strategy,
-not approval to deploy.**
-- **APPROVED:** FREE → `gpt-6-luna`.
-- **CONDITIONALLY APPROVED:** Plus/Pro → `gpt-6.1-sol`, and official curation → Sol regardless of the admin
-  account's plan, within the agreed cost caps and monitoring.
-- **Condition: Challenge Quiz start latency is a product UX issue this release must address, not an accepted
-  caveat.** Do not treat the 5-question benchmark leg as a proxy for the real 10/12/15-question and multi-note
-  starts.
-- Ten deliverables are owed before final rollout approval:
-  1. the updated v0.174.0 scope;
-  2. the model-routing matrix for FREE, Plus, Pro and curation;
-  3. the start-latency root cause;
-  4. a recommended UX solution;
-  5. a comparison of solutions;
-  6. a targeted-benchmark proposal for the real start sizes, needing owner approval before any paid call;
-  7. Board Exam and Long Exam validation on the production paths, including the parallel Long Exam variant;
-  8. a monitoring and rollback plan;
-  9. the split between v0.174.0 and future releases;
-  10. the remaining decisions.
-- Split by role (agreed between sessions 2026-10-17): **Feature Planner** owns 3, 4 and 5; **Release
-  Implementor** owns 1, 2, 6, 7, 8, 9 and 10.
-- The decision supersedes the separate Product UX consultation: Feature Planner's deliverables 3–5 answer the
-  prompt's questions. The prompt stays as input.
-- **Owner decisions, 2026-10-17 (later):**
-  - **Targeted benchmark: option A approved.** It runs Tier 1 (10/12/15-question starts and multi-note
-    3×6 and 6×3) plus the lower-reasoning-effort variant, under a **$4.50 hard stop** that includes the smoke
-    run (`docs/claude-plans/2026-10-17-v0174-targeted-challenge-start-benchmark-proposal.md`).
-    - The harness change is test scope only and goes to Codex on its own PR.
-    - The owner runs the paid calls.
-  - **[SUPERSEDED 2026-10-19 by A4: the pool stays 48 in v0.174.0; the reduction moves to v0.175.0.]**
-    **Long Exam pool: lower it rather than benchmark the 26-question pool call (owner).** The owner chose to
-    lower it; **Release Implementor chose 30** (`long-exam-pool-size`, `application.yaml:249`;
-    `StudySnapProperties:169`).
-    - **Trade-off:** at 30 a pool serves one exam and is then refreshed (`ExamQuestionPoolService:134`), so
-      reuse across sessions effectively ends. No learner uses Long Exam today.
-    - Item 3 checks that no validator or test assumes the pool is larger than the exam (`examSizeForMode`).
-    - 30 is the floor: a pool must hold at least one whole exam (`ExamQuestionPoolService:116-123`), and
-      the largest Long Exam is 30 questions (`StudySnapProperties:168`).
-    - At 30 the pool generates as two calls of 17, the same size a session already sends.
-    - It lands with item 3's `application.yaml` defaults. Existing pools are untouched, since none has been
-      served and no regeneration is allowed. If `LONG_EXAM_POOL_SIZE` is set on Render, changing it is an
-      owner action.
-  - ~~Still owed: the acceptable Challenge start wait~~ **Answered 2026-10-19:** a 30 s target and a 60 s
-    maximum blocking wait (owner decisions, Set 1). The Challenge work is split out to v0.175.0.
-- ~~Item 3's default and the item 2 brief wait on these deliverables.~~ **Discharged 2026-10-19:** the
-  deliverables were returned, the owner decided A1–A7, and items 2 and 3 shipped. No Challenge-specific
-  routing destination was adopted; Challenge work moved to v0.175.0.
-
-**Anti-drift:**
-- No change to Plus/Pro entitlements, `FeatureGateService` quotas or `UserUsageEntity`.
-- No pricing, plan copy or announcement. If customer-facing copy is ever needed, it says "Enhanced
-  Study Pack Generation" for Plus/Pro and never names an internal model.
-- No mass regeneration, and no historical `model_tier` or `model_used` rewrite. 5a: those columns
-  correctly record who last generated each pack.
-- No prompt-content change beyond what model compatibility strictly requires.
-- No migration.
-- No checkout/payment path.
-- No Hikari pool change.
-- Existing notes, Study Packs and learner progress are untouched.
-
-**Deferred, each to be scoped on its own once it has data** (decision 1, approved 2026-10-16):
-- the optional regeneration UX; quiz-only regeneration stays a feasibility assessment;
-- Sol-as-checker quiz-pool remediation, which needs the benchmark numbers and selective validation
-  first;
-- the `LLM_MODEL_CRITIQUE` migration, which needs its own feedback-quality check (tightened plan
-  §10) and must also land before 2027-01-14;
-- pricing/subscription copy and announcements;
-- retention instrumentation.
-
-**Verification tier:** Tier H, with at least one scoped cold falsification pass at pre-signoff.
-Item 2 changes a shared method and per-generation cost, so falsify both the tier resolution and the
-ADMIN carve-out.
-
-**Kickoff scan (2026-10-16):**
-- One unindexed plan file (the `v0.173.0` Product UX consultation prompt) was moved to
-  `docs/claude-plans/done/`: a consumed release artifact.
-- 16 overdue `[CHECKPOINT]` rows are carried unread, not actioned at this kickoff. Among them are
-  the 7 long-running ones (`v0.107.0`, `v0.90.0`, `v0.106.0`, `v0.97.0`, `v0.111.0`, `v0.96.0`,
-  `v0.74.0`).
-- New this scan: the `v0.166.0` Hikari checkpoint row's title still reads open although its Status
-  records the 2026-10-14 read. That is a title/status contradiction, left for a dedicated pass.
-- RC-3's reminder-timing checkpoint falls due 2026-10-21, inside this release.
-- `v0.168.0` was archived from both files; no line was lost, checked against the pre-move copies.
-
-### Shipped
-
-- **Item 1, part 1: the benchmark harness (PR #1506, `8d417a35`, test scope only). No API call made
-  and nothing spent yet; the owner runs the paid smoke and full runs.**
-  - `backend/src/test/java/com/studysnap/backend/benchmark/`. `LlmModelBenchmark` runs the real
-    `OpenAiLlmStudyPackService` and production prompts on one candidate model. It is skipped unless
-    `-Dllm.benchmark=true`, so a normal build and CI never run it. No file under `backend/src/main`
-    changed.
-  - `MeteringInterceptor` meters every HTTP call, including the service's own retries. It stops
-    before the next call at `spendStopUsd` (hard max $10) or `maxCalls`, and records raw `usage`
-    including reasoning tokens. It never saves the request or its headers.
-  - The README sets explicit per-model stops totalling $9.25 under the $10 cap: smoke $0.25 × 3,
-    then full runs at mini $1.50, Luna $0.75, Sol $7.00. Without them, the $8 per-command default
-    would have allowed up to $24.
-  - `sample-query.sql` is one read-only `SELECT` producing 81 public-note lines (A 40, B 32, C 5,
-    D 4). Its output holds note text, stays under `backend/target/`, and is never committed.
-  - Codex review P2, fixed with a regression test that fails without the fix: a transport failure
-    was classified `EMPTY`, which distorted that metric and bypassed the 3-consecutive-errors stop.
-  - Verification: full `./mvnw clean install` with Docker, 2,713 tests, 0 failures, before the
-    test-only P2 fix; `LlmModelBenchmarkTest` 12/12 after it.
-  - **Results caveat:** Leg B reuses each note's existing `gpt-4.1-mini` Study Pack as identical
-    input for all three models; the context fields approximate `StudyPackGenerationContextResolver`.
-  - Findings for item 2/4: `LlmResponseUtils` takes the first `output_text` and skips reasoning
-    items, so a second `output_text` is silently ignored; `extractUsageMetadata` does not record
-    reasoning tokens, which item 4's cost monitor needs.
-- **Item 1, part 2: benchmark run and results (2026-10-17). COMPLETE; item 3 is the owner's decision.**
-  Results and recommendation: `docs/claude-findings/2026-10-17-v0174-llm-benchmark-results.md`.
-  - The owner ran the smoke run and the three full runs: about **$2.62** of the $10 cap. Billed cost
-    is lower: `output_tokens` already includes reasoning, and cached input is billed below list price.
-  - Generations succeeded: `gpt-4.1-mini` 77/81 (3 timeouts at 180 s, 1 invalid Long Exam format),
-    `gpt-6-luna` 81/81, `gpt-6.1-sol` 81/81. No multi-output responses and no H4 flags on any model.
-  - Blind tier, 20 items per model, scored by a fresh agent: no regression detected for either
-    candidate. Differences between the means are within noise and are not evidence for an "Enhanced"
-    quality claim.
-  - Cost per generation: mini $0.0033, Luna $0.0015, Sol $0.0272.
-  - Recommendation: both candidates pass the pre-stated rule; Sol's cost is accepted under the execution
-    plan's own clause. Caveat for items 2 and 3: STARTING a Challenge Quiz waits in the foreground for 10–15
-    live questions whenever the learner's bank and the Official template fall short (33 starts by 29 of
-    34 learners since 2026-07-24). That wait is already p50 30 s / p90 62 s on mini, and projects to about
-    55–90 s on Luna and 90–175 s on Sol, near the 180 s timeout. "+5" is almost always served from the
-    bank (2 live batches for learners). The owner made it a release condition on 2026-10-17 (see Planned Scope); Sol's single-call Long Exam took up to 126 s against the 180 s timeout.
-
-- **Item 1, part 3: the Leg E harness for the targeted Challenge start benchmark (PR #1507, `5dffd5e6`,
-  test scope only). Nothing spent yet; the owner runs the paid calls.**
-  - `backend/src/test/java/com/studysnap/backend/benchmark/` gains cells S15 / S10 / S12 (15 `hard`,
-    10 `easy`, 12 `medium`, read from the `ChallengeQuizService` constants), M6x3 and M3x6 (multi-note
-    starts as sequential per-source calls), and VLOW (S15 with `reasoning.effort: "low"`, injected by the
-    interceptor on every attempt).
-  - It mirrors production's avoid-lists. Single-note uses the pack's saved quiz (`:396,463`). Multi-note
-    starts empty, accumulates, aborts on a failed source, and dedups the final set against the primary
-    pack's quiz (`:421,1831-1860`).
-  - It records accepted vs requested questions, the sequential start latency, the slowest source call, the
-    failed source index and timeouts. The summary excludes spend-stopped runs.
-  - The pre-flight fails the command before any HTTP call. `sample-query-e.sql` is one read-only `SELECT`;
-    a count-only version run against production returned all 52 paired lines.
-  - Run sheet: ten commands with explicit stops totalling $4.10, about $4.45 worst case with a one-call
-    overshoot per command, under the approved $4.50.
-  - Release Implementor fixed two issues after Codex, each with an assertion mutation-checked to fail
-    without its fix: a malformed line no longer passes silently, and spend-stopped runs no longer skew the
-    latency summary.
-  - Verification: `./mvnw install` with Docker, 2,723 tests, 0 failures, including
-    `NativeQueryPostgresIntegrationTest` (115). No file under `backend/src/main` changed.
-  - Known difference from production: multi-note cells use `medium`, but a learner's last Quick Review
-    score can make it `easy` or `hard`.
-- **Item 4: the Official curation cost alert (brief 2b, PR #1508, `c1a28305`). Alert only; never blocks.**
-  - `CurationCostAlertJob` runs hourly in UTC.
-    - It estimates the month's **tracked** cost of ADMIN-owned Study Pack generation from persisted tokens:
-      one native aggregate query by `model_used`, at configured per-model rates.
-    - At **USD 10** (owner A6) it delivers one in-app `CURATION_COST_ALERT` per ADMIN per month, deduplicated
-      by a per-month key through `NotificationService.deliver`.
-  - The copy states its partial scope: Study Pack generation only, excluding note generation from topics
-    (added in #1511), template seeding, summary regeneration and repair, with a pointer to the billing
-    dashboard. No model is named.
-  - The cached-input rate falls back to the input rate, which overstates cost. Reasoning tokens are not
-    added, because `output_tokens` already includes them.
-  - **Known limits (corrected by the pre-signoff pass; the earlier "$45 bulk regeneration" and "a repair
-    counts the original tokens" examples were wrong):**
-    - Summary regeneration and repair do **not** advance `updated_at`, so they are not counted at all.
-    - Share-link creation, owner reassignment, and title, subject and tag edits **do** advance it, and
-      re-count a pack's original tokens (over-count).
-    - An ADMIN remix copies the source pack's tokens into a new pack (over-count, with no LLM call behind it).
-    - Tokens from failed or retried attempts are never persisted (under-count).
-    - The month is UTC.
-  - Verified:
-    - `CurationCostAlertJobTest` 8/8, plus the notification dedup integration test.
-    - The full suite with Docker. The 7 Docker-dependent classes failed during a disk-full Docker outage
-      and all passed on rerun, including `NativeQueryPostgresIntegrationTest` at 116/116.
-    - The query, run read-only against production, returned 10 admin packs this month.
-  - Release Implementor fixed the new native test's fixture: notes for the fixture packs, and a past-month
-    window for isolation. No migration, and no frontend change (notification `type` is a plain string).
-- **Item 2a: tier routing for Study Pack generation and pins for every interactive path (PR #1509,
-  `96a46d78`; owner A1–A3).**
-  - `LlmModelRouter` resolves the model from an explicit route; a missing route throws.
-    - **TIERED:** FREE → `LLM_MODEL_FREE`; Plus/Pro → `LLM_MODEL_PREMIUM`, from the expiry-aware
-      `SubscriptionService` snapshot; `UserRole.ADMIN` on any plan → premium. A missing or deleted tier user
-      routes as FREE with a warning.
-    - **Routed paths:** Study Pack async and synchronous (requester); summary regeneration and the
-      malformed-quiz repair (pack owner, resolved at repair time); note-from-topic, single and bulk; the
-      Official template seed (note owner).
-  - **Pinned for every plan:**
-    - `LLM_MODEL_INTERACTIVE_QUIZ` (`gpt-4.1-mini`): Challenge start, +5, multi-note, Board Exam, Adaptive,
-      study tip, teacher quiz, Long Exam and the exam pools.
-    - `LLM_MODEL_PAID_INTERACTIVE` (`gpt-4.1`): Interview quiz and the companion.
-    - `LLM_MODEL_CRITIQUE` is untouched.
-  - **Metadata:** one tier snapshot per generation sets the model sent and `model_tier`, keeping the
-    PLUS||PRO rule. `model_used` falls back to the model sent. A repair keeps the original metadata (known
-    limitation).
-  - **Logging:** a structured log line per HTTP attempt (route, model, tier, latency, attempt, outcome, tokens
-    including reasoning). No prompt, body or headers.
-  - **Defaults:** `application.yaml` now defaults to `gpt-6-luna` / `gpt-6.1-sol`. Render sets
-    `LLM_MODEL_FREE` / `LLM_MODEL_PREMIUM`. **[CORRECTED: the merge to `main` DOES change a model.** Plus/Pro
-    and ADMIN Study Pack paths move from `gpt-4.1-mini` to Render's `LLM_MODEL_PREMIUM=gpt-4.1`. See the
-    correction under Planned Scope item 3.]
-  - **Verified:**
-    - Tests assert the model in every outgoing request body, per route and for every pinned method (Long
-      Exam halves, salvage, fallback and consistency retry included). Pins hold when the tier keys change.
-      Each caller's route is tested.
-    - A cold Opus falsification pass found no claim wrong. It found five gaps, which Codex fixed and Release
-      Implementor verified in the code: the null-route fallback, the Board Exam route test, body-level pin
-      tests, log outcome labels, and upstream error detail. Release Implementor also added a safeguard so a
-      deferred log line cannot be overwritten.
-    - `./mvnw install` with Docker: 2,770 tests, 0 failures, including `NativeQueryPostgresIntegrationTest`
-      116/116. Feature docs are updated; no migration.
-  - **Known:** an email-only Official author would route FREE. In production that email is the single ADMIN
-    account.
-- **Item 2c: Try again on the `/study` Study Pack error card (PR #1510, `f1a5c244`; owner A5).**
-  - A failed synchronous generation now offers a deliberate retry. It goes through the existing guarded
-    handler (disabled while loading or redirecting), never retries on its own, and makes no time promise.
-  - **The note-editor half of 2c needed no change.** Note-from-topic already meets A5: an inline error and a
-    toast, the topic kept, and "Generate Note" re-enabled (`note-editor-page-client.tsx` `handleGenerateNote`).
-  - Frontend suite 2,669 passed; tsc and eslint clean.
-- **Pre-signoff fixes (PR #1511, `fa474931`), from the cold falsification pass:**
-  - **Try again ran the wrong operation after a confirm-text failure.** It re-uploaded the image, spent OCR
-    quota and overwrote the learner's edited text.
-    - It now shows only after a retryable generation failure (a `retryable` flag in `useStudyPack`).
-    - It is hidden while confirmation is pending and after the signed-out error.
-    - Tests cover each case.
-  - The cost-alert copy now also excludes note generation from topics. The feature docs list every
-    over-count and under-count.
-  - `StudySnapPropertiesTest` binds the production YAML price map.
-  - Backend 2,771 tests with Docker; frontend 2,672.
-
-### Signoff record (2026-10-19)
-
-**Scope completeness, item by item:**
-1. **Benchmark: shipped**: #1506, #1507, and both owner-run runs (about $5.37 of the $10 cap).
-2. **Routing: shipped as CHANGED by owner A1.** Tier routing covers the Study Pack family only. Every
-   interactive path is pinned to today's model. Challenge routing moves to v0.175.0. Delivered as #1509,
-   #1510 and #1511.
-3. **Defaults: shipped in code** (`application.yaml`: Luna/Sol defaults plus two pins). **The production switch
-   is the owner's post-merge env change.** The Long Exam pool reduction is **deferred to v0.175.0** (A4).
-4. **Cost alert: shipped**: #1508 and #1511.
-
-**Verification:**
-- Tier H. Cold Opus falsification on 2a (five gaps, fixed). A release-wide cold pass at pre-signoff found
-  three confirmed issues, fixed in #1511, plus one wrong production-safety claim, corrected above.
-- Final backend build: 2,771 tests with Docker, 0 failures. Frontend: 2,672 passed.
-
-**Known limitations, recorded and not fixed:**
-- No test calls `CurationCostAlertJob.run()` through its `@Scheduled` entry or `findAdminUserIds` directly.
-  The cron and zone are asserted by `ScheduledJobCronContractTest`, and the job logic by `runAt`.
-- An email-only Official author would route FREE. Today that email is the single ADMIN account.
-- A repaired pack keeps its original `model_used` / `model_tier`.
-- The cost estimate's over-count and under-count cases are listed in item 4.
-
-**⚠️ MERGE-DAY HANDOFF. Every step is an owner action unless marked; follow it in order:**
-1. **#1505 (v0.173.0) merges with a merge commit, after its 2026-10-22 signal-9 read.** Then the v0.173.0
-   cache deploy + 7 days read.
-2. **Only then, open the `releases/v0.174.0` → `main` PR.** Opening it earlier would show v0.173.0's commits
-   in its diff.
-3. Merge it. Wait at least 5 minutes, then run `scripts/check-deploys.sh` (exit 0 = both platforms serve
-   `main`).
-   - **From this deploy until step 4, Plus/Pro and ADMIN Study Pack paths run on `gpt-4.1`** (Render's current
-     `LLM_MODEL_PREMIUM`).
-4. **Immediately set on Render: `LLM_MODEL_FREE=gpt-6-luna` and `LLM_MODEL_PREMIUM=gpt-6.1-sol`.** Do not
-   remove the overrides. This is a second redeploy: record both deploy times, because they matter for the
-   v0.173.0 memory-kill and cache reads. Wait, then run `check-deploys.sh` again.
-5. **First-use check** (read-only, Release Implementor can run it):
-   - the next ADMIN Study Pack's `model_used` starts with `gpt-6.1-sol`;
-   - the next FREE pack's starts with `gpt-6-luna`;
-   - a new Challenge session's `model_used` is still `gpt-4.1-mini`;
-   - Render logs show the structured per-call line.
-6. **Rollback to pre-release behaviour:** `LLM_MODEL_FREE=gpt-4.1-mini` and `LLM_MODEL_PREMIUM=gpt-4.1-mini`.
-   Interview Practice and the companion stay on their own pin. No data rewrite is needed.
-
-**Checkpoint:** `[CHECKPOINT — due env switch + 14 days]` in `ROADMAP.md`. The pin-retirement checkpoint is
-due 2026-12-15.
-## v0.173.0 - Cached Catalog
-
-**Status: Released** (signed off 2026-10-16; **merge to `main` HELD for the 2026-10-22 gate, so NOT yet deployed**. Kicked off 2026-10-15 on `releases/v0.173.0`, cut from `docs/v0.172.0-deploy-stamp`
-(`3961383e`), which is `main` after `v0.172.0` merged as #1501 plus one docs commit.)
-
-Theme: take the remaining repeat load off the production database's Explore discovery reads by
-caching the copies/likes/views aggregates in-process for a short TTL, so most page views stop
-recomputing them at all.
-
-**Why this release exists.** `v0.172.0` made each discovery call compute the three engagement
-aggregates once instead of once per section. The fix plan's durable follow-up is to stop computing
-them on every call: an in-process Caffeine cache, TTL 60–300 s
-(`docs/claude-plans/2026-10-14-db-oom-memory-ceiling-fix-plan.md`, Leg D "Durable follow-up"). The
-owner deferred it to this release on 2026-10-14.
-
-**⚠️ MERGE GATE: the release PR merges to `main` only AFTER the `[CHECKPOINT — due 2026-10-22]` read.**
-- That checkpoint measures `v0.172.0` (Leg D) plus Leg B with **no** cache, over 7 days from the
-  2026-10-15T07:09:09Z deploy. Shipping the cache inside that window would make the read unattributable.
-- Every `main` merge also triggers a Render deploy, and the deploy double-pool overlap is itself a
-  known kill mechanism. So nothing merges to `main` before 2026-10-22T07:09Z.
-- **The read can redirect this release.** ≥ 5 kills: Leg A (plan upgrade) becomes the next lever and
-  the cache alone is not enough; the owner decides whether this release still ships. 2–4: proceed as
-  planned. 0–1: the checkpoint is silent on the cache; owner call after the read.
-- Work can be built, audited and merged into `releases/v0.173.0` before then.
-
-### Planned Scope
-
-1. **Discovery ranking cache (backend, Tier H, Codex). ✅ Merged #1503 (`70fdd019`), 2026-10-15; see Shipped.**
-   - **Tier N → H (2026-10-15, before the brief):** single-flight under concurrent load is the charter's concurrency trigger, and a waiter holding a JDBC connection under open-in-view would reproduce this method's own leak traces. A scoped cold falsification pass is owed at pre-signoff. Brief: `docs/codex-prompts/v0.173.0-discovery-ranking-cache.md` (no stale-on-error: `expireAfterWrite` 300 s keeps Product UX's bound).
-   - Add Caffeine and cache the copies/likes/views aggregates behind
-     `NoteService.getPublicLibraryDiscoverySections` for a short TTL (fix plan: 60–300 s).
-   - **Product UX decision, 2026-10-15 (APPROVED with safeguards; consultation prompt
-     `docs/claude-plans/done/2026-10-15-discovery-cache-product-ux-consultation-prompt.md`):**
-     - **Cache the ranked id lists of all three sections (Featured, Most Popular, Recently Added) as
-       one coherent snapshot, TTL 300 s.** Existing ranking and exclusion semantics are preserved.
-       Card counts and the viewer's liked state stay live per request, and are never cached.
-     - **No early invalidation**: not on publish, unpublish, copy, like or view.
-     - **The per-request `visibility = 'PUBLIC'` re-check stays on every response, cache hits
-       included.** A private or deleted note drops out at once, even if a section then shows fewer
-       than 6 cards.
-     - No user-facing freshness notice, and no promise that publishing lands a note in Recently Added
-       (it orders by creation date, which this release must not change).
-     - **Safeguards to verify:** concurrent misses must not each run the ranking query
-       (single-flight). A failing refresh must not cause a retry storm. Cold-start, expiry and
-       failure behaviour must be tested under concurrency. No per-copy or per-like invalidation, and
-       no expensive per-request backfill.
-     - **Post-deploy:** compare the 7-day signal-9 count against the baseline of 9. Add bounded
-       instrumentation for ranking computations, hit/miss, refresh failures, ranking duration and
-       short (< 6) sections.
-     - **Why the copy-count concern is gone:** counts are loaded per request by
-       `NoteService.toListItems`, not by the ranking, so #1500's in-page freshness is unaffected.
-   - **Re-read 2026-10-15, read-only:** backend `numInstances` = 1 (Render `get_service`), so an
-     in-memory cache is consistent across visitors.
-   - Guard (fix plan): a test asserting the aggregate computation runs at most once per TTL window
-     across repeated `getPublicLibraryDiscoverySections` calls, plus a real-request test if any
-     endpoint changes.
-2. **Carried docs commit (no code). `[merged-to-release: 3961383e]`** Stamps the `v0.172.0`
-   production deploy time (2026-10-15T07:09:09Z) into the `ROADMAP.md` Backlog rows. It rides in via
-   this release instead of PR #1502, so it does not trigger its own deploy mid-checkpoint window.
-
-Anti-drift:
-- **Caffeine is the one allowed new dependency.** No Redis, no HTTP cache headers, no Next.js
-  `revalidate` change.
-- No Hikari pool-size change (pinned by the 09-04 outage fix and
-  `TomcatThreadPoolHikariAlignmentTest`).
-- No change to FEATURED/POPULAR weights, decay, thresholds, or the paginated listing's SQL (pinned by
-  the 14 golden SQL files from #1498).
-- No checkout/payment path (RC-4 baseline) and no public-note/adoption path (RC-5 read).
-- No migration.
-
-**Open at kickoff, not scoped:**
-- `[CHECKPOINT — due 2026-10-22]` (signal-9 kills; read by 2026-10-29 at the latest, Render log
-  retention). RC-3 checkpoint due 2026-10-21.
-- Overdue checkpoint reads carried from `v0.172.0`: `v0.107.0`, `v0.90.0`, `v0.106.0`, `v0.97.0` (due
-  10-13); `v0.111.0`, `v0.96.0` (09-28); the `v0.74.0` conversion read (09-30).
-- The `v0.166.0` Hikari checkpoint row's title still reads open, though the `v0.171.0` kickoff read
-  it (cell contradiction, not re-read here).
-- Owner: re-run the admin Official Challenge backfill seed for note `0c6b0be8`.
-- Workflow redesign: `v0.172.0` ran two Tier-N items through the new worktree lifecycle, but no M5
-  pilot measurement was recorded. D4/D9 stay gated on it.
-
-### Shipped
-
-1. **Explore discovery rankings cached for 300 s** — #1503 (`70fdd019`), Tier H.
-   - `PublicLibraryDiscoveryRankingCache` holds one viewer-independent snapshot of the Featured /
-     Popular / Recent id lists. It is a Caffeine `AsyncLoadingCache` (`:51-55`): the 300 s TTL counts
-     from completion, concurrent misses share one computation and its failure, and a failure is not
-     cached.
-   - The ranking runs on `discoveryRankingTaskExecutor` (`AppConfig.java:35`) in its own read-only
-     transaction. `NoteService.getPublicLibraryDiscoverySections` (`:940-942`) is `NOT_SUPPORTED`, so
-     waiting requests hold no JDBC connection.
-   - Card projections, counts, the `visibility = 'PUBLIC'` re-check and the viewer's liked state run on
-     every request. There is no early invalidation and no stale-on-error. Repository SQL, ranking
-     formulas, the pool and migrations are unchanged; the one new dependency is Caffeine 3.2.3, from
-     the Boot BOM.
-   - Instrumentation:
-     - `DISCOVERY_RANKING_CACHE computed` (INFO): `durationMs`, the three list sizes, cumulative
-       hits/misses/failures, and `shortSectionResponses`. The line emits; it appeared 13 times in the
-       full build.
-     - `DISCOVERY_RANKING_CACHE failed` (WARN).
-     - A request that joins a ranking still in flight counts as a **hit**: in a cold-start burst of 8,
-       7 show as hits.
-   - Verification:
-     - Full `./mvnw clean install` with Docker: 2,694 tests, 0 failures.
-     - `concurrentHttpDiscoveryWaitersDoNotHoldJdbcConnections` (real HTTP, 8 concurrent requests,
-       ≤1 active connection) fails with **9** when the method is reverted to `readOnly = true`. That
-       mutation was run by Release Implementor.
-     - `inFlightRankingSurvivesTtlAndExpiresFromCompletion` fails with 2 rankings under insertion-time
-       expiry. That mutation was run by Codex; the test was read by Release Implementor.
-     - Two defects in Codex pass 1 were confirmed and fixed in fix-1: the TTL started at insertion, and
-       the connection guard bypassed the real request path.
-   - **Known gaps (as merged in #1503; the first two are closed by item 2):**
-     - No test asserts that `shortSectionResponses` rises.
-     - The HTTP test's identical-body check is trivial, because every section is stubbed empty.
-     - ~~`future.join()` has no timeout. That is no worse than the previous per-request query.~~
-       **Corrected 2026-10-16: this was wrong.** The old query failed alone. Here a stalled ranking left an
-       in-flight future that never expired, and every request pinned a Tomcat thread (25 total) on it.
-       Health checks starved, and Explore stayed frozen until restart. The cold pass found it (C8), and
-       item 2 fixes it.
-   - The Tier-H cold falsification pass (Opus, read-only) ran on 2026-10-15. It found no blockers;
-     its findings are resolved under item 2.
-
-2. **Stalled rankings bounded and the cache hardened** — #1504 (`ff555530`), Tier H, Codex at high
-   effort (D10).
-   - **C8 (stall):** the ranking transaction has a 50 s statement timeout
-     (`PublicLibraryDiscoveryRankingCache.java:40`, via `TransactionTemplate.setTimeout`). The loader
-     future has a 55 s `orTimeout` backstop (`:41`). Both are under the 60 s Hikari leak threshold.
-     - 50/55 rather than the 30/45 that was built: before `v0.172.0`, this endpoint held connections over
-       60 s three times during CPU spikes. A shorter cancel risks a cancel-and-retry loop with no backoff.
-       The owner chose this on 2026-10-16.
-     - A timed-out ranking is not cached, so the next request retries.
-   - **Rejection:** when the queue of 16 is full, the load fails at once and reports one failure, with
-     no orphan timer. A queued load whose future already timed out skips the ranking.
-   - **Accounting (both Codex-review P2s):**
-     - The success line and the `shortSectionResponses` reset happen only when `complete()` delivers
-       the snapshot.
-     - The counter is captured before publishing and added back if the snapshot is not delivered. That
-       last race can't be reproduced by a test, so this fix is unverified.
-     - Failures, including `Error`, are counted once per load.
-   - **Missing decorator:** `InFlightThreadRegisteringTaskDecorator` is now set on
-     `discoveryRankingTaskExecutor`, pinned by
-     `AppConfigTest.discoveryRankingExecutorIsBoundedAbortOnOverflowAndRegistered`.
-   - **C10 (test gaps):**
-     - The pagination fixture now has 7 notes, so a backfill would be detected, and it asserts
-       `shortSectionResponses`.
-     - The cold test is now `coldRequestsShareOneRanking`; its "no connection" half could not fail, so
-       that claim was dropped there and is left to the HTTP test.
-     - The HTTP test now sends one authenticated (JWT) request.
-   - The inert `invalidateAll` call in the pagination test was removed.
-   - **New tests:**
-     - `PublicLibraryDiscoveryTimeoutPostgresIntegrationTest.lockedNativeRankingIsCancelledServerSideAndNextRequestRetries`
-       (Docker): an `ACCESS EXCLUSIVE` lock on `notes` checks the server-side cancel, the worker being
-       released, and recovery after unlock.
-     - Unit tests for a late result after the wait timeout, a rejected submission, a timed-out queued
-       load, and a failure logged once.
-   - **Verification:**
-     - Full `./mvnw clean install` with Docker: 2,701 tests, 0 failures, at 30/45 and again at 50/55.
-     - Mutations run by Release Implementor:
-       - Removing the transaction timeout fails the lock test at "each caller sees PostgreSQL
-         cancellation before the 5 s backstop".
-       - Removing both bounds now fails in about 7 s. Before fix-1, the test hung instead.
-       - Removing `readOnly` gives 9 connections against 1 in the HTTP test.
-     - Codex killed the complete-guard, rejection-handling and decorator mutations.
-   - **D10 cost (gpt-6-sol), as 5h-window / weekly `used_percent`:**
-
-     | Run | Effort | 5h window | Weekly |
-     |---|---|---|---|
-     | Hardening pass | high | 49→72 | 8→11 |
-     | Review | medium | +2 | 11→12 |
-     | Fix-1 | high | 0→7 (after the 5h reset) | 12→13 |
-
-     That is two D10 runs this week on one item, and the owner was told.
-   - **Known limitations (cold-pass notes, not fixed):**
-     - **A dead socket can't be cancelled.** The worker stays stuck until restart. Each request fails
-       after 55 s, and requests fail at once once the queue of 16 fills. Tomcat threads stay free, so
-       health checks don't restart the service, but Explore is down until restart.
-     - **C2:** for a few microseconds after a failed ranking, a request can join the failed future.
-       Retries have no backoff.
-     - **C7 (log emitters):**
-       - One failure also emits Caffeine's own WARNING and one `unhandled_exception` ERROR per waiting
-         request. Count failures from `DISCOVERY_RANKING_CACHE failed` only.
-       - Joining an in-flight ranking counts as a hit.
-       - `shortSectionResponses` resets after each delivered computation.
-     - The HTTP test's identical-body check is still trivial.
-     - **C11:** the doc-wording notes were folded into `docs/features/public-library.md`.
-
-3. **Owner action: four residual pre-H4 answer-key defects repaired in `study_packs.quiz`** — 2026-10-16,
-   run by the owner with psql.
-   - Source: `docs/claude-findings/2026-10-15-quiz-quality-retention-llm-cost-production-read.md` §2
-     (Feature Planner / Prod Investigator).
-   - Script: `docs/claude-plans/done/2026-10-16-study-packs-residual-answer-key-defects-repair-tightened.sql`.
-     It is the Release Implementor's tightened copy of the Prod Investigator's
-     `done/2026-10-15-…-repair.sql`. It adds a question-text match (D3's choices are generic), keeps array
-     order (`WITH ORDINALITY … ORDER BY`), and runs as one transaction with checks that abort it.
-     Before production, it was tested in a throwaway local Postgres, with a decoy question sharing
-     D3's choices and wrong index.
-   - Corrections:
-     - D1 audit detection risk: 0.06/(0.4×0.5) = 0.3, so idx 3 → 0.
-     - D2 labor efficiency variance: (120−100)×$15 = $300 unfavorable, so idx 0 → 2.
-     - D3 weighted average cost: $10,000/500 = $20, so idx 2 → 1.
-     - D4 straight-line depreciation: ($50,000−$5,000)/9 = $5,000, so idx 3 → 0, on the source and
-       both public-note copies.
-   - Owner run: `UPDATE 1/1/1/3`, the check block passed ("6 packs corrected"), and `COMMIT`.
-   - **Verified read-only by Release Implementor, after commit:**
-     - In each of the 6 packs, only the targeted question's `correctIndex` changed, compared with a
-       per-question read taken before the repair.
-     - Question order is unchanged, and every quiz still has 5 questions.
-     - `quiz_stamp` (0) and `updated_at` are unchanged, so no Quick Review mastery was reset.
-     - A whole-table recount finds 0 wrong keys for all four defects, and 3 corrected D4 copies.
-   - Exposure: one incomplete owner test session existed on these packs. The real learner's D4 copy
-     had no sessions.
-   - Not repaired, by design: the APGAR, percentage-tax and grain-size candidates were re-derived as
-     correctly keyed (false positives).
-
-### Signoff (2026-10-16)
-
-- **Signed off ahead of the merge, owner decision 2026-10-16**, so `v0.174.0` can be cut from this
-  branch. The merge gate is unchanged: the release PR merges to `main` only after the
-  `[CHECKPOINT — due 2026-10-22]` signal-9 read (by 2026-10-29 at the latest). If that read shows
-  ≥ 5 kills, the owner decides whether this release still ships, and any change made here is merged
-  forward into `v0.174.0`.
-- **Interim reads at signoff (read-only, NOT the verdict):**
-  - 0 `terminated by signal 9` lines from 2026-10-15T07:09:09Z to 2026-10-16T03:14Z. The filter was
-    checked against the known 07:08:54Z kill.
-  - 1 `Apparent connection leak` trace since the `v0.172.0` deploy: 2026-10-15T14:25:32Z on
-    `PublicProfileController.getByUsername`, returned to the pool about 70 s after acquire. That is a
-    `v0.166.0` method, not discovery, and is recorded on its checkpoint row.
-- **Scope completeness:**
-  - Item 1 shipped: #1503 plus the #1504 hardening, file:line anchors under Shipped.
-  - Item 2 shipped: the carried deploy-time stamp `3961383e` is on this branch.
-  - Item 3 is an owner action, done and verified.
-  - Nothing was planned and left unbuilt.
-- **Pressure test:** one scoped cold falsification agent (Opus, read-only), Tier H for concurrency.
-  It found no blockers; every finding is fixed or listed as a known limitation under item 2.
-- **Feature-doc drift:** `docs/features/public-library.md`'s cache paragraph was re-read against the
-  final `PublicLibraryDiscoveryRankingCache`. These all match:
-  - the 50 s / 55 s bounds (`:40-41`);
-  - a failure is not cached;
-  - immediate rejection when the queue is full;
-  - no viewer id;
-  - no backfill;
-  - the log and counter semantics.
-- **Backlog:**
-  - The "Production DB memory ceiling" and discovery long-hold `[DECISION]` rows are updated: cache
-    built, deploy held.
-  - The `v0.166.0` Hikari checkpoint row carries the `getByUsername` recurrence.
-  - A new `[CHECKPOINT]` row covers the cache itself, dated from its deploy.
-
-## v0.172.0 - Headroom
-
-**Status: Released** (signed off 2026-10-15 on `releases/v0.172.0`; kicked off 2026-10-14, cut from
-`main` after `v0.171.0` merged as #1497. PRs #1498, #1499, #1500.)
-
-Theme: stop the production database being pushed past its 268 MB memory ceiling. The cheapest
-already-diagnosed code legs land here: stop the Explore discovery sections computing the same
-engagement aggregates twice per call, and stop them re-fetching on every tab switch. Close the
-Challenge `+5` duplicate-question HTTP 500 alongside them.
-
-**Why this release exists.** At this kickoff, the database I/O bursts the Backlog Index attributed to
-deploys were traced to the database itself. `notelib-db-prod` (`basic_256mb`) had **9 backend kills by
-signal 9 in 7 days** (2026-10-08 → 10-14), each followed by a full Postgres crash-recovery that drops
-every in-flight request. Daily memory peaks hit 251–268 MB against a 268,435,460-byte limit on **every
-day from 09-15 to 10-14**: a long-standing undersizing, not a regression. Prod Investigator root-caused
-two mechanisms (`docs/claude-findings/2026-10-14-db-oom-memory-ceiling-public-catalog.md`; fix plan at
-`docs/claude-plans/2026-10-14-db-oom-memory-ceiling-fix-plan.md`):
-- **Deploy overlap.** The old instance keeps its 20-connection pool open 39 s–2 min after the new
-  instance is live. All 4 deploy-adjacent kills fit this, but the overlap is not sufficient alone:
-  10-12 had the same overlap with no kill.
-- **CPU-saturated public-catalog reads.** These precede most, not all, non-deploy kills.
-
-Both are made worse by a memory floor sitting within ~45 MB of the ceiling.
-
-**Owner decisions, 2026-10-14:**
-- **Leg A (plan upgrade): not now.** There are no paying users yet.
-- **Leg B: yes**, as an owner `SET`.
-- **Leg D: yes**, as a single-statement rewrite, not Java-side ranking, because Java-side ranking
-  would duplicate the FEATURED/POPULAR scoring formula that the paginated Public Library listing
-  keeps in SQL.
-- **Durable aggregate cache: next release.**
-- **Legs C, E, F: not scoped.**
-
-### Planned Scope
-
-1. **Discovery sections: compute the engagement aggregates once (Leg D, Option 1), and stop
-   re-fetching on discovery-overview re-entry (backend + frontend, Tier H, Codex). `[shipped: #1498 4871be7e + follow-up #1500 fc7da866]`**
-   - **Re-tiered N → H (2026-10-15):** delivery introduced defects that this session then fixed, which is the charter's Tier H trigger. Pass 1 sorted the whole public catalog twice with ~2,437-byte rows (prod `EXPLAIN`, and Codex's own review). Pass 2 moved `n.content` into a 1,290-byte-wide hash join inside the ranking subquery (prod `EXPLAIN`). Pass 1's H2 oracle tie-check also sorted UUIDs in Java (signed `compareTo`), so it passed or failed depending on the random ids; Release Implementor rewrote that one assertion as `subList(0, 2).containsExactlyInAnyOrder(...)`. The oracle comparison itself is unchanged. A scoped cold falsification pass is owed at pre-signoff (it can be batched with item 2). The paginated listing's golden SQL files were verified against the pre-refactor code (`fcfae82b`) in a throwaway worktree.
-   - **Backend.** `NoteService.getPublicLibraryDiscoverySections` (`NoteService.java:953-960`) runs
-     the ranked query separately for `FEATURED` and `POPULAR`. Each run builds the
-     `RANK_COPIES_JOIN`/`RANK_LIKES_JOIN`/`RANK_VIEWS_JOIN` aggregates from scratch
-     (`PublicLibraryRepositoryImpl.java:534-564`). Rewrite it so the three aggregates are computed
-     once per call and both rankings read from them. `POPULAR` must still exclude `FEATURED`'s
-     returned IDs. Same results, same ordering, same thresholds.
-   - **One scoring definition.** The paginated listing (`NoteService.java:829`, `:915`) keeps using
-     the existing fragments, so there must be exactly one definition of the scoring formula.
-   - **Frontend.** `public-library-page-client.tsx:648-675` re-requests discovery sections each time
-     discovery overview is re-entered (`?view=` round-trip, filter cleared; Explore only `hidden`-toggles the tab, so its tab switch does not remount). Reuse the already-loaded response instead.
-   - **Guards.**
-     - A test asserting the aggregate computation runs at most once per call.
-     - The rewritten SQL covered by `NativeQueryPostgresIntegrationTest`.
-     - A result-equivalence test against the old two-query output on seeded data.
-2. **Challenge `+5`: duplicate bank question no longer 500s (backend, Tier N, Codex). `[shipped: #1499 89f4edad]`**
-   - **Audit (2026-10-15).** Both bank writers (`persistGeneratedQuestions`, which also serves
-     `seedTemplateAsync`, and `copyTemplateQuestions`) now go through one native
-     `insertIfAbsent … on conflict do nothing`. A skipped question is still served in its session but
-     is not banked or claimed for it. Real-PostgreSQL guards: same key twice at the same level, at a
-     NULL level and at a different level; a two-connection race; `+5` with a pre-existing duplicate;
-     bank rows present after start, `+5`, seed and copy; and a jsonb round-trip through the entity.
-     Removing `on conflict do nothing` fails three tests by name, including the end-to-end `+5` test.
-     Removing `flushAutomatically` fails nothing, so the start-path row-existence test guards the
-     outcome but does not prove the unflushed-session state was reproduced; the flag stays as a
-     harmless safeguard. The three claim queries gained `cast(:learnerLevel as string)`, which changes
-     no behaviour (verified by reverting it). It is needed only because `NativeQueryParameterTypingTest`
-     scans whole files and flags JPQL `:param is null` once a file holds a native query; narrowing
-     that lint is a follow-up. Full `./mvnw clean install` with Docker: 2685 tests, 0 failures.
-   - **The defect.** `ChallengeQuizQuestionBankService` de-duplicates new bank rows only within the
-     incoming batch (`:101-106`), never against rows already in the bank. A same-level repeat of
-     `question_key` therefore hits `uq_challenge_quiz_question_bank_user_pack_key` and rolls back the
-     request as HTTP 500. This is documented as a known limitation in `docs/features/challenge-quiz.md:119`.
-   - **The fix.** Make the insert itself skip duplicates, for example `ON CONFLICT DO NOTHING` on that
-     key, so a concurrent `+5` or `seedTemplateAsync` cannot race a pre-read. The exact mechanism is
-     settled in the brief.
-   - **Guard.** A real-PostgreSQL test inserting the same key twice.
-   - **Evidence.** No occurrence in the 7 retained days of logs, so this is a latent-defect fix, not
-     an active incident.
-
-**Owner action, outside the code release:** Leg B,
-`ALTER DATABASE notelib_db_prod SET max_parallel_workers_per_gather = 0;`. The statement, expected
-effect and verification are handed over in `docs/claude-plans/done/2026-10-14-db-leg-b-parallel-workers.sql`.
-It only applies to new sessions, so it is fully live after the next deploy cycles the pool.
-**Applied by the owner 2026-10-15** (before ~03:04Z). Verified read-only at signoff (05:39Z):
-`pg_db_role_setting` holds `max_parallel_workers_per_gather=0` for `notelib_db_prod`, a new connection
-reads `0` (source `database`), and all 20 app connections opened at or after 05:14Z, after the `ALTER`.
-The owner's IntelliJ console kept reading `1` because its connection predated the `ALTER` and
-"detach session" reuses it.
-
-**Kill criterion, stated before any leg lands:** count `*terminated by signal 9*` lines on
-`dpg-d6tvb8fkijhs73fda4m0-a` over 7 days after the release deploys and Leg B is applied. **Baseline: 9.**
-
-Anti-drift:
-- No Hikari `maximum-pool-size` or `minimum-idle` change. The pool size is pinned by the 2026-09-04
-  outage fix and `TomcatThreadPoolHikariAlignmentTest`.
-- No change to the FEATURED/POPULAR scoring weights, decay, thresholds or section limits. No change
-  to the paginated Public Library listing's results.
-- No new cache and no new dependency (the Caffeine cache is next release).
-- No checkout, payment or pricing path, so RC-4's baseline window is untouched. No public-note-page
-  or adoption-path change, so RC-5's read is untouched.
-- No migration.
-- No `statement_timeout`.
-
-### Shipped
-
-1. **Discovery sections compute the engagement aggregates once (Leg D), and stop re-fetching on
-   overview re-entry** — #1498 (`4871be7e`), Tier H.
-   - `PublicLibraryRepositoryImpl.findPublicLibraryFeaturedAndPopularIds` (`:314`) ranks Featured and
-     Popular in one statement. Each of the copies/likes/views aggregates appears once. A narrow
-     `featured_ids` CTE keeps `n.content`/`sp.summary`/`sp.quiz` in scan filters only. Each section
-     filters to eligible notes, then `ORDER BY … LIMIT`. Called from `NoteService.java:955`; RECENT
-     keeps its own query and still excludes both.
-   - One scoring definition, shared with the paginated listing via `rankedOrderKeys`/`rankScoreSql`.
-     14 golden files pin the paginated page/count SQL. The pin was verified against the pre-refactor
-     code.
-   - Prod `EXPLAIN` (read-only, planner estimate): old pair ~25,300 total cost, widest node 48 bytes;
-     final ~18,600, widest node 64 bytes. Two earlier Codex passes were rejected for wide sorts and
-     joins (see the re-tier note in Planned Scope).
-   - Frontend: `discoverySectionsLoadedRef` (`public-library-page-client.tsx:552`) reuses a successful
-     load across overview re-entry. Retry always fetches, and an error resets the flag.
-2. **Copy counts stay current on the reused overview** — #1500 (`fc7da866`), a follow-up to item 1
-   that the cold falsification pass found. Reusing the sections froze `copyCount` at first load.
-   `handleCopySuccess` (`public-library-page-client.tsx:774`) now adds one on the source card in the
-   browse list and all three sections. It skips a re-copy (the backend returns the existing copy) and
-   an owner's own copy, which is never counted. Copies recorded during the mount are merged over the
-   copied-notes load (`:510`), so an in-flight load cannot erase them. Each of the four guards is
-   mutation-checked against a named test.
-3. **Challenge bank duplicates are skipped at insert instead of returning HTTP 500** — #1499
-   (`89f4edad`).
-   - Both bank writers route through `ChallengeQuizQuestionBankRepository.insertIfAbsent`
-     (`:31`, `on conflict do nothing` at `:29`), called from `ChallengeQuizQuestionBankService.java:133`
-     and `OfficialChallengeQuizTemplateService.java:257`.
-   - A skipped question is still served but not banked or claimed for that session
-     (`challenge-quiz.md` "Per-user question bank").
-   - Real-PostgreSQL guards cover same, NULL and different level; a two-connection race; `+5` with a
-     pre-existing duplicate; rows persisted on every path; and a jsonb round-trip.
-
-**Pre-signoff pressure test: one scoped cold falsification agent (Opus), Tier H trigger.** Leg D's
-delivery introduced defects that the same session fixed. The agent tested 6 Leg D claims, 7 Item 2
-claims and 2 release-wide sweeps, using mutation testing in a throwaway worktree. **No code defect was
-found in either PR.** Confirmed findings and their disposition:
-- Frozen copy counts on the reused overview: **fixed in #1500**.
-- Stale Backlog rows (`v0.81.0` checkpoint, "Isolate Challenge bank writes properly"): **corrected in
-  this signoff**.
-- Two imprecise sentences in `challenge-quiz.md` (the seed path's transaction; the shortfall's dedup
-  scope): **corrected in this signoff**.
-- An unpinned flush flag and narrow golden coverage: recorded below.
-
-**Checkpoint:** `[CHECKPOINT — due 2026-10-22]` in `ROADMAP.md`'s Backlog Index carries the signal-9
-kill criterion (baseline 9 in 7 days).
-
-**Owner note, outside this release's scope:** the Official Challenge template seed for note
-`0c6b0be8-8b7d-41dc-9619-94cab1d52064` (pack `3deae879-…`) failed at 2026-10-13T03:32:35Z. A read-only
-log read at signoff traced it to an LLM output-validation failure: `AppException: Challenge quiz
-generation returned an invalid quiz format` from `validateGeneratedQuizItem`, after its one retry. It
-was **not** a duplicate-key violation, so it is not evidence against item 2 being latent. The pack has
-**0** bank rows and the note is `PUBLIC`, so the admin backfill seed will pick it up if re-run.
-
-### Known Limitations
-
-- **Shared-then-public copy count:** a learner who copied a note while it was privately shared, and
-  then copies it again after it goes public, reuses the old copy. That copy isn't counted publicly
-  (`copied_from_public = false`), but the card shows +1 until reload. Closing this needs the backend to
-  say whether a copy is new.
-- **`@Modifying(flushAutomatically = true)` on `insertIfAbsent` is not pinned by any test.** Removing it
-  fails nothing, most likely because Hibernate already flushes before native DML. The start-path test
-  proves bank rows land, but not that an unflushed session row was ever reproduced.
-- **The paginated golden files pin only the H2 dialect with empty criteria.** The PostgreSQL branch of
-  `rankScoreSql`, which #1498 edited, is unchanged by reading but not byte-pinned. Discovery's filter
-  parameters are oracle-tested on H2 only; production discovery always sends empty criteria.
-- **No end-to-end duplicate test on the start or template-copy paths.** They share `insertIfAbsent`
-  with the tested `+5` path, so they are covered by construction only.
-- **Non-duplicate bank write failures** (foreign-key, check-constraint or 512-character `question_key`
-  overflow) still poison the caller's transaction, as before.
-- **`NativeQueryParameterTypingTest` scans whole files**, so it flagged the JPQL `:learnerLevel is null`
-  in the bank repository once that file held a native query. The three claim queries now use
-  `cast(:learnerLevel as string)`, which is behaviour-neutral (verified on PG with a NULL level).
-  Narrowing the lint to native-query blocks is a follow-up.
-
 ## Archived releases
 
 - `v0.163.0 — No Peeking` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`.
@@ -1609,3 +1002,6 @@ was **not** a duplicate-key violation, so it is not evidence against item 2 bein
 - `v0.170.0 — Study Journey, Closed` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.178.0` kickoff.
 - `v0.171.0 — Checkout, Recovered` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.179.0` kickoff.
 - `v0.169.0 — Study Journey, Continued` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.175.0` kickoff.
+- `v0.172.0 — Headroom` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.179.0` sign-off (the live file held eight sections against *current + last five*).
+- `v0.173.0 — Cached Catalog` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.179.0` sign-off (the live file held eight sections against *current + last five*).
+- `v0.174.0 — Enhanced Generation` (Released) — archived to `docs/archive/RELEASES_ARCHIVE.md`. Moved at the `v0.180.0` kickoff (the live file held seven sections against *current + last five*).

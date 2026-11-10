@@ -81,7 +81,7 @@ Cadence: every 5 minutes for 30 minutes, every 15 minutes to +2 hours, hourly to
 ## 5. Hard stops (any one means pause and decide; never an automatic rollback)
 
 - Any `signal 9` kill after T0.
-- Backend 5xx above 2% for 5 minutes, or database connections above 25 for 5 minutes.
+- Backend 5xx above 2% for 5 minutes, or database connections above 25 for 5 minutes. **Clarified 2026-11-08 (Product UX): read going forward as above 2% sustained across five consecutive one-minute observation periods; the wording was ambiguous before (sustained versus any five-minute window) and the 2026-11-07 episode is recorded under both readings (`docs/claude-plans/2026-11-08-v0179-503-reconciliation-and-request-volume.md`). No new threshold, the 2% value unchanged; brief elevated-error episodes stay visible in each check.**
 - Any `CATALOG_WALK_GUARD_BREACH` line.
 - Any `CATALOG_CACHE_DEADLINE` line (a real walk outlasted its deadline: the 90 s and 240 s numbers are wrong for production).
 - `CATALOG_WALK outcome=error` on more than 20% of page-class walks in any 15-minute window that contains at least 10 walks.
@@ -115,3 +115,13 @@ Sign-off per `.claude/commands/signoff.md`: release notes file `docs/releases/v0
 - **Owner:** approves the deploy; merges the stack and the final PR; reads the platform limit; decides the off-peak time and whether to take a backup; runs any rollback; holds the `main` freeze; may run the smoke GETs.
 - **First-hour log collection (Product UX asked for an explicit owner of this):** the proposal is that Claude collects and saves the Vercel runtime-log excerpts at T0 plus 10 min, 30 min and 55 min of the first hour, because Hobby keeps logs for one hour only; **the owner confirms this assignment and must keep the session able to run in that hour, or names another person.** A checkpoint missed inside the hour cannot be recovered later.
 - **Claude (read-only):** the watch in sections 4 and 5, saving log excerpts within the hour, reporting every milestone, and telling the owner immediately if a hard stop fires. Claude does not merge, deploy, roll back, change environment variables or run a load test.
+
+## 10. Deploy record and status (2026-11-06 to 2026-11-08)
+- **Deployed:** PR #1571 merged 2026-11-06T15:55:02Z; T0 = 15:56:32Z (Vercel `dpl_3DYfi2WhryAmg8osG4wLtTBXKkN1` READY); slot chosen by the owner (near midnight PHT; the recommended slot was Saturday 05:00 PHT); rollback target `dpl_fZ7WPyhKuNpN4Tqs6faYqHz4Bvja`; first-hour logs saved at +10, +30, +45, +55 minutes as planned.
+- **+1 h:** clean; walk health not read (fewer than 10 page-class walks), extended.
+- **+24 h (2026-11-07T15:57:50Z):** PASSED as written; one item for Product UX (3 HTTP 503 in about two minutes, 8.3% of 36 requests in a five-minute window; section 5 wording "above 2% for 5 minutes" is ambiguous between a sustained and a window reading); highest memory sample 266.0 MB with a single reading above 260 MB, so the two-consecutive-reads stop did not fire. See `docs/claude-plans/2026-11-07-v0179-stage-b-24h-read-report.md`.
+- **503 reconciliation (2026-11-08, accepted by Product UX):** cause = the v0.178.0 ranking-snapshot fallback bulkhead (`PUBLIC_LIBRARY_RANKING_BUSY`), not Stage B; sustained reading NOT triggered, five-minute aggregate reading TRIGGERED; no retrospective rollback; record `docs/claude-plans/2026-11-08-v0179-503-reconciliation-and-request-volume.md`.
+- **Lesson for the watch plan:** a per-minute 5xx evaluation and 30-second memory samples around any reading above 250 MB are cheap and decisive; Vercel logs older than one hour are gone, so walk-side stops are verifiable only in the last hour of each check.
+- **Sign-off ahead of the +72 h read (deviation from section 8):** at the owner's request `v0.179.0` was signed off on 2026-11-08 (release notes written, status flags set to Released), before the +72 h read. The tag waits for the read. If the read fails, the Released flag and the release notes are corrected before the sign-off PR merges. The sign-off PR merges only after (1) the +72 h read has passed, (2) the release notes and `RELEASES.md` carry its outcome, (3) PR #1547 has merged and (4) `main` has been merged forward into the release branch with the archive move done.
+- **Pending:** +72 h read 2026-11-09T15:56Z; Product UX's confirmation of the 503 reading; the `main` freeze ends only then.
+

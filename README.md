@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.179.0 - Lighter Listings` (In Progress; cut from `main` at `v0.178.0`; Stage A backend first, Stage B frontend second, each deploy separately approved; `v0.176.0` and `v0.177.0` are Released on their own branches, unmerged, deploy on HOLD)
+Current release baseline: `v0.180.0 - Public Page Reliability and Privacy` (In Progress; kicked off 2026-11-10 on `releases/v0.180.0`, cut from `main` at `2cf895f6` after `v0.179.0` was signed off, merged (#1573) and tagged and `v0.176.0` and `v0.177.0` merged (#1547); frontend only, one merge, one separately approved deploy, nothing deployed; creator and profile reads bounded at 120 s and failing closed with a calm failure state and a `noindex` head, the exam hub keeps its notes when only its review sets fail; built and verified on `feat/public-pages-followup-frontend` and an isolated Vercel Preview, NOT yet merged into this branch; all seven version references are bumped (the only `backend/` change is the `pom.xml` version); `v0.179.0` is Released and tagged, the `main` freeze was lifted 2026-11-10, and Render redeployed identical code after both the #1547 and #1573 merges because neither carried `[skip render]`)
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
