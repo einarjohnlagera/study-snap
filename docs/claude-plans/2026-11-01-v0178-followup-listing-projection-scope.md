@@ -336,3 +336,18 @@ A public note's URL contains a slug **derived from its title** (`/public/library
 | 5 | **Correction recorded:** Web Analytics visitors are about 97% automated traffic (CN, HK, SG, US, MX desktop Chrome, no referrer), so Product UX's reading of 706 visitors as the "busiest real-visitor day" should read "busiest automated-traffic day". It did not change decision 1. |
 | 6 | **Still required for the Stage B deploy:** the owner's explicit approval with the wording in the report, a decision on every open docs PR before T0, a merge-forward and re-check of the stage branch, and the deploy-time checks. Nothing is approved or scheduled. |
 
+---
+
+# FINAL PRODUCT UX DECISIONS 7 (2026-11-07): Stage B +24 h checkpoint and database load
+
+**Recorded by the Release Implementor session from the Product UX decision the owner relayed. Detail: `docs/claude-plans/2026-11-07-v0179-stage-b-24h-read-report.md`.**
+
+| # | Decision |
+|---|---|
+| 1 | **Continue Stage B observation through the formal +24 h checkpoint; no immediate rollback** on the increased listing-request rate alone. Conditional on the existing hard stops staying clear; no threshold is to be reinterpreted or relaxed. |
+| 2 | **Evaluate the 503 incident objectively against the existing criteria** and report it as unknown where attribution cannot be established; do not dismiss it because it looks unrelated to Stage B. |
+| 3 | **Distinguish operational stability from database-load efficiency.** "Stage B is operationally stable so far, but catalog-listing workload has increased" is an acceptable statement when supported; do not claim Stage B reduces database load without evidence. |
+| 4 | **Repeated 52-page hub walks: investigate only.** The per-instance 120 s cache is a working hypothesis, not a root cause. Do not raise the 120 s TTL, add stale-while-revalidate, warm the cache speculatively, weaken withdrawn-content privacy, change crawler or indexing behavior, or change backend infrastructure or database plans. Any optimization returns for separate Product UX and owner review. |
+| 5 | **The `main` freeze may end only if the +24 h criteria pass, and ending it is not authorization for another deployment.** All earlier constraints (120 s TTL, 90 s and 240 s deadlines, 15 s backoff, single-flight, strict completeness, `w10p`, hard stops, first-hour logs, rollback) are unchanged. |
+| 6 | **Outcome of the +24 h read (2026-11-07T15:57:50Z):** passed as written, with the 503 reading and a 266.0 MB single memory sample reported for Product UX. A first quoted `courseProgram` rate (14 an hour against 6) is withdrawn; over the comparison window the figures are about 7.7 against 6.2 an hour (`courseProgram`) and 16.3 against 13.6 (unfiltered). |
+
