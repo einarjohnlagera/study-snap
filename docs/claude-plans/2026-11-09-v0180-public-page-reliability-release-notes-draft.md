@@ -1,10 +1,10 @@
-# DRAFT release notes: v0.180.0 (working identifier) — Public Page Reliability and Privacy
+# Release record (draft): v0.180.0 — Public Page Reliability and Privacy
 
-Written 2026-11-09 by the Claude Code session. **This is a draft, not a release record.** It holds the follow-up's `RELEASES.md` content outside the signed-off `v0.179.0` section (Product UX decision D, 2026-11-09) so that section stays historically accurate and the merge conflict with `releases/v0.179.0` does not arise. At the follow-up's kickoff, move these bullets into a new `## v0.180.0` section of `RELEASES.md` through the normal kickoff checklist.
+Written 2026-11-09 by the Claude Code session. **This is the full verification record for `v0.180.0`**; the condensed release record is the `v0.180.0` section of `RELEASES.md`. It was written outside the signed-off `v0.179.0` section (Product UX decision D, 2026-11-09) so that section stayed historically accurate, and it moved into the `v0.180.0` section's scope at the 2026-11-10 kickoff.
 
-**Identifier check (2026-11-09):** `v0.180.0` appears in no release, roadmap, README, AGENTS or CLAUDE file on `main`, `releases/v0.179.0`, `releases/v0.177.0`, `releases/v0.176.0` or `docs/v0179-stage-b-24h-read`, and no `v0.180*` branch exists. Re-check before the kickoff.
+**Kickoff (2026-11-10):** `v0.180.0` was confirmed free and kicked off on `releases/v0.180.0`, cut from `main` at `2cf895f6`; the condensed record is in the `v0.180.0` section of `RELEASES.md` and this file keeps the full verification record and both cold reviews. All seven version references are bumped (`backend/pom.xml` included).
 
-**State:** frontend only (nothing under `backend/`, no migration, no version bump yet), local to `feat/public-pages-followup-frontend`; **not pushed, not merged, not deployed, not approved for production.** Merge and deployment order and approvals are in the Product UX decision of 2026-11-09 (the `main` freeze and the Stage B +72 h checkpoint stay independent and mandatory).
+**State (as of 2026-11-10):** frontend only (no backend code change, no migration; the only `backend/` change is the `pom.xml` version bump made at the kickoff), built on `feat/public-pages-followup-frontend` (pushed) and being integrated into `releases/v0.180.0`; **not merged to `main`, not deployed, not approved for production.** Merge and deployment order and approvals are in the Product UX decision of 2026-11-09 (the `main` freeze and the Stage B +72 h checkpoint stay independent and mandatory).
 
 ## Shipped on the branch
 
