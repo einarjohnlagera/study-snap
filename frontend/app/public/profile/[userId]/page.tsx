@@ -3,7 +3,11 @@ import { notFound } from "next/navigation";
 import { PublicProfilePageClient } from "@/components/public/public-profile-page-client";
 import { buildPublicProfilePath } from "@/lib/public-note-path";
 import { getServerPublicProfile } from "@/lib/server-public-profiles";
+import { PUBLIC_PROFILE_UNAVAILABLE_METADATA } from "@/lib/public-profile-metadata";
 import { buildPageMetadata } from "@/lib/site-metadata";
+
+// Explicit, like the subject listing and exam hub: the 120 s hard-TTL profile cache is the only freshness layer for this page.
+export const dynamic = "force-dynamic";
 
 type PublicProfilePageProps = {
   params: Promise<{
@@ -17,7 +21,13 @@ function buildDescription(displayName: string, publicNotesCount: number, totalCo
 
 export async function generateMetadata({ params }: PublicProfilePageProps): Promise<Metadata> {
   const { userId } = await params;
-  const result = await getServerPublicProfile(userId);
+  let result: Awaited<ReturnType<typeof getServerPublicProfile>>;
+  try {
+    result = await getServerPublicProfile(userId);
+  } catch {
+    // The page body reads the same value and fails the same way, so error.tsx renders. Only the head is handled here.
+    return PUBLIC_PROFILE_UNAVAILABLE_METADATA;
+  }
 
   if (result.status === "not_found") {
     return {

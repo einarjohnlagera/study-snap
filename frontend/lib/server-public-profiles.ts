@@ -74,6 +74,12 @@ async function loadPublicProfile(path: string, loaderSignal: AbortSignal): Promi
   }
 }
 
+// "." and ".." are NOT changed by encodeURIComponent, and URL normalization then rewrites the backend path
+// (".." -> /api/public/, "." -> /api/public/creator/, and their Learning Focus request -> /api/public/learning-focus or
+// /api/public/creator/learning-focus, which is the profile route of a user named "learning-focus"). Neither can be a username
+// or an id, so they are not-found without a request or a cache entry.
+const isDotSegment = (value: string) => value === "." || value === "..";
+
 const cacheOptions = {
   hardCapMs: CATALOG_PAGE_TTL_CAP_MS,
   deadlineMs: CATALOG_PROFILE_DEADLINE_MS,
@@ -83,7 +89,7 @@ const cacheOptions = {
 
 export async function getServerPublicProfile(userId: string): Promise<ServerPublicProfileResult> {
   const value = userId.trim();
-  if (!value) return { status: "not_found" };
+  if (!value || isDotSegment(value)) return { status: "not_found" };
   return getCatalogCached(
     `profile:id:${value.toLowerCase()}`,
     catalogTtlMs(CATALOG_PAGE_TTL_CAP_MS, process.env.NOTELIB_CATALOG_PAGE_TTL_MS),
@@ -94,7 +100,7 @@ export async function getServerPublicProfile(userId: string): Promise<ServerPubl
 
 export async function getServerPublicCreatorProfile(username: string): Promise<ServerPublicProfileResult> {
   const value = username.trim();
-  if (!value) return { status: "not_found" };
+  if (!value || isDotSegment(value)) return { status: "not_found" };
   return getCatalogCached(
     `profile:username:${value.toLowerCase()}`,
     catalogTtlMs(CATALOG_PAGE_TTL_CAP_MS, process.env.NOTELIB_CATALOG_PAGE_TTL_MS),

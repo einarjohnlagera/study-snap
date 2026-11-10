@@ -163,4 +163,45 @@ describe("server public profile reads", () => {
     await expect(getServerPublicCreatorProfile("real")).resolves.toMatchObject({ status: "ok" });
     expect(globalThis.fetch).toHaveBeenCalledTimes(563 * 2 + 2);
   });
+
+  it("fails closed when only the Learning Focus request fails: throws, caches nothing, backs off", async () => {
+    (globalThis.fetch as jest.Mock).mockImplementation((url: string) => Promise.resolve(
+      url.endsWith("learning-focus") ? response(500) : response(200, { bio: "profile loaded fine" }),
+    ));
+    await expect(getServerPublicCreatorProfile("alice")).rejects.toThrow("Could not load public profile Learning Focus.");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    await expect(getServerPublicCreatorProfile("alice")).rejects.toBeInstanceOf(CatalogBackoffError);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives the Learning Focus request its own 10 s timeout even when the profile request answers", async () => {
+    (globalThis.fetch as jest.Mock).mockImplementation((url: string, options: RequestInit) => {
+      if (!url.endsWith("learning-focus")) return Promise.resolve(response(200, { bio: "answered at once" }));
+      return new Promise((_resolve, reject) => {
+        options.signal?.addEventListener("abort", () => reject(new Error("focus aborted")), { once: true });
+      });
+    });
+    let settled = false;
+    const pending = getServerPublicProfile("hung-focus");
+    const assertion = expect(pending).rejects.toThrow("focus aborted");
+    pending.catch(() => { settled = true; });
+    await jest.advanceTimersByTimeAsync(9_999);
+    expect(settled).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(settled).toBe(true);
+    await assertion;
+    await expect(getServerPublicProfile("hung-focus")).rejects.toBeInstanceOf(CatalogBackoffError);
+  });
+
+  it("treats the dot segments . and .. as not_found without a request, because URL normalization would rewrite the backend path", async () => {
+    for (const value of [".", "..", " .. "]) {
+      await expect(getServerPublicCreatorProfile(value)).resolves.toEqual({ status: "not_found" });
+      await expect(getServerPublicProfile(value)).resolves.toEqual({ status: "not_found" });
+    }
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    // Dots inside a longer value are ordinary characters: not a dot segment, still sent (encoded) and still looked up.
+    await getServerPublicCreatorProfile("a..b");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect((globalThis.fetch as jest.Mock).mock.calls[0][0]).toBe("http://localhost:8080/api/public/creator/a..b");
+  });
 });
