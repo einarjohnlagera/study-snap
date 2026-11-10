@@ -32,7 +32,7 @@ Anti-drift: no backend code change (the only `backend/` change is the version in
 ### Open risks and decisions
 
 - Crafted usernames containing `/`, `\`, NUL, `%` or `;` reach the error state and write a failure-backoff record (documented, deferred); the failure head and the page body each read the cache, so on a confirmed 404 a second request pair can be issued; the per-instance cache may raise backend profile reads (accepted in D2, unmeasured); a 512-key partition can hold about 882 keys in the worst case (refetch cost only).
-- **Merge and deploy:** separate Product UX and owner approval, at least 24 hours from any other deploy; both previous merges redeployed Render because the merge commit lacked `[skip render]`, and the second even though its diff touched nothing under `backend/`, so expect a backend restart on merge and watch the database for an hour.
+- **Merge and deploy:** **Product UX returned CONDITIONAL GO on the deploy plan on 2026-11-10; production deployment is NOT authorized** (plan: `docs/claude-plans/2026-11-10-v0180-deploy-plan.md`, section 2b; it adds a required Preview demonstration of the failure signals, a privacy-sensitive rollback decision tree and attended operation). Separate Product UX and owner approval, at least 24 hours from any other deploy; both previous merges redeployed Render because the merge commit lacked `[skip render]`, and the second even though its diff touched nothing under `backend/`, so expect a backend restart on merge and watch the database for an hour.
 
 ### Kickoff checks (2026-11-10)
 
