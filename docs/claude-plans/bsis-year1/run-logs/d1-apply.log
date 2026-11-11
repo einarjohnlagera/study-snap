@@ -1,0 +1,38 @@
+D1 LaTeX delimiter fix run, mode = commit
+BEGIN
+SELECT 1
+DO
+Preconditions P1-P7 passed.
+BEFORE (the Quick Recall lines):
+                                       before_line                                       
+-----------------------------------------------------------------------------------------
+ - Mean formula — \frac{\sum x_i}{n} where x_i are data points and n is number of points
+ - Variance formula — \frac{\sum (x_i - \bar{x})^2}{n} where \bar{x} is mean
+ - Multiplication rule — P(A and B) = P(A) \times P(B) for independent events
+(3 rows)
+
+CREATE TABLE
+INSERT 0 1
+DO
+Post-update assertions passed (1 row; 12 dollar signs added and nothing else; length 1928; new md5 ada1a363...; metadata, memberships and Study Pack unchanged).
+AFTER:
+                                          after_line                                           
+-----------------------------------------------------------------------------------------------
+ - Mean formula — $\frac{\sum x_i}{n}$ where $x_i$ are data points and $n$ is number of points
+ - Variance formula — $\frac{\sum (x_i - \bar{x})^2}{n}$ where $\bar{x}$ is mean
+ - Multiplication rule — P(A and B) = P(A) $\times$ P(B) for independent events
+(3 rows)
+
+ len  |               md5                |          updated_at           
+------+----------------------------------+-------------------------------
+ 1928 | ada1a3636c502fbc515fad7c942eca17 | 2026-11-06 09:04:40.284533+00
+(1 row)
+
+ROLLBACK STATEMENT (SAVE THIS; use ONLY after a COMMIT you want to undo; expect UPDATE 1; afterwards the md5 must be 3105b51056c2c78d8d5ae657179bac07):
+                                                                                                                                                                                                                                                                                                                                                     rollback_statement                                                                                                                                                                                                                                                                                                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ UPDATE notes SET content = replace(replace(replace(content, '- Mean formula — $\frac{\sum x_i}{n}$ where $x_i$ are data points and $n$ is number of points', '- Mean formula — \frac{\sum x_i}{n} where x_i are data points and n is number of points'), '- Variance formula — $\frac{\sum (x_i - \bar{x})^2}{n}$ where $\bar{x}$ is mean', '- Variance formula — \frac{\sum (x_i - \bar{x})^2}{n} where \bar{x} is mean'), '- Multiplication rule — P(A and B) = P(A) $\times$ P(B) for independent events', '- Multiplication rule — P(A and B) = P(A) \times P(B) for independent events'), updated_at = now() WHERE id = '404ee436-ff9e-4963-bcc2-7f1c395e19dd' AND md5(content) = 'ada1a3636c502fbc515fad7c942eca17';
+(1 row)
+
+COMMIT
+COMMITTED. Keep this log. Do not regenerate the Note or its Study Pack.

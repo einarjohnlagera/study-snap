@@ -2,7 +2,7 @@ Status: DRAFT authored body for owner/curator review, 2026-11-05. NOTHING here i
 
 # Counting: Sum and Product Rules, Permutations and Combinations: authored body
 
-Approved as BSIT Year 1 decision Q8. Specification: `../bsit-year1-counting-note-authoring-brief.md`. The body below follows the structure of the neighbouring Discrete Mathematics Notes (Overview, Key Idea, Core Details, Why It Matters, Quick Recall; `$...$` for mathematics).
+Approved as BSIT Year 1 decision Q8. Specification: `../bsit-year1-counting-note-authoring-brief.md` (removed 2026-11-11; recoverable from commit `d5eaf383`). The body below follows the structure of the neighbouring Discrete Mathematics Notes (Overview, Key Idea, Core Details, Why It Matters, Quick Recall; `$...$` for mathematics).
 
 ## Metadata (from the shaping TSV, row "Counting Principles")
 
