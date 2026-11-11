@@ -8,13 +8,17 @@ Theme: every price a learner sees agrees with the price the backend will charge,
 
 ### Planned Scope (owner decisions 2026-11-04 and 2026-11-11; Product UX 2026-11-11)
 
-- **Homepage pricing reads the backend (frontend, option A2).** `SimplePricingSection` reads the existing public pricing API through `useBillingPricing` and shows the plain monthly price (never an intro), with a same-height placeholder while loading and a "See current prices" link to `/pricing` on failure (wording provisional); `/` stays statically rendered (`○ /`).
+- **Homepage pricing reads the backend (frontend, option A2).** `SimplePricingSection` reads the existing public pricing API through `useBillingPricing` and shows the plain monthly price (never an intro), with a same-height placeholder while loading and a "See current prices" link to `/pricing` on failure (wording settled by the owner, 2026-11-11; no currency code beside amounts, no "for new subscribers" label, no timeout for a call that never settles, recorded as a known limitation); `/` stays statically rendered (`○ /`).
 - **No surface prints a price the backend did not provide (frontend, the approved compatibility adjustment).** The plan cards, the paywall modal and Settings lose their static fallbacks; the intro hint no longer falls back to a static intro (the E19 bug); the static "Regional Pricing" card on `/pricing` is removed; the static `price` and `intro` tables leave `lib/pricing-config.ts`.
 - **The price change itself is the owner's action, not code.** At least 24 hours after the frontend deployment, the owner saves in Render: `PRICING_PH_PLUS_MONTHLY_PRICE=99`, `PRICING_PH_PRO_MONTHLY_PRICE=149` (the Pro-specific variable, not the legacy fallback), `PRICING_PH_PRO_YEARLY_ACTIVE=false` and `PRICING_PH_PRO_EXAM_CYCLE_ACTIVE=false`. That save is a Render redeploy and is gated like one; the owner then makes one real ₱99 test purchase.
 
 Not in this release: any backend code, any `backend/pom.xml` bump (frontend-only: Product UX, 2026-11-11), voucher changes (the `INTRO-PH-*` vouchers become inert on their own when the base falls below the override), entitlements, quotas, other regions' prices, a country or currency selector, geolocation or the `CF-IPCountry` trust-boundary test, the unknown-region default, any Cloudflare or Vercel configuration, Challenge Quiz or LLM work.
 
 Anti-drift: no new regional-pricing authority in the frontend; the displayed price equals the backend-authorized checkout amount; the homepage never shows an intro; no Render environment or deploy action by Claude. **Backend version:** `backend/pom.xml` stays at `0.180.0`, the last release that changed `backend/` (every other version reference is bumped to `0.181.0`).
+
+### Known, owner-accepted limitation (decision E, 2026-11-11)
+
+Between the frontend deployment and the environment save (at least 24 hours) the backend still auto-applies the live `INTRO-PH-*` vouchers at checkout to new Philippine subscribers (`PaymentService.java:102-108` passes no voucher code), so the homepage's plain base (₱179 Plus, ₱249 Pro) is higher than a new subscriber is charged (₱149, ₱199). It favours the customer, ends when the environment save makes the vouchers inert, and was accepted by the owner in place of showing the intro to anonymous visitors, who may be returning subscribers. The pre-existing case remains too: on `/pricing` the backend treats every anonymous visitor as eligible for the intro, so a signed-out returning subscriber can see an intro they will not be charged. Both end at the environment save.
 
 ### Kickoff checks (2026-11-11)
 
