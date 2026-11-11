@@ -72,3 +72,7 @@ See `bsit-year1-curator-verification-checklist.md` (includes the owner-approved 
 - Three reused GE Notes in the BSCS Year lack Computer Science (a BSCS-side gap).
 - CHED text is OCR; the official PDF has not been checked.
 - The recorded production state is a snapshot from 2026-11-03; re-read before use.
+
+## Repository cleanup record (2026-11-11, owner-authorized)
+
+The BSIT working documents were removed with `git rm` (19 files: the owner handoff, research and reuse audit, proposed journey, impact report, Discrete Mathematics assessment, curator verification checklist, review packs and manifests (including the blind variants and results), spot-check findings, pack and manifests, Counting Note authoring brief, collection checklist, run sheet and verify SQL). The first-semester curriculum evidence audit and the General Education additions bodies (4 files, `docs/claude-plans/curriculum-audit-year1-sem1/` and `docs/claude-plans/ge-sem1-additions/`) were removed in the same cleanup. **Deleted files are recoverable from commit `d5eaf383`.** Kept: this log, the reuse id manifest, the authored bodies and the SQL files that ran in production. References above to the removed documents are historical.

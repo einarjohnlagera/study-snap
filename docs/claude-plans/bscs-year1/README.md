@@ -6,12 +6,12 @@ The collection sources are `docs/curriculum/bscs-year1-shaping.tsv` and `bscs-ye
 
 | File | Role |
 |---|---|
-| `bscs-year1-phase1-run-sheet.md` | step-by-step Phase 1 (Introduction to Computing + Computer Programming 1) |
-| `bscs-year1-collection-creation-checklist.md` | create the Year root and Subject Plans |
-| `bscs-year1-authoring-batch-plan.md`, `bscs-year1-authoring-plan.xlsx` | how the 194 New notes are authored, by phase and batch |
+| `bscs-year1-authoring-plan.xlsx` | how the 194 New notes were planned, by phase and batch |
 | `authored-bodies/` | curator-authored Note bodies (Path C) |
-| `bscs-year1-decision-log.md` | decisions D-01 to D-40 |
-| `bscs-year1-readiness-and-handoff.md`, `bscs-year1-proposed-study-journey.md`, `bscs-year1-curriculum-coverage.xlsx` | readiness, the readable journey, and coverage |
+| `bscs-year1-decision-log.md` | decisions D-01 to D-40 and the 2026-11-11 cleanup record |
+| `bscs-year1-term-labels.sql` | the owner-run academic-term SQL (a record; do not re-run) |
+
+The run sheet, creation checklist, batch plan, proposed journey, readiness handoff and coverage workbook were removed on 2026-11-11 (repository cleanup) and are recoverable from commit `d5eaf383`.
 
 Closed research, GPT handoffs and discovery audits are in `docs/archive/bscs-year1/`; the R4 pilot findings are in
 `docs/claude-findings/r4-pilot/`.

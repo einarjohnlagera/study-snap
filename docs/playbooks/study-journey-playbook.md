@@ -76,7 +76,7 @@ A role may read another role's artifact and never edits it; change requests go b
 | Safe batch generation | Supported (50 topics, throttled sequential, receipt, retry) | same |
 | Post-generation validation | Study Packs: existing server validators. **Notes: the server enforces only the JSON shape, the per-item cap and the 700-word cap (`OpenAiLlmStudyPackService.java:1385-1387,3147`); nothing checks depth or coverage of any objective** | `QuizValidationUtils`; the file just cited |
 | Reliable Study Pack creation | Automatic after each Note; quality per section 9 | `docs/features/study-pack-generation.md` |
-| Model | Admin bulk runs route to `LLM_MODEL_PREMIUM` (GPT-6 family, live since 2026-10-25). The "about 2,000-character outline" evidence is the BSCS pilot of 2026-10-06, **before** that switch, and **no depth measurement since was found**. The live environment value was not re-read | `docs/claude-plans/bscs-year1/bscs-year1-authoring-batch-plan.md` section 1; v0.174.0 |
+| Model | Admin bulk runs route to `LLM_MODEL_PREMIUM` (GPT-6 family, live since 2026-10-25). The "about 2,000-character outline" evidence is the BSCS pilot of 2026-10-06, **before** that switch, and **no depth measurement since was found**. The live environment value was not re-read | the R4 pilot findings in `docs/claude-findings/r4-pilot/` (the BSCS authoring batch plan, section 1, recorded the same finding; it was removed 2026-11-11 and is recoverable from commit `d5eaf383`); v0.174.0 |
 
 **Verdict:** generation **cannot yet be shown to satisfy an approved specification** for scope-sensitive Notes. The input gap is certain, the depth ceiling is structural, and whether GPT-6 removed the outline limitation is **unmeasured, not resolved**.
 
