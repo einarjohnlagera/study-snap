@@ -1,5 +1,7 @@
 # LLM model migration — benchmark design (gpt-4.1 / gpt-4.1-mini decommission)
 
+> **ROUTING CORRECTION, 2026-11-11 (the slot table below is kept as written and is out of date).** The FREE and PREMIUM slots are now `gpt-6-luna` and `gpt-6.1-sol` (`application.yaml:198-199`; production calls on both are visible in the `action=llm_call` logs), and Challenge Quiz start, +5 and multi-note moved to the tiered route in `v0.175.0`. **What remains pinned to `gpt-4.1`-family models is the `INTERACTIVE_QUIZ` route (`gpt-4.1-mini`), the `PAID_INTERACTIVE` route (`gpt-4.1`) and the `CRITIQUE` slot (`gpt-4.1-mini`)**, with the call sites listed in `docs/claude-plans/2026-11-10-next-releases-sequence-recommendation.md` section 4, which is the current plan for the migration. The shutdown date (2027-01-14) was verified on OpenAI's deprecations page on 2026-11-10.
+
 **Status: design only — not run, not costed-and-approved. Tiering decision is now FINAL** (owner +
 Product UX, 2026-10-16, see `docs/claude-plans/2026-10-16-v0174-llm-tiering-remediation-tightened.md`):
 **FREE → `gpt-6-luna`, Plus → `gpt-6.1-sol`, Pro → `gpt-6.1-sol`.** This design's earlier "send to Product

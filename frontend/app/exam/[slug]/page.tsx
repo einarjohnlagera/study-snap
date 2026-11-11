@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { ExamHubCta } from "@/components/exam-hub/exam-hub-cta";
 import { ExamHubOfficialReviewSets } from "@/components/exam-hub/exam-hub-official-review-sets";
+import { ExamHubOfficialReviewSetsUnavailable } from "@/components/exam-hub/exam-hub-official-review-sets-unavailable";
 import { PublicLibraryReturnLink } from "@/components/notes/public-library-return-link";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
@@ -192,9 +193,14 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
 
   const coursePrograms = await getServerExamGoalCoursePrograms(exam.slug);
   const resolvedExam = { ...exam, coursePrograms };
-  const [notes, officialReviewSets] = await Promise.all([
+  const [notes, reviewSetsResult] = await Promise.all([
     getServerPublicNotesByCoursePrograms(coursePrograms) as Promise<ExamHubNote[]>,
-    getServerPublicStudyPlansByCoursePrograms(coursePrograms),
+    getServerPublicStudyPlansByCoursePrograms(coursePrograms)
+      .then((plans) => ({ unavailable: false as const, plans }))
+      .catch((error: unknown) => {
+        console.warn(`EXAM_HUB_REVIEW_SETS_UNAVAILABLE reason=${error instanceof Error ? error.name : "unknown"}`);
+        return { unavailable: true as const, plans: [] };
+      }),
   ]);
   const description = buildExamMetadataDescription(exam);
   const examPath = buildExamPath(exam.slug);
@@ -261,9 +267,10 @@ export default async function ExamHubPage({ params }: Readonly<ExamHubPageProps>
         once.
       </p>
 
-      {officialReviewSets.length > 0 ? (
-        <ExamHubOfficialReviewSets exam={resolvedExam} plans={officialReviewSets} />
-      ) : null}
+      {reviewSetsResult.unavailable ? <ExamHubOfficialReviewSetsUnavailable /> :
+        reviewSetsResult.plans.length > 0 ? (
+          <ExamHubOfficialReviewSets exam={resolvedExam} plans={reviewSetsResult.plans} />
+        ) : null}
 
       {hasAnyNotes ? (
         <div className="space-y-8">

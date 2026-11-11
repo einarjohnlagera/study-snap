@@ -7,6 +7,7 @@ import { getServerExamGoalCoursePrograms } from "@/lib/server-exam-goal-course-p
 import { getAuthUser } from "@/lib/auth";
 import { trackAnalyticsEvent, type NoteListItemResponse } from "@/lib/api";
 import { PUBLIC_LIBRARY_RETURN_URL_STORAGE_KEY } from "@/lib/public-library-url";
+import { ExamHubOfficialReviewSetsUnavailable } from "@/components/exam-hub/exam-hub-official-review-sets-unavailable";
 
 const notFoundMock = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
@@ -111,17 +112,38 @@ describe("ExamHubPage", () => {
     window.sessionStorage.clear();
   });
 
-  it("renders dynamically and rejects failed notes or plans without notFound", async () => {
+  it("renders dynamically and still rejects failed notes without notFound", async () => {
     expect(dynamic).toBe("force-dynamic");
     const error = new Error("upstream failed");
     const props = { params: Promise.resolve({ slug: "ale" }) };
     (getServerPublicNotesByCoursePrograms as jest.Mock).mockRejectedValue(error);
     await expect(ExamHubPage(props)).rejects.toBe(error);
     expect(notFoundMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps notes visible and shows the unavailable section when review sets fail", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation();
     (getServerPublicNotesByCoursePrograms as jest.Mock).mockResolvedValue(sectionNotes);
-    (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockRejectedValue(error);
-    await expect(ExamHubPage(props)).rejects.toBe(error);
-    expect(notFoundMock).not.toHaveBeenCalled();
+    (getServerPublicStudyPlansByCoursePrograms as jest.Mock).mockRejectedValue(new Error("secret slug ale and upstream detail"));
+
+    render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
+
+    expect(screen.getByRole("heading", { name: "Featured Notes" })).toBeInTheDocument();
+    expect(screen.getByText("ALE Structures")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Official review sets are temporarily unavailable" })).toBeInTheDocument();
+    expect(screen.getByText("Your study notes are still available. Please try loading the review sets again in a little while.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Official Review Sets for/ })).not.toBeInTheDocument();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith("EXAM_HUB_REVIEW_SETS_UNAVAILABLE reason=Error");
+    expect(warn.mock.calls[0][0]).not.toContain("ale");
+    expect(warn.mock.calls[0][0]).not.toContain("upstream detail");
+  });
+
+  it("renders the standalone unavailable section with exact copy and no controls", () => {
+    const { container } = render(<ExamHubOfficialReviewSetsUnavailable />);
+    expect(screen.getByRole("heading", { level: 2, name: "Official review sets are temporarily unavailable" })).toBeInTheDocument();
+    expect(screen.getByText("Your study notes are still available. Please try loading the review sets again in a little while.")).toBeInTheDocument();
+    expect(container.querySelector("button, a")).toBeNull();
   });
 
   it("defines exactly the configured exam hubs and course program aliases", () => {
@@ -283,6 +305,7 @@ describe("ExamHubPage", () => {
     render(await ExamHubPage({ params: Promise.resolve({ slug: "ale" }) }));
 
     expect(screen.queryByRole("heading", { name: /Official Review Sets for/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Official review sets are temporarily unavailable" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Featured Notes" })).toBeInTheDocument();
   });
 
