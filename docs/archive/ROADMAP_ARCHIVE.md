@@ -5488,3 +5488,17 @@ The baseline held seven versions against its *current + last five* cap; the olde
 - pre-signoff fixes (#1511).
 
 Challenge Quiz routing and preparation UX moved to v0.175.0. **Merge-day handoff:** RELEASES.md, v0.174.0 signoff record.
+
+## Current Release Baseline entries moved from `ROADMAP.md`, 2026-11-11 (`v0.181.0` kickoff)
+
+The baseline held seven versions against its *current + last five* cap; the oldest block moved here verbatim.
+
+**Kicked off 2026-10-20, signed off 2026-10-25, merged to `main` as #1533 (`06a09f7c`) on 2026-10-26 and deployed (Render live 14:58:47Z, Vercel 15:02:51Z).** `v0.175.0 — Quiz Ready` is **Released** on `releases/v0.175.0`, cut from `releases/v0.174.0` (`e539b045`). All six items shipped (PRs #1513–#1532); the deploy-ordering statement, owner post-deploy actions and known limitations are in the `RELEASES.md` signoff record. Scope (full list, tiers and order in `RELEASES.md`):
+- (1) **R1 statement-pair answer-key guard** (Challenge generation path only), FIRST: its prompt and schema wording goes to the owner before the brief;
+- (2) the Challenge preparation state machine: async start, ready-not-started state, timer only on Start Quiz (Challenge only; Board Exam unchanged until C6), quota charged only when Start Quiz succeeds (owner, 2026-10-20: nothing to refund), retry once, 7-day expiry, collision asks;
+- (3) the preparation, ready, failure and expired screens (no "Stay" button);
+- (4) one readiness notification with a deep link;
+- (5) multi-note parallel preparation with a floor;
+- (6) Challenge tier routing, after (1) **and** (2); multi-note stays pinned until (5) ships.
+
+**Full Tier H; six items is above the size guidance** (the clean split is item 5 as its own release). Board/Long Exam "press Start first" is the follow-up release (C6); the B6 backfill is a separate PR after the v0.174.0 switch (C8).

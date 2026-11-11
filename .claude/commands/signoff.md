@@ -151,6 +151,8 @@ Commit directly on `releases/vX.Y.Z`. No sub-branch, no PR for this commit.
 
 Open a PR from `releases/vX.Y.Z` → `main`. PR description comes from the release notes file — do not draft a separate description. Merge after CI passes.
 
+**⚠️ FRONTEND-ONLY RELEASES (no backend code change; Product UX, 2026-11-11, from `v0.181.0`): squash-merge the PR and run the per-commit range check BEFORE merging.** Render redeploys when any commit in the pushed range changes `backend/` against its first parent, and `git log -- backend` hides a merge-forward commit that took `main`'s backend files (verified on `#1573`: a zero net diff, a Render redeploy). The check, which must print nothing: `for c in $(git log --format=%H <main>..<release tip>); do git diff --name-only $c^1 $c -- backend; done` (and, for the squash case, `git diff --name-only <main> <release tip> -- backend`). A release that does change backend code expects the Render redeploy and watches it as a deploy.
+
 **⚠️ THEN VERIFY THE MERGE ACTUALLY DEPLOYED — a merge is not a deploy, and this is the step whose absence shipped a broken feature.**
 
 ```bash
