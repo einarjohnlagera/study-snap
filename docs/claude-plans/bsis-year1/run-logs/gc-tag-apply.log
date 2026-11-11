@@ -1,0 +1,23 @@
+Global Citizenship IS-tag run, mode = commit
+BEGIN
+SELECT 1
+DO
+Preconditions passed (corrected body in place).
+CREATE TABLE
+INSERT 0 1
+INSERTED ASSOCIATION (exact id; expect 1 row):
+                  id                  |               note_id                |          course_program_id           |          created_at           
+--------------------------------------+--------------------------------------+--------------------------------------+-------------------------------
+ f47d7497-fb53-44f0-94c7-bed20dad4ee7 | 45133a32-4440-4277-8b50-931eaec3788f | 338d3e66-fee4-4400-afa7-0af0931444c8 | 2026-11-06 10:21:53.274325+00
+(1 row)
+
+DO
+Post-insert assertions passed.
+ROLLBACK STATEMENT, id-exact (SAVE THIS; only after a COMMIT you want to undo; expect DELETE 1):
+                                                                                                    rollback_statement                                                                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ DELETE FROM note_course_program WHERE id = 'f47d7497-fb53-44f0-94c7-bed20dad4ee7'::uuid AND note_id = '45133a32-4440-4277-8b50-931eaec3788f'::uuid AND course_program_id = '338d3e66-fee4-4400-afa7-0af0931444c8'::uuid;
+(1 row)
+
+COMMIT
+COMMITTED.

@@ -1,0 +1,27 @@
+RA 10364 correction run, mode = commit
+BEGIN
+SELECT 1
+DO
+Preconditions P1-P7 passed.
+BEFORE (the sentence being corrected):
+                                                                    before_text                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------
+ ns Act of 2003 (Republic Act No. 9208), expanded by Republic Act No. 10364 in 2012; civil society groups assist survivors and monitor enforcement.+
+ - Appropriate
+(1 row)
+
+CREATE TABLE
+INSERT 0 1
+DO
+Post-update assertions passed (1 row; "in 2012" gone; one "in 2013;"; length 3516; new md5 9e3e316d...; metadata and Study Pack unchanged; 2000 and 2003 untouched).
+AFTER:
+                                                                     after_text                                                                     | len  |               md5                |          updated_at           
+----------------------------------------------------------------------------------------------------------------------------------------------------+------+----------------------------------+-------------------------------
+ ns Act of 2003 (Republic Act No. 9208), expanded by Republic Act No. 10364 in 2013; civil society groups assist survivors and monitor enforcement.+| 3516 | 9e3e316db280f70073ca1ce485abd01b | 2026-11-06 10:20:08.121486+00
+ - Appropriate                                                                                                                                      |      |                                  | 
+(1 row)
+
+ROLLBACK STATEMENT (SAVE THIS; use ONLY after a COMMIT you want to undo; expect UPDATE 1):
+UPDATE notes SET content = replace(content, 'expanded by Republic Act No. 10364 in 2013;', 'expanded by Republic Act No. 10364 in 2012;'), updated_at = now() WHERE id = '45133a32-4440-4277-8b50-931eaec3788f' AND md5(content) = '9e3e316db280f70073ca1ce485abd01b';  -- afterwards md5 must be 834de9de0e5296a782855611eed736f7
+COMMIT
+COMMITTED. Keep this log. Do not regenerate the Note or its Study Pack.
