@@ -1,0 +1,324 @@
+# ACM/AIS IS2020 excerpts used as evidence (extracted from the PDF text layer, 2026-11-06)
+# Source: https://is2020.hosting2.acm.org/wp-content/uploads/2021/06/is2020.pdf (IS2020 December 2020; copyright ACM and AIS: 'Permission granted to use these curriculum guidelines for the development of educational materials and programs').
+# Printed page numbers equal PDF page indexes here. IS2020 is a COMPETENCY MODEL, not a prescribed course list and not a CHED requirement (see its Foreword, printed p. 8).
+
+===== Foreword (p. 8): no prescriptive core and elective courses =====
+IS2020 December 2020 
+ 
+8 
+ 
+for updating the IS undergraduate model curriculum report (IS2020) was preceded by a joint 
+ACM/AIS exploratory committee that reported its findings and recommendations to AIS and ACM 
+in December 2018 (de Vreede et al., 2018). Having been accepted by both AIS and ACM, the 
+detailed recommendations and guidance from the steering committee have proven to be 
+incredibly useful and are used as the foundations of this revision.  
+As discussed in more detail within this document, IS2020 follows and extends the competency 
+thinking initiated in the IS2010 report, and further refined in IT2017, MSIS2016 and CC2020. The 
+recommendations proffered in this report also articulate competencies that graduates should have 
+upon completion of an IS undergraduate program. The specified competencies are divided into 
+groupings of requisite competencies (that should be del
+
+===== Section 4.2.1 Foundations competency realm (p. 52) =====
+IS2020 December 2020 
+ 
+52 
+ 
+competencies in each competency area and their associated knowledge skill pairs see 
+Appendices 2 and 3. 
+4.2.1 Foundations competency realm 
+Foundational IS competencies are typically first introduced as part of an “Introductory Course,” 
+sometimes also referred to as an “MIS Course” or “Foundations Course.” Competencies in this 
+area will improve as more courses are taken. As a competency area, it represents the IS discipline 
+as a whole: What are the knowledge areas and how are they being applied? Why is this subject 
+significant? What specializations exist? What is the work like? Do I want to study IS? What kind 
+of career would I like to have? The foundational IS competency realm comprises one required 
+area (IS Foundations). 
+Information Systems Foundations refer to the ability of students to understand the fundamental 
+concepts of IS (including hardware, software, and information acquisition) and the support that IS 
+provides for transactional, decisional, and collaborative business processes.  They will also be 
+able to understand the collection, processing, storage, distribution, and value of information and 
+be able to make recommendations regarding IS that support and enable individuals in their daily 
+lives as well as the management, customers, and suppliers of the enterprise.  This competency 
+includes the ability to conduct an organizational business analysis, and assess processes, and 
+systems. 
+While specific electives are not proposed in this competency realm, it is perhaps important to note 
+that these foundational skills will be important in future IS researcher/teacher careers. At the 
+undergraduate level, it may be premature to elaborate and extend in this area. 
+4.2.2 Data/Information competency realm 
+Traditionally, Data Management has focused on data persisting in organizations, usually in 
+relational databases. Such data assets support the core business processes of the organization 
+and form the basis for business applications. Increasingly, organizations also process ever larger 
+volumes of data that emerge from expansive digitalization (web traffic, social media, and sensed 
+sources). Regardless of the source and type of data, the fundamental questions and concerns of 
+this realm remain the same: How to gather, organize, curate, and process data to help run an 
+organization or extract actionable information to increase effectiveness. The Data/Information 
+competency realm comprises one required area (Data and Information Management) and two 
+elective areas (Data and Business Analytics; Data and Information Visualization). 
+The Data and Information Management area comprises competencies related to tools and 
+techniques for managing data with database systems. At the highest level, competencies within 
+this area are related to two questions: (1) how to use a database and (2) how to build a database. 
+Most of this competency area will focus on the classic relational model.  In the past several years, 
+driven by evolving functional and non-functional (quality) needs of an organization, alternatives to 
+the classic relational model have emerged.  Illustrative samples will be examined of these popular 
+alternatives known as non-relational or NoSQL models.
+
+===== Appendix 3, printed p. 97 =====
+IS2020 December 2020 
+ 
+97 
+ 
+Competency definitions focus on only the dispositions that should be emphasized for a given 
+competency and are therefore labeled as Key Dispositions. Additional details regarding 
+competencies, knowledge-skill pairs, and dispositions may be found in Chapter 3. 
+A3.1 Foundations Competency Realm 
+A3.1.1 Competency Area – Foundations of Information Systems 
+Competency Area Statement:  
+Students who meet the competencies of IS Foundations can understand the fundamental 
+concepts of IS (including hardware, software, and information acquisition) and the support that IS 
+provides for transactional, decisional, and collaborative business processes.  They will also be 
+able to understand the collection, processing, storage, distribution, and value of information and 
+be able to make recommendations regarding IS that support and enable individuals in their daily 
+lives as well as the management, customers, and suppliers of the enterprise.  This competency 
+includes the abilities to conduct an organizational business analysis and to assess processes and 
+systems. 
+Competencies: Graduates will be able to: 
+1. Classify the components, elements, operations, and impact of IS 
+2. Interpret the dimensions, characteristics, and value of quality information. 
+3. Explain the roles, responsibilities, and characteristics of the IS professional 
+4. Recommend techniques for using information and knowledge for business decision 
+making and strategic value 
+5. Analyze a business case and critique appropriate IS solutions to common business 
+problems, based on the different components, elements, types, and levels of IS 
+6. Critique and recommend Enterprise Systems for a given business problem and 
+processes 
+7. Identify techniques for transmitting and securing information in an organization 
+8. Demonstrate an ability to solve basic computational and design problems using IS 
+development with appropriate methodologies, software tools and innovative 
+methods for improving processes and organizational change
+
+===== Appendix 3, printed p. 98 =====
+IS2020 December 2020 
+ 
+98 
+ 
+Competency 1: Classify the components, elements, operations, and impact of IS 
+Key Dispositions: Self-Directed, Inventive, Purpose-driven 
+Knowledge-Skill Pairs: 
+Knowledge Element 
+Skill Level (Bloom 
+cognitive level) 
+Components of IS - technology (hardware, software, 
+communication media), data, people, and 
+procedures/processes. 
+2 - Understand 
+Operations of IS (the processing cycle of input, processing, 
+storage, output, control) 
+3 - Apply 
+The ways in which IS helps us deal with information 
+3 - Apply 
+Functions (and operations) of IS and their impact on facilitating 
+organizational change 
+3 - Apply 
+Common types of IS (e.g., Transaction Processing Systems, 
+Enterprise Systems) 
+2 - Understand 
+  
+Competency 2: Interpret the dimensions, characteristics, and value of quality information 
+Key Dispositions: Purpose-driven, Self-Directed, Responsive 
+Knowledge-Skill Pairs: 
+Knowledge Element 
+Skill Level (Bloom 
+cognitive level) 
+Dimensions of information quality and information evaluation 
+methods 
+3 - Apply 
+The virtual value chain 
+2 - Understand 
+  
+Competency 3: Explain the roles, responsibilities, and characteristics of the IS professional 
+Key Dispositions: Self-Directed, Inventive, Purpose-Driven 
+Knowledge-Skill Pairs: 
+Knowledge Element 
+Skill Level (Bloom 
+cognitive level) 
+Roles and responsibilities of the IS professional 
+3 - Apply 
+Characteristics of the IS professional 
+3 - Apply
+
+===== Appendix 3, printed p. 99 =====
+IS2020 December 2020 
+ 
+99 
+ 
+Ethical standards for the IS professional 
+3 - Apply 
+  
+Competency 4: Recommend techniques for using information and knowledge for business 
+decision making and strategic value 
+Key Dispositions: Self-Directed, Purpose-driven, Professional 
+Knowledge-Skill Pairs: 
+Knowledge Element 
+Skill Level (Bloom 
+cognitive level) 
+IS and the value of information 
+2 - Understand 
+Methods for storing and organizing information 
+3 - Apply 
+Role of information in decision making 
+2 - Understand 
+Types of decisions and techniques for decision making 
+3 - Apply 
+Stages of decision making and appropriate information system 
+tools 
+3 - Apply 
+Key IT issues, trends, and alignment of IT with business 
+2 - Understand 
+IS strategic planning process 
+2 - Understand 
+Information and knowledge for business decision making and 
+strategic value 
+2 - Understand 
+Decision support systems 
+2 - Understand 
+  
+Competency 5: Analyze a business case and critique appropriate IS solutions to common 
+business problems, based on the different components, elements, types, and levels of IS 
+Key Dispositions: Self-Directed, Purpose-driven, Professional 
+Knowledge-Skill Pairs: 
+Knowledge Element 
+Skill Level (Bloom 
+cognitive level) 
+Components of IS 
+3 - Apply 
+Operations of an IS or information processing cycle (input, 
+processing, storage, output, control)  
+3 - Apply 
+ Elements of IS (data, hardware, software, communication, 
+and processes) 
+3 - Apply
+
+===== Appendix 3, printed p. 100 =====
+IS2020 December 2020 
+ 
+100 
+ 
+ Types and utility of IS  
+3 - Apply 
+IS solutions and tools for different business contexts and 
+processes 
+3 - Apply 
+ 
+Competency 6: Critique and recommend Enterprise Systems for a given business problem and 
+processes 
+Key Dispositions: Purpose-driven, Professional, Self-Directed 
+Knowledge-Skill Pairs: 
+Knowledge Element 
+Skill Level (Bloom 
+cognitive level) 
+Business processes modelling and optimization 
+3 - Apply 
+Components of an enterprise system 
+3 - Apply 
+Types and functions of Enterprise systems (including ERP 
+and BI) 
+3 - Apply 
+ 
+Competency 7: Identify techniques for transmitting and securing information in an organization 
+Key Dispositions: Purpose-driven, Self-Directed, Professional 
+Knowledge-Skill Pairs: 
+Knowledge Element 
+Skill Level (Bloom 
+cognitive level) 
+Methods for transmitting information using networks (including 
+communication, Web 2.0 and Web 3.0 applications, IoT, 
+crowdsourcing) 
+2 - Understand 
+Methods for transmitting information using networks (including 
+communication, Web 2.0 and Web 3.0 applications, IoT, 
+crowdsourcing) 
+2 - Understand 
+Key components of networks 
+2 - Understand 
+Types of information security threats 
+2 - Understand 
+Security technologies and solutions 
+2 - Understand 
+Types of information privacy threats 
+2 - Understand 
+Consequences of information privacy violations 
+2 - Understand
+
+===== Appendix 3, printed p. 101 =====
+IS2020 December 2020 
+ 
+101 
+ 
+Technologies and solutions for information privacy 
+2 - Understand 
+Fair information practices and privacy policies 
+2 - Understand 
+Government information privacy regulations 
+2 - Understand 
+ 
+Competency 8: Demonstrate an ability to solve basic computational and design problems using 
+IS development with appropriate methodologies, software tools and innovative methods for 
+improving processes and organizational change 
+Key Dispositions: Self-Directed, Purpose-driven, Professional 
+Knowledge-Skill Pairs: 
+Knowledge Element 
+Skill Level (Bloom 
+cognitive level) 
+Methods and tools for using information 
+3 - Apply 
+Buy versus build decision 
+2 - Understand 
+Outsourcing possibilities and models for IS  
+2- Understand 
+Computational methods  
+2- Understand 
+Software tools and computational methods 
+3 - Apply 
+Software development methodologies  
+2 - Understand 
+Systems development lifecycle 
+2 - Understand 
+Innovation and design techniques 
+3 - Apply
+
+===== A3.5.2 IS Management and Strategy: competency list (advanced; context for N11), printed p. 159 =====
+Competencies: Graduates will be able to: 
+1. Apply professional managerial skills to design and manage an effective IS 
+organization 
+2. Ensure operational efficiency and effectiveness in service delivery of organizational 
+information 
+3. Manage the information resources in coordination with line management 
+4. Create and manage the oversight mechanisms by which an organization 
+evaluates, directs, and monitors organizational information technology - managing 
+decision rights and organizational information technology decision-making 
+practices 
+5. Implement strategic plans that have been created for the delivery and use of 
+organizational information systems 
+6. Ensure organizational information systems comply with policies, applicable laws 
+and regulations 
+7. Manage organizational risk and develop risk mitigation plans 
+8. Create IT procurement policies and understand and negotiate IT contracts 
+9. Develop plans for workforce development, training, talent acquisition, and 
+employee retention 
+10. Apply leading service management frameworks, such as ITIL and CMMI 
+11. Identify commonly used governance frameworks, such as COBIT and TOGAF, to 
+align information systems with organizational requirements
+
+===== A3.5.3 Digital Innovation: competency list (advanced; context for N7), printed p. 164 =====
+Competencies: Graduates will be able to: 
+1. Articulate and critically reflect on the unique features that an application of 
+emerging technology may offer 
+2. Demonstrate knowledge of the role of digital business technologies in social and 
+mobile domains 
+3. Identify and critique characteristics necessary for digital innovation 
+4. Identify and validate an opportunity to develop a new digital business model 
+5. Identify and evaluate key issues related to implementation and infrastructure 
+issues 
+6. Identify and assemble the required resources, processes, and partners to bring a 
+digital business model to fruition 
+7. Practically demonstrate the investigation and application of a new innovation

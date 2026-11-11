@@ -1,0 +1,182 @@
+# CMO 25 s.2015, BSIS excerpts from the OCR text layer (archive.org mirror, 57 pages).
+# OCR IS IMPERFECT: the page images were read directly for the sample program of study (see evidence/). Where this text and the image disagree, the image wins.
+
+## Program description and BSIS professional/domain lists (OCR lines 113-135, 555-575)
+B. Bachelor of Science in Information Systems (BSIS) 
+Graduates of this program shall be conferred the degree of Bachelor of 
+Science in Information Systems (BSIS). 
+C. Bachelor of Science in Information Technology (BSIT) 
+Graduates of this program shail be conferred the degree of Bachelor of 
+Science in Information Technology (BSIT). 
+5.2 Nature of the Field of Study 
+5.2.1 Bachelor of Science in Computer Science (BSCS) 
+The BS Computer Science program includes the study of computing 
+concepts and theories, algorithmic foundations and new 
+developments in computing. The program prepares students to design 
+and create aigorithmicaily complex software and develop new and 
+effective algorithms for solving computing problems. 
+The program also includes the study of the standards and practices in 
+Software Engineering. It prepares students to acquire skills and 
+disciplines required for designing, writing and modifying software 
+components, modules and applications that comprise software 
+solutions. 
+5.2.2 Bachelor of Science in Information Systems (BSIS) 
+The BS Information Systems Program includes the study of application 
+and effect of information technology to organizations. Graduates of the 
+program should be able to implement an information system, which 
+considers complex technological and organizational factors affecting it. 
+These include components, tools, techniques, _ strategies, 
+methodologies, etc. 
+
+Graduates are able to help an organization determine how information 
+and technology-enabied business processes can be used as strategic 
+...
+B. Bachelor of Science in Information Systems (BSIS) 
+The Information Systems curriculum encompasses 
+introductory and professional courses to cover the various 
+information systems functional areas as follows: 
+Fundamentals of IS 
+Professional Issues in Information Systems 
+IT Infrastructure and Network Technologies 
+Systems Analysis, Design and Development 
+Enterprise Architectures 
+IS Project Management 
+IS Strategy, Management and Acquisition NOaARWN> 
+In addition, the curriculum shall include business enterprise 
+domain courses such as the following: 
+Organization and Management Concepts 
+Financial Management 
+Business Process Design and Management 
+Evaluation of Business Performance 
+Quantitative Methods akON> 
+. Bachelor of Science in Information Technology (BSIT) 
+The Information Technology curriculum includes basic and 
+advanced courses on planning, development, integration, 
+
+## Sample curriculum list for BSIS (OCR lines 720-757)
+Bachelor of Science in Information Systems (BSIS) 
+The following is a list of professional and elective courses in the 
+sample curriculum for BSIS: 
+Course Cade nowedge Course Title Units 
+c¢c101 ITF Introduction to Computing 3 
+cC102 PF Computer Programming 1 3 
+CC103 PF Computer Programming 2 3 
+C104 PIF Data Structures and Algorithms 3 
+C105 DIM information Management 3 
+CC106 UE Application Development and Emerging Technologies 3 
+18101 FIS Fundamentals of information Systems 3 ! 
+1S102 PIS Professional Issues in information Systems 3 
+IS103 NIT (T Infrastructure and Network Technologies 3 
+1$104 SAD Systems Analysis and Design 3 
+IS105 EA Enterprise Architecture 3 
+1$106 IPM IS Project Management 1 3 
+1S107 ISMA IS Strategy, Management and Acquisition 3 
+DM101 DBC Organization and Management Concepts 3 { 
+DM102 DBC Financial Management 3 
+DM103 DBC Business Process Management 3 
+DM104 DBC | Evaluation of Business Performance 3 
+QUAMET MATH Quantitative Methods 3 
+CAP101 CAP Capstone Project 1 3 
+CAP102 CAP Capstone Project 2 3 
+PRAC104 PRC Practicum for Information Systems 6 
+Recommended Electives 
+ADV01 TD Enterprise Systems 3 
+ADVO02 ITD Human Computer Interaction 3 
+ADV03 BD IT Audit and Controls 3 
+ADV04 8D 1S Innovations and New Technologies 3 
+ADVOS ITO IT Security and Management 3 
+ADV06 ITD IT Service Management 3 
+ADVO7 ITD IS Project Management 2 3 
+ADVO8 ITD Data Mining 3 
+ADVO9 8D Business Intelligence 3 
+ADV10 8D Enterprise Resource Planning 3 
+ADV14 BD Supply Chain Management 3 
+ADV12 BD Customer Relationship Management 3 
+
+## Curriculum map, BSIS rows (OCR lines 1365-1450) - OCR is rough
+inspection of the source code and unit testing of 
+tre functional units of a sufficiently complex 
+software project 
+IS101 
+Fundamentats of 
+is C104 LO1 
+Compare and identify the major technologies and 
+applications of information systems in driving 
+development and changes in enterprises 
+{$102 Professional Issues in 1S cc101 
+to1 
+Examine professional, ethical and moral 
+challenges in computing and use of information 
+systems and recommend courses of action. 
+Lo2 
+Apply/exhibit ethical thinking skills in analyzing 
+and finding resolutions to computing issues 
+{$103 
+IT Infrastructure 
+and Network 
+Technologies 
+ccto1 Lo1 
+Evaluate how {T infrastructure components are 
+organized into infrastructure solutions in diferent 
+organizational environments 
+26 | lage conn 3 
+G 
+bree) 
+
+T 
+LO? Examine, test and evaluation web solutions as 
+appiied to business enterprise 
+Use systems thinking to analyze business 
+Lot Processes and identify prabiems and opportunites 
+that can be solved and supported by technology DB D E 
+solutions 
+i 
+} Systems 3 , 2° Year Apply appropriate tools. methods, E E E E E 
+$104 | Analysis and Standing LO2 | modelsitechniques in systems analysis and D D Design | design 
+| 
+103 Develop and defend a project design proposal tc D D E D E | 
+different audiences. } \ 
+4 
+3 t + + 
+Enteron: Examine and evaluate core concepts of 
+18105 | AOpen 1§103 LO1 | dataiintormation architecture used in existing —E| oD Do " e datalinformation architecture designs 
+Lo Examine the use of project management best | 
+practices in real-life projects 
+I 
+ising —_-'S Project S104 | efeleleflelelo E , Management 1 H . i | ‘ i I Lo2 Aoply proect management concepts. principles ' 
+i | i and tools in performing an actual |S project. ' 
+i j i : i ’ 
+! j Examine existing and emerging information i | 
+H LO1 | technologies, the functions of IS and how it Hl ! 
+3 impacts organizational operations. D D D 
+1S Strategy TH ' 4™ Year | 15107 | Management ! ; ; 4 and Acquisition Standing Analyze how strategic decisions are made ! ! 
+Lop | conceming acquiring IS resources and DY{O}E FE i 
+capabilites including the ability to evaluate the i Hy } 
+different sourcing options 
+Examine and Evaluate organizational structure 
+| 101 | policies and procedures and the information D 
+Organization | 4 sysiems that support them I E E iE and ¥ DM101 Management C101 i 
+, Concepts. Lo? Examine and Evaluate management lifecycle and ( E E E | D | | the information systems that support them 
+| 
+| Financial | Examine and Evaluate financial processes and DM102_ | M DM101 3 Lot reports and the information systems that support E E E — — E lanagement them { 
+-. 1 Lot Use systems thinking in modeling and analyzing 
+business processes E E D D E 
+Business 3 j DM103 | Process Dm102 i 
+Management Log | Rethink processes to simpity business operations jelelo:ole i : 
+H i , { 
+foe | } i 1 | 
+Evatuate business performance applying the i 
+LOt | different evaluation tools consistent with quality; i 
+management and continuous improvement D D D 
+Evaluation of 3 
+DM104 | Business DM103 Log | Develop quality metrics for assessment of 
+Performance customer satisfaction in all phases of life cycle o|o D 
+I 
+Design a business performance management 
+Los program for SMEs D D E e | 
+i 
+QUAM Quantitative 3 Year Lon Use appropriate mathematical tools for decision D D D , ET Methods Standing 3 making, : 
+implement mathematical methods in 1T solutions | | I i : 
+102 | 4 problems i \ dD o \ | 
+~~ 
+iTS, i ; W7(|Pase ° eo 
