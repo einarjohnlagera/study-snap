@@ -7,7 +7,7 @@ First written 2026-11-10, **revised twice on 2026-11-11**: after Product UX retu
 | Order | Release (provisional) | Status |
 |---|---|---|
 | 1 | `v0.180.0` Public Page Reliability and Privacy | Code signed off; PR #1575 is a draft; **awaiting the owner's explicit deployment authorization** |
-| 2 | `v0.181.0` Affordable NoteLib | **Scope approved; deploy order NOT approved** (section 3) |
+| 2 | `v0.181.0` Affordable NoteLib | **Scope approved; homepage A2 and the compatibility adjustment approved by the owner 2026-11-11 (planning only); deploy order frontend first, environment save at least 24 hours later, still to be authorized at deploy time** (section 3) |
 | 3 | `v0.182.0` Remaining Interactive LLM Migration | **Priority approved**; internal target 2026-12-15; **no production model switch authorized** (section 4) |
 | — | Board Exam "Redo Missed" defect | Priority approved for investigation; investigated below; the slot is an owner decision (section 5) |
 | — | Challenge Quiz Quality | **ON HOLD**; `v0.183.0` is NOT reserved for it; the slot after the migration stays flexible until the Redo Missed investigation and the migration results are reviewed (section 6) |
@@ -24,6 +24,8 @@ First written 2026-11-10, **revised twice on 2026-11-11**: after Product UX retu
 - **Kickoff checklist:** `.claude/commands/kickoff.md` and the `CLAUDE.md` checklist still say to bump `backend/pom.xml` on every release; they must be edited at the `v0.181.0` kickoff (not now: they are process files, not planning documents).
 
 ## 3. `v0.181.0` Affordable NoteLib: scope approved; homepage pricing architecture investigated (second Product UX handoff, 2026-11-11)
+
+**Owner decision, 2026-11-11: homepage option A2 APPROVED, and the compatibility adjustment (the five static price surfaces) APPROVED as a planning decision.** It authorizes no implementation, merge, deployment or environment change: `v0.181.0` still needs its normal kickoff (after `v0.180.0` is on `main`, deployed and past its 24-hour hold), a Codex prompt (about 5 frontend files and tests), the diff audit, and its own deployment authorizations; the environment save is a separate owner action at least 24 hours after the frontend deployment.
 
 **Scope kept:** Plus ₱99 and Pro ₱149 monthly (Philippines); no change to entitlements, quotas, the checkout provider or any other region's price; Pro yearly and the Pro exam pass hidden through their existing `active` flags; no new tiers or geographic price tiers; no promotional deadline; no voucher change. Source brief: `docs/claude-plans/2026-11-04-price-decrease-release-brief.md` (dated correction blocks added). **Not implemented; nothing here is approved for implementation or deployment.**
 
@@ -92,12 +94,15 @@ First written 2026-11-10, **revised twice on 2026-11-11**: after Product UX retu
 
 Genuine checkout starts, webhook-confirmed payments, conversion reported as both numbers, and paid usage per week, excluding the owner's accounts, read at +14 and +28 days from the environment change as `[CHECKPOINT]` rows. The 2026-11-04 read found 18 invoices from 14 people (4 the owner's) and, since 2026-10-09, 0 genuine completions and 1 genuine initiation; refresh it with a read-only SELECT at kickoff. Proposed first signal for the owner to accept or change: at least one genuine completion within 28 days. Margin is not computed.
 
-### 3.7 Decisions this section needs
+### 3.7 Decisions this section needed, and their status
 
-1. **A2 (recommended) or B** for the homepage.
-2. **Approve the compatibility adjustment** (the five surfaces above) before any implementation, and the order frontend first, environment 24 hours or more later.
-3. **Optional, owner-authorized read-only test of the trust boundary:** two single GETs to the public pricing endpoint on the production API host, one plain and one with a client-supplied `CF-IPCountry: US` header, to show whether the API host overwrites a client-supplied country. It is a diagnostic of two requests, not load; Claude will not send it without the owner's explicit authorization and the API host value.
-4. **Product decision, not part of this release:** whether an unlocated visitor should default to the US price instead of the Philippines price (a backend change).
+1. **Homepage: A2, DECIDED by the owner 2026-11-11** (B remains the fallback if A2 proves fragile).
+2. **The compatibility adjustment (the five surfaces above): APPROVED by the owner 2026-11-11 as a planning decision; the order frontend first, environment save 24 hours or more later, is the approved plan and is authorized step by step at deploy time.**
+3. **Still open, optional: an owner-authorized read-only test of the trust boundary:** two single GETs to the public pricing endpoint on the production API host, one plain and one with a client-supplied `CF-IPCountry: US` header, to show whether the API host overwrites a client-supplied country. It is a diagnostic of two requests, not load; Claude will not send it without the owner's explicit authorization and the API host value.
+4. **Still open, not part of this release:** whether an unlocated visitor should default to the US price instead of the Philippines price (a backend change).
+5. **Small details to settle in the kickoff and the Codex prompt (not blocking the decision above):** the failure line's copy under `VOICE_AND_TONE.md`; whether the intro label on `/pricing` should say "new subscribers"; showing the currency code beside amounts, as recommended in section 3.4.
+
+**What happens next, in order:** (1) the owner's `v0.180.0` gates and deployment authorization, then its 24-hour `main` hold; (2) `v0.181.0` kickoff on a release branch cut from `main` after that (not before: the branch must contain `v0.180.0`), with no `backend/pom.xml` bump (frontend-only, approved prospectively) and a squash-merge plus the pre-merge range check from section 2; (3) a Codex prompt written from `docs/skills/codex-prompt-generator.md` (frontend, about 5 files, over the routing threshold), its diff audited before any commit; (4) Preview verification of the surfaces in the intermediate states, the frontend deployment, then at least 24 hours later the owner's environment save, then the owner's ₱99 test purchase.
 
 ## 4. `v0.182.0` Remaining Interactive LLM Migration: priority approved, no production switch authorized
 
@@ -140,7 +145,7 @@ Nothing found that must supersede the order above. The Redo Missed slot is the o
 
 ## 8. Remaining owner decisions
 
-1. **Pricing (section 3.7):** homepage A2 (recommended) or B; approve the compatibility adjustment (five static price surfaces) and the order frontend first, then the environment save at least 24 hours later; optionally authorize the two-request trust-boundary test; the unknown-region default (a backend change) is a separate later decision.
+1. **Pricing (section 3.7): DECIDED 2026-11-11, homepage A2 and the compatibility adjustment approved (planning only).** Still open: optionally authorize the two-request trust-boundary test; the unknown-region default (a backend change) is a separate later decision; the small copy details in section 3.7 item 5.
 2. **Versioning:** apply the policy at the `v0.181.0` kickoff (edit the kickoff checklist), adopt squash-merge plus the pre-merge range check for frontend-only releases, and approve the `check-deploys.sh` improvement as its own small change.
 3. **Migration:** read the three `LLM_MODEL_*` environment values from the Render dashboard and confirm them; approve the estimated maximum spend (proposed cap $40) and the owner-run schedule once the preregistration is written.
 4. **Redo Missed:** the slot (between pricing and the migration's environment saves, as recommended, or after the migration).
