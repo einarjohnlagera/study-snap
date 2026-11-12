@@ -1438,7 +1438,7 @@ Pricing UI source of truth:
 
 - frontend pricing surfaces must use the centralized shared plan config at `frontend/src/config/plans.ts`
 - shared config owns plan names, descriptions, CTA labels, and feature lists
-- backend billing pricing APIs remain the source of truth for checkout amounts and regional pricing eligibility
+- `GET /billing/pricing` supplies every displayed price, including the homepage plain monthly amount; backend billing pricing remains the source of truth for checkout amounts and regional eligibility
 
 Context-aware paywall flow:
 
@@ -1472,7 +1472,7 @@ Context-aware paywall flow:
 - In-app upgrade CTAs (post-success nudge, limit modal, near-limit banner, paywall modal) navigate to `/settings?section=plans`, **not** the public `/pricing` page.
 - The Settings page reads `?section=plans`, scrolls to the Plan & Billing card, and applies a temporary highlight ring so the user lands directly on the plan options.
 - The plan ladder is `Free → Plus → Pro`. Plus is positioned as *regular study*; Pro is positioned as *exam preparation*. Upgrade copy must respect this framing.
-- Plan limits, prices, and feature scope are documented in `docs/product/PLANS.md`. Runtime values live in `frontend/lib/pricing-config.ts`; feature lists and CTA labels live in `frontend/src/config/plans.ts`.
+- Plan limits and feature scope are documented in `docs/product/PLANS.md`. Price display and checkout amounts come from backend pricing; frontend limits live in `frontend/lib/pricing-config.ts`, and feature lists and CTA labels live in `frontend/src/config/plans.ts`.
 
 ### Shared Hash Navigation
 

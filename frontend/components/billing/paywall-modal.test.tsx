@@ -111,6 +111,21 @@ describe("PaywallModal", () => {
     window.sessionStorage.clear();
   });
 
+  it("keeps price slots as shapes while pricing is pending", () => {
+    (getBillingPricing as jest.Mock).mockReturnValue(new Promise(() => {}));
+    render(<PaywallModal isOpen context={{ type: "ADAPTIVE_PRACTICE_LOCKED" }} source="test_source" onClose={jest.fn()} />);
+    expect(document.body.querySelectorAll(".animate-pulse")).toHaveLength(2);
+    expect(screen.queryByText("Monthly pricing unavailable")).not.toBeInTheDocument();
+    expect(screen.queryByText(/₱\d/)).not.toBeInTheDocument();
+  });
+
+  it("shows no invented price when pricing fails", async () => {
+    (getBillingPricing as jest.Mock).mockRejectedValue(new Error("pricing unavailable"));
+    render(<PaywallModal isOpen context={{ type: "ADAPTIVE_PRACTICE_LOCKED" }} source="test_source" onClose={jest.fn()} />);
+    expect(await screen.findAllByText("Monthly pricing unavailable")).toHaveLength(2);
+    expect(screen.queryByText(/₱\d/)).not.toBeInTheDocument();
+  });
+
   it("renders context-aware adaptive practice copy with Plus and Pro plan cards", async () => {
     render(
       <PaywallModal

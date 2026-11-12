@@ -1,4 +1,4 @@
-import { formatPassDuration, getExamCyclePriceLabel, passSavingsPct, resolveCyclePricing } from "./billing-pricing";
+import { formatPassDuration, getExamCyclePriceLabel, getPlainMonthlyPriceLabel, passSavingsPct, resolveCyclePricing } from "./billing-pricing";
 import type { BillingPricingResponse } from "./api";
 
 const pricing: BillingPricingResponse = {
@@ -19,6 +19,13 @@ const pricing: BillingPricingResponse = {
 };
 
 describe("billing pricing helpers", () => {
+  it("formats only an available backend monthly amount and ignores intro", () => {
+    expect(getPlainMonthlyPriceLabel(pricing, "PLUS")).toBe("₱179 / 1 month");
+    expect(getPlainMonthlyPriceLabel(null, "PLUS")).toBeNull();
+    expect(getPlainMonthlyPriceLabel({ ...pricing, plus: { ...pricing.plus, monthly: { ...pricing.plus.monthly, available: false } } }, "PLUS")).toBeNull();
+    expect(getPlainMonthlyPriceLabel({ ...pricing, plus: { ...pricing.plus, monthly: { ...pricing.plus.monthly, amount: null } } }, "PLUS")).toBeNull();
+  });
+
   it("resolves EXAM_CYCLE pricing from the examCycle field", () => {
     expect(resolveCyclePricing(pricing, "PRO", "EXAM_CYCLE")).toEqual(pricing.pro.examCycle);
   });

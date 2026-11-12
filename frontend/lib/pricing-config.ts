@@ -41,40 +41,6 @@ export const pricingConfig = {
     pdfExportsPerMonth: null,
     quizShareLinksPerMonth: null,
   },
-  price: {
-    PH: {
-      currency: "PHP",
-      plus: {
-        monthly: 179,
-        yearly: null,
-      },
-      pro: {
-        monthly: 249,
-        yearly: 1999,
-      },
-    },
-    DEFAULT: {
-      currency: "USD",
-      plus: {
-        monthly: 3.99,
-        yearly: null,
-      },
-      pro: {
-        monthly: 4.99,
-        yearly: 39.99,
-      },
-    },
-  },
-  intro: {
-    PH: {
-      plus: { monthly: 149 },
-      pro: { monthly: 199 },
-    },
-    DEFAULT: {
-      plus: { monthly: null },
-      pro: { monthly: null },
-    },
-  },
 } as const;
 
 export function resolvePricingDisplayRegion(region: string | null | undefined): PricingDisplayRegion {

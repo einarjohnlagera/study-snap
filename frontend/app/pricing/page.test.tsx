@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PricingPage, { metadata } from "./page";
-import { createPremiumCheckoutSession, trackAnalyticsEvent } from "@/lib/api";
+import { createPremiumCheckoutSession, getBillingPricing, trackAnalyticsEvent } from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 
 const pushMock = jest.fn();
@@ -97,14 +97,7 @@ describe("PricingPage", () => {
     expect(screen.getAllByRole("button", { name: "Get Pro" })).not.toHaveLength(0);
     expect(screen.getByRole("button", { name: /^1 year — ₱1,999 \/ 1 year/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Get Plus Yearly/ })).not.toBeInTheDocument();
-    expect(screen.getByText("🇵🇭 Philippines pricing (PHP)")).toBeInTheDocument();
-    expect(screen.getByText("🌍 International pricing")).toBeInTheDocument();
-    expect(screen.getByText("Plus: ₱179 / 1-month pass")).toBeInTheDocument();
-    expect(screen.getByText("Pro: ₱249 / 1-month pass")).toBeInTheDocument();
-    expect(screen.getByText("Pro 1-year pass: ₱1,999")).toBeInTheDocument();
-    expect(screen.getByText("Pro: $4.99 / 1-month pass")).toBeInTheDocument();
-    expect(screen.getByText("Pro 1-year pass: $39.99")).toBeInTheDocument();
-    expect(screen.getByText("Prices are shown for Philippines (PHP) and international (USD) using backend pricing data when available.")).toBeInTheDocument();
+    expect(screen.queryByText("Regional Pricing")).not.toBeInTheDocument();
     expect(screen.getByText("Plan comparison")).toBeInTheDocument();
     expect(screen.getByText("Best for")).toBeInTheDocument();
     expect(screen.getByText("Preparing with a real exam in sight")).toBeInTheDocument();
@@ -148,6 +141,19 @@ describe("PricingPage", () => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PRO", billingCycle: "YEARLY", returnUrl: "/pricing" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
+  });
+
+  it("shows unavailable prices when the public pricing request fails", async () => {
+    const originalPricingRequest = (getBillingPricing as jest.Mock).getMockImplementation();
+    (getBillingPricing as jest.Mock).mockRejectedValue(new Error("pricing unavailable"));
+    try {
+      render(<PricingPage />);
+      expect(await screen.findAllByText("Monthly pricing unavailable")).toHaveLength(2);
+      expect(screen.queryByText(/₱\d/)).not.toBeInTheDocument();
+      expect(screen.queryByText("Regional Pricing")).not.toBeInTheDocument();
+    } finally {
+      (getBillingPricing as jest.Mock).mockImplementation(originalPricingRequest);
+    }
   });
 
   it("exports pricing metadata with canonical and social preview fields", () => {
