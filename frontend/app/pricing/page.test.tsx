@@ -150,6 +150,7 @@ describe("PricingPage", () => {
       render(<PricingPage />);
       expect(await screen.findAllByText("Monthly pricing unavailable")).toHaveLength(2);
       expect(screen.queryByText(/₱\d/)).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/[₱$£€]\s*\d/);
       expect(screen.queryByText("Regional Pricing")).not.toBeInTheDocument();
     } finally {
       (getBillingPricing as jest.Mock).mockImplementation(originalPricingRequest);

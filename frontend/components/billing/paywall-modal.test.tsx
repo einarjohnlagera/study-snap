@@ -117,6 +117,7 @@ describe("PaywallModal", () => {
     expect(document.body.querySelectorAll(".animate-pulse")).toHaveLength(2);
     expect(screen.queryByText("Monthly pricing unavailable")).not.toBeInTheDocument();
     expect(screen.queryByText(/₱\d/)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/[₱$£€]\s*\d/);
   });
 
   it("shows no invented price when pricing fails", async () => {
@@ -124,6 +125,7 @@ describe("PaywallModal", () => {
     render(<PaywallModal isOpen context={{ type: "ADAPTIVE_PRACTICE_LOCKED" }} source="test_source" onClose={jest.fn()} />);
     expect(await screen.findAllByText("Monthly pricing unavailable")).toHaveLength(2);
     expect(screen.queryByText(/₱\d/)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/[₱$£€]\s*\d/);
   });
 
   it("renders context-aware adaptive practice copy with Plus and Pro plan cards", async () => {

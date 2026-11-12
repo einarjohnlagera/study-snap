@@ -270,6 +270,7 @@ describe("Settings page cancellation flow", () => {
     expect(screen.queryByRole("button", { name: /^3 months/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^1 year/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/₱\d/)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/[₱$£€]\s*\d/);
   });
 
   it("shows the theme selector in Preferences", async () => {
