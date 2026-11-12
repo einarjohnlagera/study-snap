@@ -2,7 +2,7 @@
 
 ## v0.181.0 - Affordable NoteLib
 
-**Status: In Progress** (kicked off 2026-11-11 on `releases/v0.181.0`, **cut from `main` at `d5eaf383`** after `v0.180.0` was merged (#1575) and deployed (T0 2026-11-11T10:59:58Z); owner decisions 2026-11-04 and 2026-11-11, Product UX 2026-11-11; **frontend only; two separately authorized deployments: the frontend merge, then the owner's Render environment save at least 24 hours later; nothing implemented or deployed yet**).
+**Status: In Progress** (kicked off 2026-11-11 on `releases/v0.181.0`, **cut from `main` at `d5eaf383`** after `v0.180.0` was merged (#1575) and deployed (T0 2026-11-11T10:59:58Z); owner decisions 2026-11-04 and 2026-11-11, Product UX 2026-11-11; **frontend only; two separately authorized deployments: the frontend merge, then the owner's Render environment save at least 24 hours later; scope built in PR #1577 (in audit, not merged); nothing deployed**).
 
 Theme: every price a learner sees agrees with the price the backend will charge, so that when the owner lowers the Philippine prices (Plus ₱99, Pro ₱149) every surface and every checkout changes together.
 
@@ -30,7 +30,13 @@ Between the frontend deployment and the environment save (at least 24 hours) the
 
 ### Shipped
 
-_(nothing yet)_
+- **[in-audit: PR #1577 (`feat/affordable-notelib-frontend`, commit `d11342b3`), not merged] Backend-owned prices on every frontend surface.** Frontend only, no backend change. The homepage reads `GET /billing/pricing` in the browser and shows the plain monthly price only (never an intro), with a same-height skeleton while loading and a "See current prices" link to `/pricing` on failure; `/` stays `○ /`. The plan cards, the paywall and Settings lose their static fallbacks (failures reuse the existing "pricing unavailable" labels; Settings still loads when pricing fails); the intro hint needs `introEligible` and a non-null amount (E19 fixed); the static Regional Pricing card and the `price` and `intro` tables in `lib/pricing-config.ts` are removed; a static guard test fails the build if a peso literal or a price-table read returns. Docs: `docs/features/pricing.md`, `docs/features/billing.md`, `docs/product/SPEC.md`, one `AGENTS.md` line. The price change itself is the owner's later Render environment save. Verification so far (Claude audit on the PR tip, 2026-11-11): `tsc` clean, lint 0 errors, 244 suites and 2,939 tests passed, build shows `○ /` and `○ /pricing`, six mutants (one per surface) killed by named tests, widened price-literal sweep clean. **Still owed before sign-off:** the scoped cold falsification agent, Preview verification, and the claims listed under "Open risks" below.
+- **[merged-to-release: PR #1576] Note Strategist workflow and journey cleanup (docs only).** Corrected the Study Journey and Review Set workflow (generation-first, XLSX mandatory, owner runs all writes), added the Claude Note Strategist persona and the GPT Note Strategist context, and removed 29 derivative journey working documents (recoverable from `d5eaf383`). No `backend/` or `frontend/` file.
+
+### Open risks (recorded 2026-11-12)
+
+- **New production load path: every homepage visit now calls `GET /billing/pricing`** (before, `/` made no backend call), and about 97% of Web Analytics visitors are automated. `PricingService.getPricing` (`backend/src/main/java/com/studysnap/backend/service/PricingService.java:56-65`, `:171-216`, `:227`) runs `discountVoucherRepository.findByIsActiveTrue()` once per ACTIVE plan-and-cycle pair (up to 6 per request, fewer once the owner's `active=false` flags hide Pro yearly and the exam pass), with no cache; an anonymous caller takes no user lookup. **Owner decision 2026-11-12: conditionally approved for Preview testing only; before production approval the worst-case request count, the failure behaviour and the first-hour monitoring criteria must be verified; no speculative optimization unless testing shows a problem.** No production deployment is authorized by that decision.
+- **The prerendered `/` is a client-render shell** (`BAILOUT_TO_CLIENT` markers, no body text in the static HTML), so the skeleton and the amount both appear only after hydration; the mocked server-render test proves the component, not the production HTML. To be confirmed on the Preview.
 
 ## v0.180.0 - Public Page Reliability and Privacy
 
