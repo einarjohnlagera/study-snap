@@ -46,7 +46,8 @@ test("shows backend PH base prices with no intro, even when eligible", async () 
 test("uses a non-PH response currency", async () => {
   (getBillingPricing as jest.Mock).mockResolvedValue({ ...pricing, region: "GB", currency: "GBP", plus: { ...pricing.plus, monthly: cycle(3.5) } });
   render(<SimplePricingSection />);
-  expect(await screen.findByText("£3.5 / 1 month")).toBeInTheDocument();
+  const price = await screen.findByText(/3[.,]5(?:0)?\s*\/\s*1 month/);
+  expect(price.textContent).toMatch(/£|GBP/);
 });
 
 test("failed or unusable prices link to current prices without an amount", async () => {

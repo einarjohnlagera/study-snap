@@ -12,7 +12,7 @@
 - Renewal is manual; there is no recurring billing yet
 - Checkout pricing is loaded from backend billing config
 - Every frontend price comes from `GET /billing/pricing`; the homepage shows its plain monthly base amount only, while plan cards show an eligible intro reported by the backend for the viewer. No display price comes from static frontend configuration.
-- While pricing loads, price slots use a skeleton. If pricing fails, the homepage links to `/pricing`, plan cards and the paywall show the existing unavailable label, and Settings leaves amounts and unavailable pass lengths out.
+- While pricing loads, price slots use a skeleton. If pricing fails, the homepage links to `/pricing`, while plan cards, the paywall, and Settings show “Monthly pricing unavailable”; Settings hides the pass-length selector.
 - Automatic intro offers and discounts use `discount_vouchers`
 - Voucher redemption history is written only after a successful `PAID` webhook
 - Paid-plan activation is webhook-confirmed only
