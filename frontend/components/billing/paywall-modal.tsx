@@ -14,7 +14,7 @@ import {
   type ProfileType,
 } from "@/lib/api";
 import { getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath } from "@/lib/auth";
-import { formatBillingAmount, getBillingCyclePriceLabel } from "@/lib/billing-pricing";
+import { getBillingCyclePriceLabel } from "@/lib/billing-pricing";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import {
   type PaywallContext,
@@ -26,7 +26,6 @@ import {
   savePendingPaywallUpgradeContext,
   type PendingPaywallUpgradeContext,
 } from "@/lib/paywall-upgrade-context";
-import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
 import { getUpgradeCtas, PASS_NO_AUTO_CHARGE_FOOTER, PLANS, type AppPlanType, type UpgradeCtaContext } from "@/src/config/plans";
 
@@ -59,17 +58,6 @@ const PRO_ONLY_PAYWALL_CONTEXT_TYPES = new Set<PaywallContext["type"]>([
   "LONG_EXAM_MODE_LOCKED",
   "INTERVIEW_PRACTICE_LOCKED",
 ]);
-
-function buildFallbackMonthlyLabel(planType: "PLUS" | "PRO", region: ReturnType<typeof resolvePricingDisplayRegion>) {
-  const regionPricing = pricingConfig.price[region];
-  const introPricing = pricingConfig.intro[region];
-  const regularAmount = planType === "PLUS" ? regionPricing.plus.monthly : regionPricing.pro.monthly;
-  const introAmount = planType === "PLUS" ? introPricing.plus.monthly : introPricing.pro.monthly;
-  if (introAmount === null) {
-    return `${formatBillingAmount(regularAmount, regionPricing.currency)} / 1 month`;
-  }
-  return `${formatBillingAmount(introAmount, regionPricing.currency)} for your first 1-month pass · ${formatBillingAmount(regularAmount, regionPricing.currency)} after`;
-}
 
 function resolvePaywallContext(
   context: PaywallContext | undefined,
@@ -141,12 +129,14 @@ function PlanCard({
   planType,
   currentPlan,
   monthlyLabel,
+  pricingLoaded,
   selected,
   onClick,
 }: Readonly<{
   planType: "PLUS" | "PRO";
   currentPlan: PlanType;
   monthlyLabel: string;
+  pricingLoaded: boolean;
   selected?: boolean;
   onClick?: () => void;
 }>) {
@@ -184,7 +174,7 @@ function PlanCard({
             </span>
           ) : null}
         </div>
-        <p className="text-lg font-semibold text-foreground">{monthlyLabel}</p>
+        {pricingLoaded ? <p className="text-lg font-semibold text-foreground">{monthlyLabel}</p> : <div aria-hidden="true" className="h-7 w-36 animate-pulse rounded bg-foreground/10 motion-reduce:animate-none" />}
         <p className="text-sm text-foreground/70">{plan.title}</p>
       </div>
       <ul className="mt-4 space-y-2 text-sm text-foreground/80">
@@ -245,14 +235,9 @@ export function PaywallModal({
       : null,
     [appCurrentPlan, authUser?.profileType, upgradeCtaContext],
   );
-  const { billingPricing } = useBillingPricing(true);
-  const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
-  const plusMonthlyLabel = billingPricing
-    ? getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY")
-    : buildFallbackMonthlyLabel("PLUS", displayRegion);
-  const proMonthlyLabel = billingPricing
-    ? getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY")
-    : buildFallbackMonthlyLabel("PRO", displayRegion);
+  const { billingPricing, pricingLoaded } = useBillingPricing(true);
+  const plusMonthlyLabel = getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY");
+  const proMonthlyLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY");
 
   useEffect(() => {
     if (!isOpen) {
@@ -441,6 +426,7 @@ export function PaywallModal({
                     planType={planType}
                     currentPlan={currentPlan}
                     monthlyLabel={planType === "PLUS" ? plusMonthlyLabel : proMonthlyLabel}
+                    pricingLoaded={pricingLoaded}
                     selected={selectedPlan === planType}
                     onClick={currentPlan !== planType && !blocksProOnlyFeature ? () => setSelectedPlan(planType) : undefined}
                   />

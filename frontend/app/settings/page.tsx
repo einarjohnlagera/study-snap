@@ -45,7 +45,6 @@ import {
 } from "@/lib/api";
 import { buildLoginPath, clearAuthUser, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
 import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, passSavingsPct, resolveCyclePricing } from "@/lib/billing-pricing";
-import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import { QUIZ_GENERATIONS_USAGE_DESCRIPTION, QUIZ_GENERATIONS_USAGE_LABEL } from "@/lib/usage-labels";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
@@ -602,16 +601,15 @@ export default function SettingsPage() {
     : null;
   const billingTransactions = billingHistory?.transactions ?? [];
 
-  const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
-  const annualAvailableForPro = proAnnualPricing?.available ?? (pricingConfig.price[displayRegion].pro.yearly !== null);
-  const annualAvailableForPlus = plusAnnualPricing?.available ?? (pricingConfig.price[displayRegion].plus.yearly !== null);
+  const annualAvailableForPro = !!proAnnualPricing?.available && proAnnualPricing.amount !== null;
+  const annualAvailableForPlus = !!plusAnnualPricing?.available && plusAnnualPricing.amount !== null;
   const freePlanConfig = PLANS.FREE;
   const plusPlanConfig = PLANS.PLUS;
   const proPlanConfig = PLANS.PRO;
-  const proRegularMonthlyAmount = billingPricing?.pro.monthly.amount ?? pricingConfig.price[displayRegion].pro.monthly;
+  const proRegularMonthlyAmount = billingPricing?.pro.monthly.available ? billingPricing.pro.monthly.amount : null;
   const monthlyDurationDays = billingPricing?.pro.monthly.durationDays ?? 30;
   const proYearlySavingsPct = passSavingsPct(
-    billingPricing?.pro.yearly.amount ?? pricingConfig.price[displayRegion].pro.yearly,
+    proAnnualPricing?.available ? proAnnualPricing.amount : null,
     proRegularMonthlyAmount,
     Math.round((proAnnualPricing?.durationDays ?? 365) / monthlyDurationDays),
   );
@@ -621,12 +619,12 @@ export default function SettingsPage() {
     Math.round((proExamCyclePricing?.durationDays ?? 90) / monthlyDurationDays),
   );
   const proAnnualLabelForDisplay = (() => {
-    const yearly = proAnnualPricing?.amount ?? pricingConfig.price[displayRegion].pro.yearly;
-    if (!yearly) return null;
-    return `${formatPricingAmount(yearly, billingPricing?.currency ?? pricingConfig.price[displayRegion].currency)} / 1 year`;
+    const yearly = proAnnualPricing?.available ? proAnnualPricing.amount : null;
+    if (yearly === null) return null;
+    return `${formatPricingAmount(yearly, billingPricing!.currency)} / 1 year`;
   })();
   const effectivePlusCycle: BillingCycle = "MONTHLY";
-  const proExamCycleAvailable = proExamCyclePricing?.available ?? false;
+  const proExamCycleAvailable = !!proExamCyclePricing?.available && proExamCyclePricing.amount !== null;
   const effectiveProCycle: BillingCycle =
     selectedCycle === "EXAM_CYCLE" && proExamCycleAvailable
       ? "EXAM_CYCLE"

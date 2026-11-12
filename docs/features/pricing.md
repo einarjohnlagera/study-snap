@@ -40,8 +40,7 @@ Current structure:
 1. hero
 2. Free / Plus / Pro pricing cards
 3. plan comparison table
-4. regional pricing block
-5. FAQ
+4. FAQ
 
 The comparison table begins with a `Best for` row that describes the learner's **situation**, not what each plan contains — *getting started without building your own* (Free), *building your own study plan from your notes* (Plus), *preparing with a real exam in sight* (Pro). **Free's cell deliberately differs from Free's tagline**: both render on this page, so repeating the tagline would make Free's row the only one that adds nothing. Paid-plan card bullets are outcome-framed: they describe the study result enabled by each allowance or feature rather than presenting an isolated feature-name list.
 
@@ -78,7 +77,7 @@ Plus and Pro are **one-time, time-boxed passes with no auto-charge**, not recurr
 
 - **Price reads as duration, not billing frequency.** Cycles render as `₱X / 1 month`, `₱X / 3 months`, `₱X / 1 year` — never `₱X/month` as a recurrence. Centralized in `getBillingCyclePriceLabel` / `getExamCyclePriceLabel` (`lib/billing-pricing.ts`); the EXAM_CYCLE duration comes from `durationDays` (90), expressed in whole months via `formatPassDuration`, never a literal.
 - **Quota stays monthly, with a clarifier.** Per-month limits remain accurate; cards carry `Usage limits refresh each month during your pass.` so "one-time pass" and "monthly limits" do not read as contradictory.
-- **Intro pricing is a first-pass discount, not a recurrence.** Render as `₱149 for your first 1-month pass · ₱179 after` — never `first month, then ₱179/month`.
+- **Intro pricing is a first-pass discount, not a recurrence.** Paid plan cards show the backend-reported intro only when `introEligible` is true and `introAmount` is present. The homepage shows the plain monthly base price only, even when an intro is available.
 - **Reassurances** live in shared constants in `plans.ts` (`PASS_MODEL_TAGLINE`, `PASS_QUOTA_REFRESH_NOTE`, `PASS_DATA_PERMANENCE_NOTE`, `PASS_ALL_ACCESS_NOTE`, `PASS_NO_AUTO_CHARGE_FOOTER`): one-time payment · never auto-charged; notes, Study Packs, and progress stay in the library after a pass ends; full access on desktop and mobile web (responsive web — there is no native app).
 - **CTA-adjacent reassurance.** `PASS_NO_AUTO_CHARGE_FOOTER` renders directly below every paid primary CTA on the Pricing plan cards, paywall modal, and Settings plan cards. The broader footer trust blocks remain because they also explain data permanence, access, hosted checkout, and usage refresh.
 - **Settings billing-status copy stays accurate** for an active pass (e.g. `Valid until …`, `Won't auto-renew`); only pre-purchase/marketing strings were reframed. No billing, quota, pass-duration, price, or checkout mechanics changed.
@@ -96,7 +95,7 @@ Plus and Pro are **one-time, time-boxed passes with no auto-charge**, not recurr
 
 ### Plus
 
-- `₱149 for your first 1-month pass · ₱179 after` in PH when intro pricing is eligible
+- monthly and eligible intro amounts come from the backend pricing response
 - positioned as the guided-learning tier ("Guided learning built around your notes")
 - `50` Study Packs / month
 - `100` generated quizzes / month
@@ -105,8 +104,7 @@ Plus and Pro are **one-time, time-boxed passes with no auto-charge**, not recurr
 
 ### Pro
 
-- `₱199 for your first 1-month pass · ₱249 after` in PH when intro pricing is eligible
-- `₱1,999 / 1 year` in PH for the annual pass; `₱599 / 3 months` for the exam pass (hero CTA; internally a 90-day pass)
+- monthly, annual, exam-pass and eligible intro amounts come from the backend pricing response; annual and exam-pass options appear only when their cycles are available
 - positioned as the complete-learning-system tier ("Your complete learning system"); Board Exam Mode is still Pro-only, but exam prep is no longer the tier's framing (v0.68.0)
 - `100` Study Packs / month
 - `200` generated quizzes / month
@@ -128,11 +126,13 @@ Current enforcement truth:
 
 If pricing copy and backend feature gates diverge, backend gating remains the behavior source of truth until the product intentionally changes it.
 
-## Regional pricing
+## Regional pricing and availability
 
-Pricing surfaces keep PHP visible for Xendit clarity and also show international USD display pricing.
+Every frontend price is supplied by `GET /billing/pricing`, which resolves the visitor's region, currency, cycle availability, and eligible intro. No frontend surface prints a price the backend did not provide. Checkout independently calculates the amount from the same backend configuration. The homepage loads pricing in the browser while the route remains static and shows only the plain monthly price, with no intro label. Plan cards retain the backend-reported eligible intro; the backend treats every anonymous visitor as eligible, so a signed-out returning subscriber on `/pricing` can see an intro they will not be charged (pre-existing; it ends when the owner's environment change makes the intro vouchers inert).
 
-Visible reviewer-safe display values currently come from the shared pricing config when API data has not resolved yet.
+The homepage and plan cards reserve price space with a skeleton while pricing loads. If a monthly price cannot be obtained, the homepage links to `/pricing` with “See current prices”; plan cards and the paywall show “Monthly pricing unavailable”, while Settings omits unavailable amounts and pass lengths. A slow or never-settling pricing call leaves the skeleton in place; this release adds no timeout.
+
+Until the owner's later backend environment change, the backend still automatically applies the live intro to new Philippine subscribers at checkout. The homepage's plain base price can therefore be higher than their actual charge. This accepted gap ends with that environment change. The approved future prices are not live because of this frontend release.
 
 ## Messaging rules
 
