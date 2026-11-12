@@ -80,3 +80,7 @@ No owner decision is open for the shaping files. All of D-27, D-35 and D-36 are 
 - **D-08** — curator confirmation of the strategist full-content read of "Financial Mathematics in Everyday Life".
 - **D-29** — confirm the Year description wording when the collection is created (a builder argument, not a TSV column).
 - The 7 reuse candidates awaiting a curator full-content read are authored NEW until then.
+
+## Repository cleanup record (2026-11-11, owner-authorized)
+
+Six BSCS working documents were removed with `git rm`: the authoring batch plan, collection creation checklist, curriculum coverage workbook, Phase 1 run sheet, proposed study journey, and readiness and handoff. **Deleted files are recoverable from commit `d5eaf383`.** Kept: this log, the authoring plan workbook, the authored bodies, the term-labels SQL and the README. Closed research was already in `docs/archive/bscs-year1/` (14 files, untouched). References above to the removed documents are historical.

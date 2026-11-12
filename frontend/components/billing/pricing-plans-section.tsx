@@ -7,8 +7,8 @@ import { PremiumUpgradeButton } from "@/components/billing/premium-upgrade-butto
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
-import { formatBillingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
-import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
+import { formatBillingAmount, getBillingCyclePriceLabel, getExamCyclePriceLabel, getPlainMonthlyPriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
+import { resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import {
   type ComparisonValue,
   PASS_ALL_ACCESS_NOTE,
@@ -68,20 +68,10 @@ function FeatureList({ features }: Readonly<{ features: ReadonlyArray<{ label: s
   );
 }
 
-function resolveFallbackCycleLabel(planType: PaidPlanType, region: ReturnType<typeof resolvePricingDisplayRegion>) {
-  const regionPricing = pricingConfig.price[region];
-  const introPricing = pricingConfig.intro[region];
-  const planPricing = planType === "PLUS" ? regionPricing.plus : regionPricing.pro;
-  const introAmount = planType === "PLUS" ? introPricing.plus.monthly : introPricing.pro.monthly;
+const SEE_CURRENT_PRICES_LABEL = "See current prices";
 
-  return {
-    monthly: introAmount === null
-      ? `${formatBillingAmount(planPricing.monthly, regionPricing.currency)} / 1 month`
-      : `${formatBillingAmount(introAmount, regionPricing.currency)} for your first 1-month pass · ${formatBillingAmount(planPricing.monthly, regionPricing.currency)} after`,
-    yearly: planPricing.yearly === null
-      ? null
-      : `${formatBillingAmount(planPricing.yearly, regionPricing.currency)} / 1 year`,
-  };
+function PriceSkeleton() {
+  return <div aria-hidden="true" className="h-7 w-36 animate-pulse rounded bg-foreground/10 motion-reduce:animate-none" />;
 }
 
 function PlanCard({
@@ -90,6 +80,7 @@ function PlanCard({
   title,
   description,
   monthlyLabel,
+  pricingLoaded,
   yearlyLabel,
   examCycleLabel,
   introHint,
@@ -104,6 +95,7 @@ function PlanCard({
   title: string;
   description: string;
   monthlyLabel: string;
+  pricingLoaded: boolean;
   yearlyLabel?: string | null;
   examCycleLabel?: string | null;
   introHint?: string | null;
@@ -130,7 +122,7 @@ function PlanCard({
         <CardDescription className="leading-relaxed">{description}</CardDescription>
       </div>
       <div className="space-y-1">
-        <p className="text-xl font-semibold text-foreground">{examCycleLabel ?? monthlyLabel}</p>
+        {pricingLoaded ? <p className="text-xl font-semibold text-foreground">{examCycleLabel ?? monthlyLabel}</p> : <PriceSkeleton />}
         <p className="text-xs text-foreground/60">{PASS_MODEL_TAGLINE}</p>
         <p className="text-xs text-foreground/60">{PASS_QUOTA_REFRESH_NOTE}</p>
         {!examCycleLabel && introHint ? <p className="text-xs text-foreground/60">{introHint}</p> : null}
@@ -186,41 +178,29 @@ function PlanCard({
 }
 
 export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlansSectionProps>) {
-  const { billingPricing } = useBillingPricing(true);
+  const { billingPricing, pricingLoaded } = useBillingPricing(true);
   const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
-  const regionFallback = pricingConfig.price[displayRegion];
   const freePlan = getPlanConfig("FREE");
   const plusPlan = getPlanConfig("PLUS");
   const proPlan = getPlanConfig("PRO");
-  const plusFallback = resolveFallbackCycleLabel("PLUS", displayRegion);
-  const proFallback = resolveFallbackCycleLabel("PRO", displayRegion);
+  const plusMonthlyLabel = getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY");
+  const plusYearlyPricing = resolveCyclePricing(billingPricing, "PLUS", "YEARLY");
+  const proMonthlyLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY");
+  const proYearlyPricing = resolveCyclePricing(billingPricing, "PRO", "YEARLY");
+  const proExamCyclePricing = resolveCyclePricing(billingPricing, "PRO", "EXAM_CYCLE");
+  const plusYearlyLabel = plusYearlyPricing?.available && plusYearlyPricing.amount !== null
+    ? getBillingCyclePriceLabel(billingPricing, "PLUS", "YEARLY") : null;
+  const proYearlyLabel = proYearlyPricing?.available && proYearlyPricing.amount !== null
+    ? getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY") : null;
+  const proExamCycleLabel = proExamCyclePricing?.available && proExamCyclePricing.amount !== null
+    ? getExamCyclePriceLabel(billingPricing, "PRO") : null;
 
-  const plusMonthlyLabel = billingPricing
-    ? getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY")
-    : plusFallback.monthly;
-  const plusYearlyLabel = billingPricing
-    ? (resolveCyclePricing(billingPricing, "PLUS", "YEARLY")?.available ? getBillingCyclePriceLabel(billingPricing, "PLUS", "YEARLY") : null)
-    : plusFallback.yearly;
-  const proMonthlyLabel = billingPricing
-    ? getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY")
-    : proFallback.monthly;
-  const proYearlyLabel = billingPricing
-    ? (resolveCyclePricing(billingPricing, "PRO", "YEARLY")?.available ? getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY") : null)
-    : proFallback.yearly;
-  const proExamCycleLabel = billingPricing && resolveCyclePricing(billingPricing, "PRO", "EXAM_CYCLE")?.available
-    ? getExamCyclePriceLabel(billingPricing, "PRO")
-    : null;
-
-  const plusIntroHint = billingPricing?.plus.monthly.introEligible && billingPricing.plus.monthly.introAmount !== null
+  const plusIntroHint = billingPricing?.plus.monthly.available && billingPricing.plus.monthly.amount !== null && billingPricing.plus.monthly.introEligible && billingPricing.plus.monthly.introAmount !== null
     ? `Intro offer: ${formatBillingAmount(billingPricing.plus.monthly.introAmount, billingPricing.currency)} on your first 1-month pass.`
-    : pricingConfig.intro[displayRegion].plus.monthly !== null
-      ? `Intro offer: ${formatBillingAmount(pricingConfig.intro[displayRegion].plus.monthly, regionFallback.currency)} on your first 1-month pass.`
-      : null;
-  const proIntroHint = billingPricing?.pro.monthly.introEligible && billingPricing.pro.monthly.introAmount !== null
+    : null;
+  const proIntroHint = billingPricing?.pro.monthly.available && billingPricing.pro.monthly.amount !== null && billingPricing.pro.monthly.introEligible && billingPricing.pro.monthly.introAmount !== null
     ? `Intro offer: ${formatBillingAmount(billingPricing.pro.monthly.introAmount, billingPricing.currency)} on your first 1-month pass.`
-    : pricingConfig.intro[displayRegion].pro.monthly !== null
-      ? `Intro offer: ${formatBillingAmount(pricingConfig.intro[displayRegion].pro.monthly, regionFallback.currency)} on your first 1-month pass.`
-      : null;
+    : null;
 
   return (
     <section className="space-y-4">
@@ -269,6 +249,7 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           title={plusPlan.title}
           description={plusPlan.description}
           monthlyLabel={plusMonthlyLabel}
+          pricingLoaded={pricingLoaded}
           yearlyLabel={plusYearlyLabel}
           introHint={plusIntroHint}
           highlights={plusPlan.features}
@@ -283,6 +264,7 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           title={proPlan.title}
           description={proPlan.description}
           monthlyLabel={proMonthlyLabel}
+          pricingLoaded={pricingLoaded}
           yearlyLabel={proYearlyLabel}
           examCycleLabel={proExamCycleLabel}
           introHint={proIntroHint}
@@ -330,29 +312,6 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
 
       <Card className="space-y-4 p-4 sm:p-6">
         <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Regional Pricing</p>
-          <h3 className="text-lg font-semibold">Pricing shown clearly</h3>
-          <p className="text-sm leading-relaxed text-foreground/70">Prices are shown for Philippines (PHP) and international (USD) using backend pricing data when available.</p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
-            <p className="text-sm font-semibold text-foreground">🇵🇭 Philippines pricing (PHP)</p>
-            <p className="text-sm text-foreground/80">Plus: ₱{pricingConfig.price.PH.plus.monthly} / 1-month pass</p>
-            <p className="text-sm text-foreground/80">Pro: ₱{pricingConfig.price.PH.pro.monthly} / 1-month pass</p>
-            <p className="text-sm text-foreground/70">Pro 1-year pass: ₱{pricingConfig.price.PH.pro.yearly?.toLocaleString()}</p>
-            <p className="text-xs text-foreground/60">First-pass intro: Plus ₱{pricingConfig.intro.PH.plus.monthly}, Pro ₱{pricingConfig.intro.PH.pro.monthly}</p>
-          </div>
-          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
-            <p className="text-sm font-semibold text-foreground">🌍 International pricing</p>
-            <p className="text-sm text-foreground/80">Plus: ${pricingConfig.price.DEFAULT.plus.monthly} / 1-month pass</p>
-            <p className="text-sm text-foreground/80">Pro: ${pricingConfig.price.DEFAULT.pro.monthly} / 1-month pass</p>
-            <p className="text-sm text-foreground/70">Pro 1-year pass: ${pricingConfig.price.DEFAULT.pro.yearly}</p>
-          </div>
-        </div>
-      </Card>
-
-      <Card className="space-y-4 p-4 sm:p-6">
-        <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">FAQ</p>
           <h3 className="text-lg font-semibold">Common questions</h3>
         </div>
@@ -379,6 +338,9 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
 }
 
 export function SimplePricingSection() {
+  const { billingPricing, pricingLoaded } = useBillingPricing(true);
+  const plusMonthlyLabel = getPlainMonthlyPriceLabel(billingPricing, "PLUS");
+  const proMonthlyLabel = getPlainMonthlyPriceLabel(billingPricing, "PRO");
   const freePlan = getPlanConfig("FREE");
   const plusPlan = getPlanConfig("PLUS");
   const proPlan = getPlanConfig("PRO");
@@ -410,8 +372,12 @@ export function SimplePricingSection() {
             <CardDescription className="text-sm leading-relaxed">{plusPlan.description}</CardDescription>
           </div>
           <div className="space-y-0.5">
-            <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.plus.monthly} first 1-month pass</p>
-            <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.plus.monthly} after · {PASS_MODEL_TAGLINE}</p>
+            {pricingLoaded ? (
+              plusMonthlyLabel
+                ? <p className="text-xl font-semibold">{plusMonthlyLabel}</p>
+                : <Link href="/pricing" className="flex min-h-7 items-center text-sm text-blue-700 underline dark:text-blue-300">{SEE_CURRENT_PRICES_LABEL}</Link>
+            ) : <PriceSkeleton />}
+            <p className="text-sm text-foreground/60">{PASS_MODEL_TAGLINE}</p>
           </div>
           <div className="grow">
             <FeatureList features={plusPlan.features} />
@@ -436,8 +402,12 @@ export function SimplePricingSection() {
             <CardDescription className="text-sm leading-relaxed">{proPlan.description}</CardDescription>
           </div>
           <div className="space-y-0.5">
-            <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.pro.monthly} first 1-month pass</p>
-            <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.pro.monthly} after · {PASS_MODEL_TAGLINE}</p>
+            {pricingLoaded ? (
+              proMonthlyLabel
+                ? <p className="text-xl font-semibold">{proMonthlyLabel}</p>
+                : <Link href="/pricing" className="flex min-h-7 items-center text-sm text-blue-700 underline dark:text-blue-300">{SEE_CURRENT_PRICES_LABEL}</Link>
+            ) : <PriceSkeleton />}
+            <p className="text-sm text-foreground/60">{PASS_MODEL_TAGLINE}</p>
           </div>
           <div className="grow">
             <FeatureList features={proPlan.features} />

@@ -46,6 +46,17 @@ export function resolveCyclePricing(
   return billingCycle === "YEARLY" ? planPricing.yearly : planPricing.monthly;
 }
 
+export function getPlainMonthlyPriceLabel(
+  pricing: BillingPricingResponse | null,
+  planType: PaidPlanType,
+): string | null {
+  const monthly = resolveCyclePricing(pricing, planType, "MONTHLY");
+  if (!pricing || !monthly?.available || monthly.amount === null) {
+    return null;
+  }
+  return `${formatBillingAmount(monthly.amount, pricing.currency)} / 1 month`;
+}
+
 export function getYearlySavings(
   pricing: BillingPricingResponse | null,
   planType: PaidPlanType,
@@ -80,7 +91,7 @@ export function getBillingCyclePriceLabel(
       const introAmount = formatBillingAmount(cyclePricing.introAmount, currency);
       return `${introAmount} for your first 1-month pass · ${monthlyAmount} after`;
     }
-    return `${monthlyAmount} / 1 month`;
+    return getPlainMonthlyPriceLabel(pricing, planType) ?? "Monthly pricing unavailable";
   }
 
   if (billingCycle === "EXAM_CYCLE") {

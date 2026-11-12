@@ -27,7 +27,7 @@ Make ALL changes before committing — this is one atomic commit.
 - [ ] **`ROADMAP.md`** — Add new version section. Update "Current Release Baseline" line.
 - [ ] **`CLAUDE.md`** — **REPLACE** the `Current version:` block with the new release's. **⚠️ REPLACE, NOT PREPEND — this is the step whose absence cost ~80,000 tokens per session.** That line grew to **322,329 characters** (63 chained `Previous:` blocks, `v0.37.0` → `v0.125.0`, ~90% of the file) because every kickoff prepended and none ever removed. `RELEASES.md` is the canonical record and always was; this line is a pointer to the OPEN release, never a history. Keep the product description above it and the anti-drift of the release you are opening — nothing else.
 - [ ] **`frontend/package.json`** — Bump `"version": "X.Y.Z"`.
-- [ ] **`backend/pom.xml`** — Bump `<version>X.Y.Z</version>` (project version, not a dependency).
+- [ ] **`backend/pom.xml`** — Bump `<version>X.Y.Z</version>` (project version, not a dependency) **ONLY when the release changes backend code** (Product UX, 2026-11-11, from `v0.181.0`). A frontend-only or environment-only release leaves it at the last backend release's version and says so in its `RELEASES.md` section (a "Backend version" sentence), because a change under `backend/` makes Render redeploy on merge. **A missing bump does not by itself prove Render will skip a deployment:** it redeploys when ANY commit in the pushed range changes `backend/` against its first parent (a merge-forward commit counts). For a frontend-only release, squash-merge the release PR and run the pre-merge range check from the sign-off command.
 - [ ] **`AGENTS.md`** — Update documentation baseline and version reference line.
 - [ ] **`README.md`** — Update release baseline line.
 
@@ -55,7 +55,8 @@ _(nothing yet)_
 ## Commit
 
 ```bash
-git add RELEASES.md ROADMAP.md CLAUDE.md frontend/package.json backend/pom.xml AGENTS.md README.md
+git add RELEASES.md ROADMAP.md CLAUDE.md frontend/package.json AGENTS.md README.md
+# add backend/pom.xml ONLY for a release that changes backend code (see the checklist above)
 git commit -m "chore: kick off vX.Y.Z — [Theme Name]"
 ```
 

@@ -1,0 +1,29 @@
+D2 quiz stem fix run, mode = commit
+BEGIN
+SELECT 1
+DO
+Preconditions P1-P7 passed.
+BEFORE (item 3):
+                  before_stem                   |                                            choices                                            | correct_index 
+------------------------------------------------+-----------------------------------------------------------------------------------------------+---------------
+ When budgeting, which step is LEAST important? | ["Listing income", "Listing expenses", "Ignoring future financial goals", "Planning savings"] | 2
+(1 row)
+
+CREATE TABLE
+INSERT 0 1
+DO
+Post-update assertions passed (1 row; only the item 3 stem changed; other items, choices, key, explanation, quiz_stamp, status, updated_at, the Note and the 7 copies unchanged).
+AFTER (item 3):
+                         after_stem                         |                                            choices                                            | correct_index | quiz_stamp |          updated_at           
+------------------------------------------------------------+-----------------------------------------------------------------------------------------------+---------------+------------+-------------------------------
+ Which of the following is NOT part of effective budgeting? | ["Listing income", "Listing expenses", "Ignoring future financial goals", "Planning savings"] | 2             |          0 | 2026-09-09 01:37:12.386427+00
+(1 row)
+
+ROLLBACK STATEMENT (SAVE THIS; use ONLY after a COMMIT you want to undo; expect UPDATE 1; afterwards md5(quiz::text) must be e7f206b08cbd9c6f352ffcc331838350):
+                                                                                                                                  rollback_statement                                                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ UPDATE study_packs SET quiz = jsonb_set(quiz, '{2,question}', to_jsonb('When budgeting, which step is LEAST important?'::text), false) WHERE id = '8efc275e-312e-4e0d-a97a-b6672585eb5d' AND quiz -> 2 ->> 'question' = 'Which of the following is NOT part of effective budgeting?';
+(1 row)
+
+COMMIT
+COMMITTED. Keep this log. Do not regenerate the Note or its Study Pack.

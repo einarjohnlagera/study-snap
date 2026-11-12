@@ -21,6 +21,8 @@ snapshots/briefs, not source-of-truth for implementation — for that, always de
 | `NOTELIB_SOCIAL_CONTEXT_v1.0.md` | Content format and writing style rules for social posts. **Carries a "SUPERSEDED 2026-10-20" banner** — its 3-deliverable structure and `/collections` CTA conflict with the locked 4-deliverable workflow and `/explore` CTA in `docs/agents/gpt/NoteLib Marketing.md` §4/§13. Body kept as historical record, not rewritten. |
 | `GPT_MARKETER_PROMPT.txt` | Session-starter prompt for a marketing-focused GPT session. **Carries a "SUPERSEDED 2026-10-20" banner** — its load list still names `PROJECT_CONTEXT.md` and the now-deleted `MARKETING_STRATEGY.md`, and its post structure conflicts with the locked workflow. Use `docs/agents/gpt/NoteLib Marketing.md` §18's opening prompt instead. |
 
+**GPT Note Strategist context added 2026-11-07, corrected 2026-11-11 (the GPT role researches, proposes the Note list and reviews generated Notes; NoteLib generates the missing Notes; the Claude Note Strategist audits and builds the workbook):** the standing ChatGPT context for the academic and curriculum researcher and reviewer is `docs/agents/gpt/NoteLib Note Strategist.md` (with the process in `docs/playbooks/study-journey-playbook.md`). Paste it with `GPT_CONTEXT.md` and `REVIEW_SET_SHAPING_CONTEXT.md` instead of writing a long prompt per round.
+
 **Marketing context moved 2026-10-20.** `MARKETING_STRATEGY.md` and `NoteLib_Marketing_Strategist_Context_v2.md`
 (formerly listed here) were retired and consolidated into **`docs/agents/gpt/NoteLib Marketing.md`** —
 the current canonical marketing-strategist context, mirroring `NoteLib Product UX.md`'s pattern. Use that

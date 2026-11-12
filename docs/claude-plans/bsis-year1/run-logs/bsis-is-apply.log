@@ -1,0 +1,40 @@
+BSIS IS-applicability run, mode = commit
+BEGIN
+CREATE TABLE
+INSERT 0 5
+SELECT 5
+SELECT 1
+DO
+Preconditions P1-P8 passed.
+CREATE TABLE
+INSERT 0 5
+INSERTED ASSOCIATIONS (exact ids; expect 5 rows):
+            association_id            |                             title                             |               note_id                |          course_program_id           |          created_at           
+--------------------------------------+---------------------------------------------------------------+--------------------------------------+--------------------------------------+-------------------------------
+ 477dc673-797c-4991-881b-006ebb0c7d6e | Art, Popular Culture and Media in Contemporary Society        | 6256e54b-1501-44cf-abf3-88b2b4d67a0e | 338d3e66-fee4-4400-afa7-0af0931444c8 | 2026-11-06 10:21:28.744658+00
+ 0d2b0a7c-4ff9-40e2-89cf-ae931217ae7e | Emerging Technologies and Their Social Impacts                | 5e2a6baa-791f-4bfb-9b1b-b4317623cd0b | 338d3e66-fee4-4400-afa7-0af0931444c8 | 2026-11-06 10:21:28.744658+00
+ 1a000adf-b02d-4a0d-9148-8624a6d8ef34 | Film and Moving-Image Art                                     | 3b53ce07-08db-4fac-b4fe-8525462d74a5 | 338d3e66-fee4-4400-afa7-0af0931444c8 | 2026-11-06 10:21:28.744658+00
+ c857135e-ecf5-403d-b6b4-93e60556145d | Philippine Revolution and the First Philippine Republic       | 769cd008-4a48-4ac0-b47d-620cbc23ffc0 | 338d3e66-fee4-4400-afa7-0af0931444c8 | 2026-11-06 10:21:28.744658+00
+ 9219d5b1-f203-47eb-9897-45a7ab04266d | Spanish Colonization and Transformation of Philippine Society | 556e7dbe-c43f-41f2-8d3f-fd2c4434b9e1 | 338d3e66-fee4-4400-afa7-0af0931444c8 | 2026-11-06 10:21:28.744658+00
+(5 rows)
+
+DO
+Post-insert assertions passed (5 rows; programs = snapshot + Information Systems; global count +5; bodies, updated_at and Study Packs unchanged; held Note untouched).
+RESULT PER NOTE:
+                             title                             | program_count |                                                                                                         programs                                                                                                         
+---------------------------------------------------------------+---------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Art, Popular Culture and Media in Contemporary Society        |             3 | Computer Science, Information Systems, Information Technology
+ Emerging Technologies and Their Social Impacts                |             9 | Computer Science, Early Childhood Education, Elementary Education, Information Systems, Information Technology, Physical Education, Secondary Education, Special Needs Education, Technical-Vocational Teacher Education
+ Film and Moving-Image Art                                     |             3 | Computer Science, Information Systems, Information Technology
+ Philippine Revolution and the First Philippine Republic       |             9 | Computer Science, Early Childhood Education, Elementary Education, Information Systems, Information Technology, Physical Education, Secondary Education, Special Needs Education, Technical-Vocational Teacher Education
+ Spanish Colonization and Transformation of Philippine Society |             9 | Computer Science, Early Childhood Education, Elementary Education, Information Systems, Information Technology, Physical Education, Secondary Education, Special Needs Education, Technical-Vocational Teacher Education
+(5 rows)
+
+ROLLBACK STATEMENT, id-exact (SAVE THIS; use it ONLY after a COMMIT you want to undo; expect DELETE 5):
+                                                                                                                                                                                                                                                                                            rollback_statement                                                                                                                                                                                                                                                                                            
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ DELETE FROM note_course_program WHERE id IN ('0d2b0a7c-4ff9-40e2-89cf-ae931217ae7e'::uuid, '1a000adf-b02d-4a0d-9148-8624a6d8ef34'::uuid, '477dc673-797c-4991-881b-006ebb0c7d6e'::uuid, '9219d5b1-f203-47eb-9897-45a7ab04266d'::uuid, 'c857135e-ecf5-403d-b6b4-93e60556145d'::uuid) AND course_program_id = '338d3e66-fee4-4400-afa7-0af0931444c8' AND note_id IN ('5e2a6baa-791f-4bfb-9b1b-b4317623cd0b'::uuid, '3b53ce07-08db-4fac-b4fe-8525462d74a5'::uuid, '6256e54b-1501-44cf-abf3-88b2b4d67a0e'::uuid, '556e7dbe-c43f-41f2-8d3f-fd2c4434b9e1'::uuid, '769cd008-4a48-4ac0-b47d-620cbc23ffc0'::uuid);
+(1 row)
+
+COMMIT
+COMMITTED. Verify with the read-only queries below, and keep the log and the rollback statement above.

@@ -1,0 +1,187 @@
+{
+ "workbook_title": "BS Computer Engineering: Year 1 Study Journey",
+ "signoff_date": "2026-11-12",
+ "internal_line": "A curated Philippine Year 1 foundation for BS Computer Engineering, a NoteLib reference arrangement and not any institution's prospectus.",
+ "public": {
+  "title": "⚙️ BS Computer Engineering — 1st Year",
+  "description": "Build your Computer Engineering foundations through programming, mathematics, physics, chemistry, and electrical circuits. Explore how hardware and software work together, from the basics of computing to engineering problem-solving.",
+  "emoji": "⚙️",
+  "course_program": "Computer Engineering",
+  "journey_type": "Study Journey: a Year root with Subject Plans grouped by Academic Term",
+  "terms": [
+   "First Semester",
+   "Second Semester"
+  ]
+ },
+ "status": {
+  "academic": "APPROVED 2026-11-12 (GPT Note Strategist final sign-off); product-facing metadata refined 2026-11-12; owner review pending",
+  "generation": "NOT AUTHORIZED: a separately authorized pilot is required before bulk generation",
+  "publication": "NOT READY: nothing generated, no collection built, no tags decided; the owner authorizes the build and publication separately"
+ },
+ "plans": {
+  "1": {
+   "emoji": "🖥️",
+   "emoji_source": "new (proposed by the GPT Note Strategist)"
+  },
+  "2": {
+   "emoji": "💻",
+   "emoji_source": "new (proposed by the GPT Note Strategist); the same emoji is used by Introduction to Computing in other journeys"
+  },
+  "3": {
+   "emoji": "📈",
+   "emoji_source": "new (proposed by the GPT Note Strategist); the BSCS Precalculus preparatory plan also uses this emoji"
+  },
+  "4": {
+   "emoji": "🧪",
+   "emoji_source": "new (proposed by the GPT Note Strategist)"
+  },
+  "5": {
+   "emoji": "🪞",
+   "emoji_source": "preserved: established in BSCS, BSIT and BSIS Year 1"
+  },
+  "6": {
+   "emoji": "📊",
+   "emoji_source": "new (proposed by the GPT Note Strategist)"
+  },
+  "7": {
+   "emoji": "⚛️",
+   "emoji_source": "new (proposed by the GPT Note Strategist)"
+  },
+  "8": {
+   "emoji": "🧮",
+   "emoji_source": "preserved: established in BSIT Year 1 (the Strategist's 🔢 is not used)"
+  },
+  "9": {
+   "emoji": "⚡",
+   "emoji_source": "new (proposed by the GPT Note Strategist)"
+  },
+  "10": {
+   "emoji": "🧱",
+   "emoji_source": "new (proposed by the GPT Note Strategist)"
+  },
+  "11": {
+   "emoji": "📐",
+   "emoji_source": "preserved: established in BSCS, BSIT and BSIS Year 1"
+  }
+ },
+ "authored_depth": {
+  "BOARD_EXAM_REVIEW": [
+   "1074d3cb",
+   "11b0d8ef",
+   "5e0fb264",
+   "6e5a8d7f",
+   "7bc1214d",
+   "bde223c9",
+   "d8042c2f",
+   "dc08be8d"
+  ],
+  "(unset)": [
+   "02b797e0",
+   "0f37e7ca",
+   "0fdee8ee",
+   "124f7cd6",
+   "24e77b20",
+   "2cf5cdd3",
+   "4239bdee",
+   "435afd7e",
+   "45e55bac",
+   "50ee257b",
+   "5768ba6b",
+   "65b723f6",
+   "7b0df43e",
+   "80e2277d",
+   "8cab64e3",
+   "9714a5bd",
+   "99648408",
+   "9e14aecd",
+   "9f8f6767",
+   "a1fb1d72",
+   "a2a227b7",
+   "acd1073a",
+   "b57a7ec2",
+   "ce9ad9be",
+   "cf662729",
+   "dac28cb9",
+   "e6b8bb57",
+   "fc0f8a2d"
+  ]
+ },
+ "tag_program": "Computer Engineering",
+ "pilot": [
+  {
+   "plan": "Fundamentals of Electrical Circuits",
+   "title": "Node-Voltage Analysis",
+   "kind": "circuit analysis"
+  },
+  {
+   "plan": "Chemistry for Engineers",
+   "title": "The Mole and Stoichiometry",
+   "kind": "chemistry calculation"
+  },
+  {
+   "plan": "Physics for Engineers",
+   "title": "Kinematics in One Dimension",
+   "kind": "physics calculation"
+  }
+ ],
+ "issues": [
+  {
+   "issue": "The CHED CMOs 87 and 86 were not readable (HTTP 403); the PCU page was not readable. Only the UE page was read.",
+   "detail": "Course list, semester split and prerequisites are not verified against the CMO. The arrangement is a NoteLib reference, not a claim that CHED prescribes it.",
+   "action": "Owner may supply the PDFs; sign-off already given on this basis."
+  },
+  {
+   "issue": "REUSE_PENDING: two Calculus 1 Notes with math-rendering defects (they stay pending)",
+   "detail": "6e5a8d7f-c113-4153-b8df-5a342a59949e Limits and Continuity in Differential Calculus: doubled backslashes, formulas will not render. 8cab64e3-1c12-42ee-9899-115354d13253 Implicit Differentiation in Differential Calculus: a lost backslash leaves 'rac{dy}{dx}' in the Key Idea. Both are held by the public CELE Comprehensive Review, so a content correction is an owner-run SQL that also changes that set.",
+   "action": "Owner decides: fix, replace with a NEW Note, or accept. Not done in this workstream."
+  },
+  {
+   "issue": "Two BOARD_EXAM_REVIEW calculus Notes are reused unchanged",
+   "detail": "dc08be8d-e6c7-4ab7-b222-7152e45cdc7b Indefinite Integrals; d8042c2f-022d-4a9f-806e-75e21c27079e Definite Integrals. Authored Depth is NOT relabelled.",
+   "action": "None; preserved by decision."
+  },
+  {
+   "issue": "Reuse rows without the Computer Engineering program",
+   "detail": "{untagged} rows (see CpE Tag Gaps). Tagging is discovery-only and a separate owner-authorized metadata decision; do not tag automatically.",
+   "action": "Owner decides per Note."
+  },
+  {
+   "issue": "Generation-depth concern",
+   "detail": "{flagged} NEW Notes need worked methods or calculations that a title-only generator does not carry (the existing calculus Notes are rules-only outlines of about 2,000 characters).",
+   "action": "Run the separately authorized pilot first (Generation Pilot sheet)."
+  },
+  {
+   "issue": "Deferred, not generation candidates",
+   "detail": "Infinite Sequences and Series: Convergence Tests; Sinusoidal Signals and Phasors (EXCLUDED at sign-off). Linked List Operations in C++ (e1828d0c) EXCLUDED to keep a language-neutral DSA introduction.",
+   "action": "Revisit only with scope evidence."
+  },
+  {
+   "issue": "Overlaps accepted",
+   "detail": "583c82dc Algorithms and Their Properties (Big-O) vs c7ae7a94 Comparing Algorithm Efficiency Informally; 2ed3f9cd MMW Logic vs the Discrete Mathematics logic Notes; 5768ba6b derivative applications vs the dedicated related-rates and maxima Notes; d8042c2f Definite Integrals vs 9e14aecd the Fundamental Theorem.",
+   "action": "Accepted at sign-off."
+  },
+  {
+   "issue": "Not used",
+   "detail": "d50a303f-8467-4180-9555-86284cf5adaa 'Republic Act 8981: Philippine Professionalization Act for Engineers' is not in the target shape; its title may misstate the statute (unverified).",
+   "action": "Independent legal verification before any future reuse."
+  },
+  {
+   "issue": "Programs on NEW rows",
+   "detail": "Computer Engineering is the single proposed program; no new Domain Context is introduced. Every selected reuse Note has an explicit Domain Context, so adding a program later does not trigger the ADR-001 precondition.",
+   "action": "Owner authorizes any program change separately."
+  },
+  {
+   "issue": "Subject Plan emoji for Discrete Mathematics",
+   "detail": "The brief proposed 🔢; the plan exists in BSIT Year 1 as 🧮 Discrete Mathematics, so the established emoji is preserved. Programming Logic and Design uses 💻 (also Introduction to Computing elsewhere) and Calculus 1 uses 📈 (also the BSCS Precalculus preparatory plan).",
+   "action": "Owner may override; emoji are separate metadata, never part of a Note title."
+  }
+ ],
+ "internal_notes": [
+  "The CHED memoranda (CMO 87 and 86) could not be read; the semester arrangement is a NoteLib reference arrangement and is not a claim that CHED prescribes it.",
+  "No Note generation, Study Pack generation, SQL, metadata change, collection creation or publication is authorized by this workbook. The owner authorizes each separately and runs every production write.",
+  "Terms freeze at publication, and publishing cascades PUBLIC to every Subject Plan. Publish only after the per-plan placement check (expected versus actual by id, section and order; Excluded Notes absent; duplicates none) reads clean (BSIS decision D-58).",
+  "Authored Depth is one value per canonical Note across every collection that holds it. The calculus and mechanics Notes are held by the public CELE Comprehensive Review: never relabel them.",
+  "Emoji are separate metadata for the Study Journey and its Subject Plans. They are never part of a canonical Note title. Where a Subject Plan already exists in another published journey its established emoji is preserved (Understanding the Self, Mathematics in the Modern World, Discrete Mathematics).",
+  "Public titles use the pattern '[emoji] BS [Program] — 1st Year'. Already published journeys are not renamed by this workbook; aligning them is a separate consistency decision."
+ ]
+}

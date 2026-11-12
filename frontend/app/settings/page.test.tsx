@@ -262,6 +262,17 @@ describe("Settings page cancellation flow", () => {
     (downloadMyData as jest.Mock).mockResolvedValue({ filename: "notelib-export-2026-06-23.json" });
   });
 
+  it("loads Settings without invented prices when pricing fails", async () => {
+    (getBillingPricing as jest.Mock).mockRejectedValue(new Error("pricing unavailable"));
+    render(<SettingsPage />);
+    expect(await screen.findByRole("heading", { name: "Plan & Billing" })).toBeInTheDocument();
+    expect(screen.getAllByText("Monthly pricing unavailable").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /^3 months/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^1 year/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/₱\d/)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/[₱$£€]\s*\d/);
+  });
+
   it("shows the theme selector in Preferences", async () => {
     render(<SettingsPage />);
 

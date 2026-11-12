@@ -1,0 +1,47 @@
+BSIS plans course/program repair, mode = commit , target = information_systems
+BEGIN
+SELECT 1
+SELECT 11
+DO
+Preconditions P1-P8 passed.
+BEFORE:
+   course_program    | rows | is_root 
+---------------------+------+---------
+ NULL                |    1 | t
+ Accountancy         |    8 | f
+ Information Systems |    2 | f
+(3 rows)
+
+CREATE TABLE
+INSERT 0 9
+DO
+Post-update assertions passed (only course_program and updated_at changed; titles, terms, level, visibility, descriptions, items and membership untouched; the UPDATE is limited to the root and its own plans).
+CHANGED ROWS (exact ids):
+                  id                  |                 title                  | old_program 
+--------------------------------------+----------------------------------------+-------------
+ 5e3d92c3-0b8d-4d29-bee0-f51207348210 | 🎨 Art Appreciation                    | Accountancy
+ 27788999-e07f-469b-9c4c-8ddb6487a6cb | 🗄️ BS Information Systems — 1st Year    | NULL (root)
+ dc4fe663-41bd-4ce7-9b63-32a95419a510 | 🧠 Computer Programming 2              | Accountancy
+ eb371317-fa6d-41f9-8b96-3b1a0623b21f | 🏢 Fundamentals of Information Systems | Accountancy
+ 7e0bde40-9eef-4bcc-a1cf-72ab4d549ca6 | 📐 Mathematics in the Modern World     | Accountancy
+ 7b191996-f268-4f23-ba30-e781452c590f | 💬 Purposive Communication             | Accountancy
+ 757444e8-15ad-4dc8-a80e-df6f9d2ebce7 | 📜 Readings in Philippine History      | Accountancy
+ 479be092-5125-46bd-9463-62b0f3c5ea1a | 🌏 The Contemporary World              | Accountancy
+ 7cb546bc-0dc3-47dc-9466-d8a99e418aa3 | 🪞 Understanding the Self              | Accountancy
+(9 rows)
+
+AFTER:
+   course_program    | rows | is_root 
+---------------------+------+---------
+ Information Systems |    1 | t
+ Information Systems |   10 | f
+(2 rows)
+
+ROLLBACK STATEMENT, id-exact (SAVE THIS; only after a COMMIT you want to undo):
+                                                                                                                                                                                                                                                              rollback_statement                                                                                                                                                                                                                                                               
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ UPDATE note_collections SET course_program = CASE WHEN id = '27788999-e07f-469b-9c4c-8ddb6487a6cb' THEN NULL ELSE 'Accountancy' END, updated_at = now() WHERE id IN ('27788999-e07f-469b-9c4c-8ddb6487a6cb', '479be092-5125-46bd-9463-62b0f3c5ea1a', '5e3d92c3-0b8d-4d29-bee0-f51207348210', '757444e8-15ad-4dc8-a80e-df6f9d2ebce7', '7b191996-f268-4f23-ba30-e781452c590f', '7cb546bc-0dc3-47dc-9466-d8a99e418aa3', '7e0bde40-9eef-4bcc-a1cf-72ab4d549ca6', 'dc4fe663-41bd-4ce7-9b63-32a95419a510', 'eb371317-fa6d-41f9-8b96-3b1a0623b21f');
+(1 row)
+
+COMMIT
+COMMITTED. Keep this log. Tell Claude to re-read the plans.

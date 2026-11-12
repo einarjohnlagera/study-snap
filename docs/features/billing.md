@@ -11,6 +11,8 @@
 - Annual checkout grants `365` days of paid access
 - Renewal is manual; there is no recurring billing yet
 - Checkout pricing is loaded from backend billing config
+- Every frontend price comes from `GET /billing/pricing`; the homepage shows its plain monthly base amount only, while plan cards show an eligible intro reported by the backend for the viewer. No display price comes from static frontend configuration.
+- While pricing loads, price slots use a skeleton. If pricing fails, the homepage links to `/pricing`, while plan cards, the paywall, and Settings show “Monthly pricing unavailable”; Settings hides the pass-length selector.
 - Automatic intro offers and discounts use `discount_vouchers`
 - Voucher redemption history is written only after a successful `PAID` webhook
 - Paid-plan activation is webhook-confirmed only
@@ -92,7 +94,7 @@
 The Settings page (`/settings#plan-billing`) surfaces plan selection and billing history in one place:
 
 - **Monthly Usage** — progress bars for Study Packs, Quizzes, Exports, Adaptive Practice, Interview Practice, Long Exam, and Board Exam where available. Displays the limit-reached message inline; no inline upgrade button (the plan cards below are the upgrade path).
-- **Billing cycle toggle** — pill toggle between Monthly and Annual. Annual tab shows a savings badge (e.g. "Save 33%") computed from Pro annual vs. 12× monthly. Toggle always renders because Pro has annual pricing in all regions.
+- **Pass-length selector** — shows only cycles the backend marks available with an amount; savings use backend amounts. A pricing failure hides the selector.
 - **Plan cards** — three side-by-side cards (Free, Plus, Pro):
   - Current plan card shows a "Current plan" badge and a disabled "Current Plan" button.
   - Non-current paid plan cards show the current checkout CTAs used by the page:
@@ -100,8 +102,7 @@ The Settings page (`/settings#plan-billing`) surfaces plan selection and billing
     - `Go Pro`
     - `Go Pro Yearly` when annual Pro is selected
   - Pro card shows a "Most popular" badge when the user is not already on Pro.
-  - Plus Annual is not yet available; when Annual tab is selected, Plus card shows monthly price with a "Monthly billing only" note and the CTA still sends a MONTHLY checkout.
-  - Pro card sends YEARLY checkout when Annual tab is active and Pro annual is available.
+  - Plus uses the monthly pass. Pro sends YEARLY or EXAM_CYCLE checkout only when the backend makes that cycle available.
   - Active Plus or Pro users see a "Cancel plan" text link below the "Current Plan" button. The link opens the cancellation confirmation modal, which states the specific current-period end date when available. The link is hidden once cancellation is already scheduled; an "Access ends [date]" note appears instead, falling back to "Cancellation scheduled" only when no date is available.
 - **Checkout footer** — single-line note with provider, confirmation model, detected region/currency, and a link to `/refund` for cancellation and refund eligibility.
 - **Billing History** — subscription summary grid (plan, status, valid-until, billing cycle) and payment transaction table, unchanged from v0.11.0.
