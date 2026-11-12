@@ -24406,3 +24406,124 @@ prepared quiz" line on secondary notes.
   (`ChallengeVerifierPath.NONE`); verifier calls are logged under the `CRITIQUE` route.
 - Deferred to a later release: the "this note is also in another prepared quiz" line, and a second click on the same
   readiness notification does nothing.
+
+## v0.176.0 - Challenge Quiz Quality
+
+**Status: Released** (kicked off 2026-10-27 on `releases/v0.176.0`, cut from `main` at `06a09f7c` after `v0.175.0` merged as #1533; **closed 2026-10-28 on its branch; MERGED to `main` on 2026-11-10 inside #1547 (`842baab8`; draft #1538 closed as superseded; tag `v0.176.0` on its closing commit `5e2db468`); no production behavior change**; the evaluation outcome was HOLD, so this release changes no production behavior).
+
+Theme: Challenge Quiz should test meaningful understanding with accurate answers and believable distractors, without a difficulty
+setting or any new learner flow. A learner's feedback ("Distractors are easily spotted", "Too easy", 2026-10-23) led to a read-only audit
+that found the Challenge prompt carries no distractor rule and a bare, undefined difficulty word. This release improves **newly
+generated** questions, and only if an owner-run evaluation proves it safe.
+
+**⚠️ DEPLOY GATE:** this release is **on HOLD for deployment** until the operational gate below clears. Every `main` merge deploys, so
+nothing merges to `main` before the final deploy decision; the evaluation harness runs from this branch. A failed, incomplete or
+inconclusive evaluation means HOLD, with **no measurement-only deploy without separate owner approval** (Product UX, 2026-10-27).
+
+**Sources:**
+- Feature Planner's audit `docs/claude-findings/2026-10-26-challenge-quiz-quality-audit-distractors-and-difficulty.md` and Phase 1
+  proposal `docs/claude-plans/2026-10-26-challenge-quiz-quality-phase1-proposal.md` (both uncommitted in the shared checkout at kickoff; the
+  owner commits them from Feature Planner's session), which record the owner's 2026-10-27 approval of the exact prompt wording (Changes A, B, C),
+  the evaluation with a $4 generation cap run by the owner, and the reframed correctness criterion. I have the record, not the owner's own words.
+- This release's scope `docs/claude-plans/2026-10-26-challenge-quiz-quality-scope.md`, with Product UX's final review applied (its sections 7 and 8).
+- The deferred Board Exam / Long Exam follow-up scope `docs/claude-plans/2026-10-26-board-long-exam-follow-up-scope.md` (owner deferral,
+  2026-10-27: no paying learners yet).
+
+### Planned Scope
+
+1. **Evaluation harness (test scope). Tier N. `[✅ SHIPPED to the release branch: PR #1536 (harness), PR #1537 (batch builder follows the rubric for an invalid primary row)]`** Extends the existing Leg E (cell `S15`) with a quality mode: an alternate Challenge
+   prompt file (`challengeResources` replaces `challengeQuizDeveloperPromptTemplate`), five generation arms (current prompt on `gpt-4.1-mini`, Luna, Sol;
+   proposed prompt on Luna and Sol) plus a stock arm of about 100 Official template questions, with blind export, a leak check and a per-arm
+   prompt hash. Official notes only. No production code.
+2. **Evaluation run. Owner-run, no agent paid call. `[✅ DONE 2026-10-27, outcome HOLD: Sol fails G2, G3 and G5; see `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md`]`** **20 Official notes, 10 `COLLEGE` + 10 `BOARD_EXAM_REVIEW` by each note's own level** (owner decision, design A,
+   2026-10-27; each level at least 4 strata and 2 quantitative notes, overall at least 6 and 4), with template stock, all `hard` (cell `S15`),
+   one fresh 15-question start per note per arm, bank off, **$4 generation cap**. Blind Codex scoring (D11), independent Opus review of a stratified
+   sample including unflagged items against the source notes, disputes adjudicated. **Finalized gates (Luna and Sol judged separately, both must
+   pass):** G1 correctness (no more confirmed critical defects than the same-model current arm, zero attributable to the new wording; owner-approved);
+   G2 distractor plausibility at least 4.0 and at least +0.3; G3 mode alignment at least 4.0 of 5 (cognitive demand reported separately, no multi-step
+   requirement); G4 independently confirmed serious giveaways at most 5% of reviewed choice-based items with no recurring pattern (mechanical indicators
+   diagnostic only); G5 no format below 3.5 with at least 20 items; G6 collateral (clarity and faithfulness within 0.2, delivered count and retry rate
+   within 2 points, latency and tokens within 15%); G7 MULTI_SELECT cardinality and scoring unchanged; G8 inconclusive counts as not passing (a stratum
+   with fewer than 150 reviewed choice-based items is inconclusive). Feasibility is stated before the run: about 200 choice-based items per arm cannot
+   prove 5%, so G4 is applied to the observed rate with the interval reported.
+3. **Prompt change. Tier N code, gated by item 2. `[NOT SHIPPED: the gate did not pass (HOLD); the production prompt is unchanged]`** The single file `challenge-quiz-developer.txt` (Changes A, B, C as approved);
+   the Java `{DIFFICULTY}` substitution stays; the 10/12/15 counts are untouched. **The one-sentence reword in
+   `challenge-more-no-statement-pair-developer.txt` is DEFERRED** (it is pinned byte for byte to the owner-signed wording document by
+   `StatementPairProductionParityTest`, and the +5 exclusion switch is OFF, so the file is never sent). Tests: a prompt-contract test pinning the
+   MULTI_SELECT cardinality sentence, and a test that a normal +5 still uses the updated Challenge template. Update
+   `docs/features/challenge-quiz.md:238` and the "Balancing difficulty…" loading line (`quiz-generation-overlay.tsx:9`) under `VOICE_AND_TONE.md`.
+4. **Measurement log. Tier N. `[NOT BUILT: HOLD allows no measurement-only deploy without separate owner approval; awaiting the owner's decision]`** Extend `challenge_quiz_delivery_counts` with prior bank outcomes at delivery time (separate from the current
+   attempt), actual delivered counts, fresh versus bank or template reuse, and the model, with **unknown provenance kept as unknown**; no question text,
+   private-note content or unnecessary learner identifiers; a failure to log never affects correctness, availability or quota; a real-database or
+   log-contract test. It also makes the `model_used` read in the `[CHECKPOINT — due 2026-11-09]` row readable.
+5. **Backlog rows and checkpoints. Docs. `[done at kickoff, extended at signoff]`**
+
+**Owner decisions and corrections recorded 2026-10-27 (evaluation design).**
+- **Design A (owner):** 10 `COLLEGE` + 10 `BOARD_EXAM_REVIEW` notes by each note's own level; the difficulty stays `hard`. Gates are read **overall**; per-level results are
+  descriptive only (10 notes each).
+- **Why:** the prompt's `{LEARNER_LEVEL_GUIDANCE}` comes from `StudyPackGenerationContextResolver.effectiveCurriculumLevel`, which uses the **note's own level first**, so a viewer-level pin
+  only affects notes with no level. For `BOARD_EXAM_REVIEW` the guidance already says "plausible distractors, multi-step thinking". Real completed Challenge sessions run at
+  `BOARD_EXAM_REVIEW` for 128 of 215 (about 59%); the Official eligible pool is 875 `COLLEGE`, 447 `BOARD_EXAM_REVIEW`, 207 with no level.
+- **Correction:** Official template rows carry a **NULL** `generation_stamp` and are claimable (`findClaimableForUpdate`); an early draft of the selection filtered on the pack's current stamp and found only 33
+  notes in 4 strata. The corrected pool is 1,529 notes in 41 strata, and the per-level selection validated read-only against production (counts only): 10 + 10 notes, 12 strata, 4 quantitative.
+- **The drift guard must be retired or updated by item 3.** `ChallengeQualityPromptGuardTest` pins production's current prompt hash, so the prompt-change commit breaks it by design.
+- **Spend stops (README run sheet):** smoke 0.33 + full 3.28 = 3.61, worst case about 3.95 under the $4 cap; the Sol full stops are 1.40 against an expected spend of about $1.20 per Sol arm.
+- **Scoring rubric v3 (SIGNED and frozen 2026-10-27, with its pre-registration committed before any paid call):** `docs/claude-plans/2026-10-27-challenge-quiz-quality-scoring-rubric.md`. Product UX's three decisions and four sign-offs of 2026-10-27 (relayed by the owner) are in it: grounding is
+  scored against the generator's inputs (summary and key concepts) with the full note as a consistency safeguard; **G4 decides on a sampling-adjusted estimate** (at most 5%, 90% one-sided bound, `UL` at most 10% as a tolerance,
+  at least 60 randomly sampled unflagged items per arm stratified across notes and formats, 3-items-across-2-notes pattern rule, `N` at least 150); a **missed critical defect in a proposed arm triggers a whole-arm independent
+  re-review**; the **wording-sensitive regression rule** (excess over the same-model current arm for four defect types; a mechanical screen, not proof of causation); **G7 tolerance 10 percentage points**, absolute. Denominators and
+  missing-data handling were written by the Release Implementor and are not separately signed.
+- **Done before the paid run (kept for the record):** the owner signed and froze the rubric (its SHA-256, the 20 pack ids, the SHA-256 of `quality-e.jsonl`, the review-order seed and the gate calculator's commit SHA are committed to a
+  pre-registration file on this branch before the first paid command; the review-order manifest hash follows as an addendum after generation and before scoring).
+
+**Operational deployment gate (Product UX, 2026-10-27):** the four Postgres signal-9 kills that followed four deploys are investigated before any
+production approval: cause and current database health (the `[CHECKPOINT — due cache deploy + 7 days]` read of 2026-11-01 is the first input),
+capacity and pre-deploy health checks, a documented rollback and recovery, and post-deploy checks of the core quiz and study flows. A single deploy
+reduces exposure but does not resolve the risk; **unexplained with no credible recovery plan means HOLD.**
+
+**Not in this release:** a learner-facing difficulty selector; any change to the 10/12/15 counts; Phase 2 outcome-aware bank selection and Phase 3
+per-question reporting (indexed as Backlog rows); a difficulty-aware bank (it needs a migration); mass regeneration; Board Exam and Long Exam; pricing,
+quota or entitlement; the +5 reword; retiring `resolveGenerationProfile` or the stored difficulty label.
+
+**Verification tier:** about four code and test items, and the risky one (the prompt) is gated by the evaluation rather than by code review.
+`advisor()` before the harness brief and on the diff, a real-PostgreSQL or log-contract test for item 4, and a scoped cold agent only if item 3 or 4
+touches a shared method beyond the log line.
+
+**Kickoff scan (2026-10-27):**
+- **Docs carried in.** The diffs of PR #1534 (dated checkpoints) and PR #1535 (deploy state of `v0.173.0` to `v0.175.0`) were applied inside this
+  kickoff commit, as the owner chose (no extra deploys). Their PRs are closed with a note, unmerged.
+- **Production facts re-read before carrying them in:** no Render deploy since `v0.175.0` (2026-10-26T14:56 to 14:58Z) and one Postgres signal-9 kill
+  since (14:58:07Z, during that deploy), so "4 of 4 deploys followed by a kill" stands.
+- `v0.170.0` was archived from `RELEASES.md` and the ROADMAP baseline (verified verbatim at the end of each archive); the `RELEASES_ARCHIVE.md`
+  header now also names `v0.169.0` (moved at the `v0.175.0` kickoff, omitted from it then).
+- **Planning files with no Backlog row:** 7 `v0.175.0` files are now indexed in its Backlog row (two are one-off Product UX consultation prompts, the
+  release-artifact exemption). The Challenge quality files and the deferred Board/Long Exam scope each have a row.
+- **Checkpoint scan, carried unread, not actioned at this kickoff.** Crude filter (a dated `[CHECKPOINT — due …]` title in the past, with no
+  `✅`, `READ`, `CLOSED` or similar marker in its title or the first 400 characters of its Status): **10 of 36 past-due rows** (`v0.111.0` and
+  `v0.96.0` of 2026-09-28; the public-read pool row of 10-07; `v0.106.0`, `v0.107.0`, `v0.90.0`, `v0.97.0` of 10-13; `v0.166.0` Hikari of 10-14;
+  RC-3's reminder of 10-21; the bulk-notification read of 10-25), plus five rows due today (`v0.91.0` to `v0.95.0`). The filter overcounts. Rows
+  due inside this release are `[CHECKPOINT — due 2026-10-29]` (the cutoff variable, reported set by the owner), the cache read of 2026-11-01, and
+  the `v0.174.0` and `v0.175.0` reads of 2026-11-08 and 2026-11-09.
+
+Anti-drift: no learner-facing difficulty selection; no change to the 10/12/15 question counts; no Phase 2 or Phase 3 implementation; no mass
+regeneration or bank migration; Board Exam and Long Exam untouched; no pricing, quota or entitlement change; customer copy never names a model and
+implies no plan quality difference; **no production prompt change before the evaluation passes for both Luna and Sol and the owner gives final
+approval**; the +5 signed-prompt file, its parity test and the three verifier switches (all OFF) are untouched; **no deployment is authorized by any
+review so far**; feature PRs never edit this file.
+
+### Shipped
+
+- **Evaluation harness and method (test scope, no production code).** `QualityEvaluation*`, the blind export, the review plan, the review-batch builder and the offline gate report under `backend/src/test/java/com/studysnap/backend/benchmark/` (PR #1536; PR #1537 fixed the batch builder so an invalid primary row marks only that arm incompletely scored). Rubric signed and pre-registered, with Amendments 1 to 4 and Addenda A to D recording every deviation.
+- **Evaluation result (2026-10-27): HOLD.** 20 Official notes, five generation arms plus stock, 1,600 blind questions, Codex primary scoring, 497 items independently re-scored by cold Opus reviewers, 144 disagreements adjudicated; about $3.03 spent of the $4 cap. **Sol, proposed against current prompt: G1 PASS, G2 FAIL (distractors 3.59 against 3.75), G3 FAIL (mode alignment 3.81 against 4.23), G4 PASS, G5 FAIL, G6 to G8 PASS.** The proposed wording reduced giveaways but made questions easier. Both models must pass, so HOLD; Luna's proposed arm was deliberately not interpreted (a whole-arm re-review could not change the outcome). **The prompt change (item 3) is not shipped and the production prompt is unchanged.**
+- **Product finding for the owner:** on today's prompt Luna (free plan) scored distractors 3.23, mode alignment 3.36, a 10.5% giveaway estimate and 5 confirmed critical defects, against Sol's 3.75, 4.23, 4.5% and 0 (internal only; customer copy still never names a model). Full report: `docs/claude-plans/2026-10-27-challenge-quiz-quality-evaluation-report.md`.
+- **Not shipped:** item 3 (prompt change, gate failed), item 4 (measurement log, awaiting the owner's decision), and no deploy of any kind.
+
+### Signoff record (2026-10-28)
+
+- **Scope completeness.** Item 1 shipped: the harness (`backend/src/test/java/com/studysnap/backend/benchmark/`, PR #1536) and the batch-builder fix (`QualityReviewBatches.java`, PR #1537). Item 2 done: pre-registration `docs/claude-plans/2026-10-27-challenge-quiz-quality-preregistration.md` and gate report `gates.json` (SHA-256 `fc6875e7…`), outcome HOLD. Item 3 **not shipped**: the gate failed; it lives on as the candidate row "Challenge Quiz Luna-first quality follow-up" in the Backlog. Item 4 **not built**: HOLD allows no measurement-only deploy without separate owner approval (owner chose to leave it unbuilt, 2026-10-28). Item 5 done.
+- **Feature-doc drift.** No feature doc was touched and no behavior changed (`git diff origin/main...HEAD` shows nothing under `backend/src/main` or any frontend source), so there is nothing to re-read; `docs/features/challenge-quiz.md:238` is unchanged because the prompt change did not ship.
+- **Backlog closure.** The Challenge quality row is marked EVALUATED: HOLD with the evidence; a new candidate row indexes the follow-up; Phase 2, Phase 3 and the Board/Long Exam deferral rows are unchanged.
+- **Checkpoint gate.** Nothing shipped ahead of its own evidence (no production change), so no new `[CHECKPOINT]` row is owed. Existing checkpoints are unchanged (2026-10-29 cutoff variable, 2026-11-01 cache and kill read, 2026-11-08 and 2026-11-09 model reads).
+- **Pre-signoff check.** The "delivery introduced a defect the same session then fixed" trigger fired (the batch-builder abort and a wrong "all rows valid" claim, both corrected in the pre-registration). One scoped cold claim-checker (Sonnet) tried to falsify 8 claims of the evaluation report against the real files: **all 8 held**; it found four wording imprecisions in the report, all corrected. Mutation checks were run on the late harness rounds (round 5: 7 mutants, round 6: 5 mutants) and every mutant was killed by a named test.
+- **Known limitations, carried.** 20 notes and one start per arm; model reviewers only, no human review; reviewer isolation by scratch directory and self-report, weaker than the command-transcript audit used for the primary pass; G5 is harsh by construction and should be reworded before a rerun; the test cannot attribute the drop to Change A, B or C; Luna's proposed arm (B2) was deliberately not interpreted and the 300-item whole-arm re-review was not run (it could not change the outcome); the `gpt-4.1-mini` arm is incompletely scored (2 rows) and is no gate's arm; the orchestrator once printed Luna's failed-gate list it had said would stay uninterpreted; **the 20% missing-telemetry threshold is hard-coded (`>.20`) in `QualityGateReport.java:563` and not a named constant in `QualityGateParameters`** as the Round 3 acceptance criteria required (it matches the signed value and changed no verdict).
+- **Handoff.** `releases/v0.176.0` is closed and **not merged to `main`** (no production change; the deploy gate and the unexplained Postgres kills stand). **A held draft PR keeps the diff visible: #1538 (`DO NOT MERGE`, draft so it cannot be merged by accident; mergeable against `main` at 2026-10-28).** The next release is cut from this branch, as `v0.175.0` was cut from `v0.174.0`. Private evaluation data stays git-ignored under `backend/target/llm-benchmark/` with a backup at `~/quality-eval-v0176-backup/`; **do not run `./mvnw clean` until it is archived.**

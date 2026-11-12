@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.181.0 - Affordable NoteLib` (Released (code sign-off 2026-11-12); release candidate approved; deployment pending; kicked off 2026-11-11 on `releases/v0.181.0`, cut from `main` at `d5eaf383` after `v0.180.0` was merged (#1575) and deployed (T0 2026-11-11T10:59:58Z, stabilization pending); frontend only, two separately authorized deployments (the frontend merge, then the owner's Render environment save at least 24 hours later), built, merged (#1577, #1578, #1579) and verified, nothing deployed; every frontend price comes from the backend pricing API, `backend/pom.xml` is not bumped)
+Current release baseline: `v0.182.0 - Remaining Interactive LLM Migration` (In Progress; kicked off 2026-11-12 on `releases/v0.182.0`, stacked on `releases/v0.181.0` at `7b5d2c53` (`v0.181.0` is code signed off, release candidate approved, deployment pending, not merged to `main`); a backend release, `backend/pom.xml` bumped to `0.182.0`; preregister acceptance criteria before any comparison, then an owner-run benchmark, a per-workflow decision and the owner's attended environment saves; nothing implemented yet and no production model switch authorized)
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
