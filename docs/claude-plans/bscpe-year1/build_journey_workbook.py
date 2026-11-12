@@ -5,8 +5,11 @@
         --shaping ../../curriculum/bscpe-year1-shaping.tsv --metadata bscpe-year1-publication-metadata.json \
         --out ../../curriculum/bscpe-year1-study-plan-target-shape.xlsx
 
+--shaping is an OUTPUT: the 10-column builder TSV, written from the reconciled TSV and the metadata (Subject Plan names
+carry their emoji, the established convention of the BSCS, BSIT and BSIS workbooks; Note titles never do).
+
 Needs openpyxl (use a venv). It never edits a workbook by hand: it
-  1. runs the SHARED builder docs/curriculum/build_review_set_workbook.py on the shaping TSV (standard layout);
+  1. writes the builder TSV and runs the SHARED builder docs/curriculum/build_review_set_workbook.py on it (standard layout);
   2. rewrites the Overview with a Publication Metadata section, per-plan emoji fields and separate internal notes;
   3. adds the sheets the shared builder cannot carry yet: Sign-off and Readiness, Note Register, Issues and Conditions,
      CpE-style Tag Gaps, Generation Pilot (all driven by the reconciled TSV and the metadata file).
@@ -49,6 +52,18 @@ def head(ws, row, labels):
 def widths(ws, ws_widths):
     for i, w in enumerate(ws_widths, 1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+
+def write_shaping(rows, meta, path):
+    """The shared builder's 10-column input. Plan names get their emoji prefix (separate metadata, one source); Note titles are untouched."""
+    m = {"REUSE_VERIFIED": "Reuse", "REUSE_PENDING": "Reuse", "NEW": "New", "EXCLUDED": "Excluded"}
+    cols = ["plan_no", "subject_plan", "plan_description", "section", "note_title", "note_subject", "domain_context", "applicable_programs", "status", "academic_term"]
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f, delimiter="\t", lineterminator="\n"); w.writerow(cols)
+        for r in rows:
+            plan = f"{meta['plans'][r['plan_no']]['emoji']} {r['subject_plan']}"
+            w.writerow([r["plan_no"], plan, r["plan_description"], r["section"], r["note_title"], r["note_subject"], r["domain_context"] or "(unset)",
+                        r["applicable_programs"], m[r["status"]], r["academic_term"]])
 
 
 def validate(meta, rows):
@@ -131,15 +146,15 @@ def rebuild_overview(wb, meta, rows, plans, terms, cnt):
     hdr = 6 + k
     ws.freeze_panes = "A%d" % (hdr + 1)
     src = ws.cell(row=hdr, column=10)
-    for col, (label, w) in enumerate([("Emoji", 8), ("Public plan title (emoji + title)", 46), ("Emoji source", 42)], 11):
+    for col, (label, w) in enumerate([("Emoji (separate field)", 12), ("Emoji source", 46)], 11):
         c = ws.cell(row=hdr, column=col, value=label); c.fill = copy(src.fill); c.font = copy(src.font); c.alignment = copy(src.alignment); c.border = copy(src.border)
         ws.column_dimensions[c.column_letter].width = w
     for r in range(hdr + 1, ws.max_row + 1):
         no = ws.cell(row=r, column=1).value
         if no is None or str(no) not in meta["plans"]: continue
         p = meta["plans"][str(no)]; title = plans[str(no)]
-        ws.cell(row=r, column=11, value=p["emoji"]); ws.cell(row=r, column=12, value=f"{p['emoji']} {title}"); ws.cell(row=r, column=13, value=p["emoji_source"])
-        for col in (11, 12, 13): ws.cell(row=r, column=col).alignment = WRAP
+        ws.cell(row=r, column=11, value=p["emoji"]); ws.cell(row=r, column=12, value=p["emoji_source"])
+        for col in (11, 12): ws.cell(row=r, column=col).alignment = WRAP
     # internal notes, separate from the public text
     r0 = ws.max_row + 2
     ws.cell(row=r0, column=1, value="INTERNAL NOTES (never public): reference-arrangement disclaimer and operational warnings").fill = H_FILL
@@ -157,6 +172,7 @@ def main():
     rows = list(csv.DictReader(open(a.recon), delimiter="\t"))
     meta = json.load(open(a.metadata))
     plans, terms = validate(meta, rows)
+    write_shaping(rows, meta, a.shaping)
     subprocess.run([sys.executable, BUILDER, a.shaping, a.out, meta["workbook_title"], meta["internal_line"]], check=True)
     wb = load_workbook(a.out)
     cnt = collections.Counter(r["status"] for r in rows)
