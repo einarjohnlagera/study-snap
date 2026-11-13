@@ -36,7 +36,13 @@ final class StageRunner {
         }
     }
     record AttemptRef(String generationId, int attempt) {}
-    record CallResult(boolean delivered, Set<AttemptRef> parseSchemaFailures, String failureClass) {}
+    record CallResult(boolean delivered, Set<AttemptRef> parseSchemaFailures, String failureClass,
+                      List<String> callGroupIds, Set<Integer> parseFailureCallIndices,
+                      List<AttemptOutcome.Kind> signalKinds, List<Integer> signalAttempts) {
+        CallResult(boolean delivered, Set<AttemptRef> parseSchemaFailures, String failureClass) {
+            this(delivered, parseSchemaFailures, failureClass, List.of(), Set.of(), List.of(), List.of());
+        }
+    }
     interface CaseCall {
         String id();
         String cellId();
@@ -147,10 +153,26 @@ final class StageRunner {
             }
             List<MeteringInterceptor.Call> newCalls = path.calls().subList(before, path.calls().size());
             Set<AttemptRef> parseFailures = result == null ? Set.of() : result.parseSchemaFailures();
-            List<AttemptOutcome> attempts = newCalls.stream().map(call -> AttemptOutcome.from(call,
-                    parseFailures.contains(new AttemptRef(call.generationId(), call.attempt())))).toList();
+            List<AttemptOutcome> attempts = new ArrayList<>();
+            for (int index = 0; index < newCalls.size(); index++) {
+                MeteringInterceptor.Call call = newCalls.get(index);
+                boolean parseFailure = parseFailures.contains(new AttemptRef(call.generationId(), call.attempt()))
+                        || result != null && result.parseFailureCallIndices().contains(index);
+                AttemptOutcome original = AttemptOutcome.from(call, parseFailure);
+                String groupId = result != null && index < result.callGroupIds().size()
+                        ? result.callGroupIds().get(index) : original.generationId();
+                AttemptOutcome.Kind signalKind = result != null && index < result.signalKinds().size()
+                        ? result.signalKinds().get(index) : AttemptOutcome.Kind.OK;
+                AttemptOutcome.Kind kind = signalKind == AttemptOutcome.Kind.OK ? original.kind() : signalKind;
+                int signalAttempt = result != null && index < result.signalAttempts().size()
+                        ? result.signalAttempts().get(index) : original.attempt();
+                attempts.add(new AttemptOutcome(groupId, signalAttempt, kind,
+                        original.parseSchemaFailure(), original.conservativeUsd(), original.billedUsd()));
+            }
             boolean stoppedBeforeCompletion = ledger.stopped()
                     && !("Three consecutive HTTP errors".equals(ledger.stopReason()) && result == null);
+            if (result != null && "INCONCLUSIVE_SIGNAL_MISMATCH".equals(result.failureClass()))
+                stoppedBeforeCompletion = true;
             String failureClass = result != null ? result.failureClass() : failure;
             outcomes.add(CaseArmOutcome.classify(item.id(), attempts,
                     result != null && result.delivered(), stoppedBeforeCompletion, failureClass));
