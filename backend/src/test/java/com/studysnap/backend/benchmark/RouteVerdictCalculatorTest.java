@@ -344,7 +344,8 @@ class RouteVerdictCalculatorTest {
                 oldAsk.sharedT3(), 1, oldAsk.baselineOnlyT2(), oldAsk.sharedT2(),
                 oldAsk.candidateOnlyT1(), oldAsk.baselineOnlyT1(), oldAsk.sharedT1(),
                 3, false, false,
-                oldAsk.candidateComponents(), oldAsk.baselineComponents(), oldAsk.subgroups(), p.sha256, oldAsk.missingPairs());
+                oldAsk.candidateComponents(), oldAsk.baselineComponents(), oldAsk.subgroups(), p.sha256, oldAsk.missingPairs(),
+                Set.of());
         Map<String, RouteVerdictCalculator.WorkflowReport> workflows = new HashMap<>(pass.workflows());
         workflows.put(ASK, failedAsk);
         RouteVerdictCalculator.RouteReport t2Fail = new RouteVerdictCalculator.RouteReport(

@@ -6,7 +6,8 @@ final class DeadlineRule {
     enum Classification { LUNA_FALLBACK_ELIGIBLE, RETURN_TO_OWNER, BENCHMARK_PASS }
 
     static Classification classify(RouteVerdictCalculator.RouteReport report) {
-        if (report.failedTiers().contains(RouteVerdictCalculator.Tier.T1)
+        if (!report.undisposedCriticalCaseIds().isEmpty()
+                || report.failedTiers().contains(RouteVerdictCalculator.Tier.T1)
                 || report.failedTiers().contains(RouteVerdictCalculator.Tier.T2)
                 || report.isolatedCriticalIncident()) return Classification.RETURN_TO_OWNER;
         if (report.verdict() == RouteVerdictCalculator.Verdict.INCONCLUSIVE

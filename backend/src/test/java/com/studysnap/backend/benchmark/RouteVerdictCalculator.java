@@ -17,6 +17,12 @@ final class RouteVerdictCalculator {
     static final class InvalidCaseSet extends RuntimeException {
         InvalidCaseSet(String message) { super(message); }
     }
+    static final class InvalidOwnerDisposition extends RuntimeException {
+        InvalidOwnerDisposition(String message) { super(message); }
+    }
+    enum DispositionValue { NOT_A_DEFECT_ON_REVIEW, DEFECT_ACKNOWLEDGED, DEFECT_BLOCKS_ROUTE }
+    enum DispositionReason { REVIEWED_NOT_DEFECT, ACKNOWLEDGED_FOR_MITIGATION, BLOCKING_CORRECTNESS }
+    record OwnerDisposition(String workflow, String caseId, DispositionValue value, DispositionReason reasonCode) {}
     enum Verdict { PASS, FAIL, INCONCLUSIVE }
     enum Evidence { SCORED, MISSING, UNMETERED, UNSCORABLE }
     enum Tier { T1, T2, T3 }
@@ -50,19 +56,39 @@ final class RouteVerdictCalculator {
                           boolean isolatedCriticalIncident, boolean protocolDeviation,
                           Map<String, Integer> candidateComponents,
                           Map<String, Integer> baselineComponents,
-                          Map<String, SubgroupReport> subgroups, String parameterSha256, int missingPairs) {}
+                          Map<String, SubgroupReport> subgroups, String parameterSha256, int missingPairs,
+                          Set<String> undisposedCriticalCaseIds) {}
     record RouteReport(Verdict verdict, Set<Tier> failedTiers, Set<Tier> inconclusiveTiers, int d,
                        boolean isolatedCriticalIncident, String parameterSha256,
-                       Map<String, WorkflowReport> workflows) {}
+                       Map<String, WorkflowReport> workflows) {
+        Map<String, Set<String>> undisposedCriticalCaseIds() {
+            Map<String, Set<String>> result = new LinkedHashMap<>();
+            workflows.forEach((workflow, report) -> {
+                if (!report.undisposedCriticalCaseIds().isEmpty())
+                    result.put(workflow, report.undisposedCriticalCaseIds());
+            });
+            return Collections.unmodifiableMap(result);
+        }
+    }
 
     static RouteReport calculate(FrozenGateParameters parameters, String route,
                                  Map<String, Set<String>> frozenCaseIds,
                                  List<CaseRecord> cases,
                                  Map<String, List<ReserveCase>> reserves,
                                  Map<String, Boolean> compatibilitySuites) {
+        return calculate(parameters, route, frozenCaseIds, cases, reserves, compatibilitySuites, List.of());
+    }
+
+    static RouteReport calculate(FrozenGateParameters parameters, String route,
+                                 Map<String, Set<String>> frozenCaseIds,
+                                 List<CaseRecord> cases,
+                                 Map<String, List<ReserveCase>> reserves,
+                                 Map<String, Boolean> compatibilitySuites,
+                                 List<OwnerDisposition> dispositions) {
         cases = cases == null ? List.of() : cases;
         reserves = reserves == null ? Map.of() : reserves;
         compatibilitySuites = compatibilitySuites == null ? Map.of() : compatibilitySuites;
+        dispositions = dispositions == null ? List.of() : dispositions;
         FrozenGateParameters.Route routeValues = parameters.routes.get(route);
         if (routeValues == null) throw new InvalidCaseSet("Unknown route: " + route);
         validateFrozen(parameters, route, frozenCaseIds);
@@ -85,6 +111,16 @@ final class RouteVerdictCalculator {
         for (String reserveWorkflow : reserves.keySet())
             if (!routeValues.workflows().contains(reserveWorkflow))
                 throw new InvalidCaseSet("Unknown reserve workflow");
+        Map<String, Map<String, OwnerDisposition>> dispositionsByWorkflow = new HashMap<>();
+        for (OwnerDisposition disposition : dispositions) {
+            if (disposition == null || !routeValues.workflows().contains(disposition.workflow())
+                    || disposition.caseId() == null || disposition.caseId().isBlank()
+                    || disposition.value() == null || disposition.reasonCode() == null)
+                throw new InvalidOwnerDisposition("Invalid owner disposition");
+            if (dispositionsByWorkflow.computeIfAbsent(disposition.workflow(), unused -> new HashMap<>())
+                    .putIfAbsent(disposition.caseId(), disposition) != null)
+                throw new InvalidOwnerDisposition("Duplicate owner disposition");
+        }
         Map<String, WorkflowReport> reports = new LinkedHashMap<>();
         Set<Tier> routeFailures = new LinkedHashSet<>();
         Set<Tier> routeInconclusive = new LinkedHashSet<>();
@@ -95,7 +131,8 @@ final class RouteVerdictCalculator {
         for (String workflow : routeValues.workflows()) {
             WorkflowReport report = workflow(parameters, workflow, frozenCaseIds.get(workflow),
                     byWorkflow.getOrDefault(workflow, List.of()), reserves.get(workflow),
-                    compatibilitySuites.get(workflow));
+                    compatibilitySuites.get(workflow),
+                    dispositionsByWorkflow.getOrDefault(workflow, Map.of()));
             reports.put(workflow, report);
             totalD += report.d();
             totalMissing += report.missingPairs();
@@ -132,7 +169,7 @@ final class RouteVerdictCalculator {
 
     private static WorkflowReport workflow(FrozenGateParameters p, String name, Set<String> frozen,
                                            List<CaseRecord> cases, List<ReserveCase> reserve,
-                                           Boolean suitePassed) {
+                                           Boolean suitePassed, Map<String, OwnerDisposition> dispositions) {
         Set<Tier> failures = new LinkedHashSet<>();
         Set<Tier> unresolved = new LinkedHashSet<>();
         boolean incomplete = cases.size() != frozen.size() || suitePassed == null;
@@ -143,6 +180,7 @@ final class RouteVerdictCalculator {
         int candidateT1 = 0, baselineT1 = 0, sharedT1 = 0;
         int unusable = 0;
         int included = 0;
+        Set<String> candidateOnlyCriticalIds = new LinkedHashSet<>();
         Map<String, Integer> candidateComponents = new LinkedHashMap<>();
         Map<String, Integer> baselineComponents = new LinkedHashMap<>();
         Map<String, MutableGroup> groups = new LinkedHashMap<>();
@@ -194,7 +232,10 @@ final class RouteVerdictCalculator {
             if (c3 && !b3) candidateT3++;
             if (b3 && !c3) baselineT3++;
             if (b3 && c3) sharedT3++;
-            if (c2 && !b2) candidateT2++;
+            if (c2 && !b2) {
+                candidateT2++;
+                candidateOnlyCriticalIds.add(record.id());
+            }
             if (b2 && !c2) baselineT2++;
             if (c2 && b2) sharedT2++;
             if (group != null) {
@@ -212,6 +253,14 @@ final class RouteVerdictCalculator {
                 && unusable / (double) cases.size() >= p.unusableFraction) failures.add(Tier.T1);
         int reserveCandidateOnly = 0;
         boolean deviation = candidateT2 == 0 && reserve != null;
+        Set<String> reserveIds = new HashSet<>();
+        if (reserve != null) for (ReserveCase item : reserve) {
+            if (item == null || item.id() == null || !reserveIds.add(item.id()) || frozen.contains(item.id()))
+                throw new InvalidCaseSet("Duplicate or overlapping reserve case");
+            if (item.candidateEvidence() == Evidence.SCORED && item.baselineEvidence() == Evidence.SCORED
+                    && item.candidateCritical() && !item.baselineCritical())
+                candidateOnlyCriticalIds.add(item.id());
+        }
         if (candidateT2 > 0) {
             if (reserve == null || reserve.size() != p.reserveSize) {
                 incomplete = true;
@@ -219,10 +268,7 @@ final class RouteVerdictCalculator {
             }
             else {
                 boolean reserveComplete = true;
-                Set<String> reserveIds = new HashSet<>();
                 for (ReserveCase item : reserve) {
-                    if (item.id() == null || !reserveIds.add(item.id()) || frozen.contains(item.id()))
-                        throw new InvalidCaseSet("Duplicate or overlapping reserve case");
                     if (item.baselineEvidence() != Evidence.SCORED
                             || item.candidateEvidence() != Evidence.SCORED) reserveComplete = false;
                     if (item.candidateCritical() && !item.baselineCritical()) reserveCandidateOnly++;
@@ -233,6 +279,17 @@ final class RouteVerdictCalculator {
                 }
                 if (reserveComplete && reserveCandidateOnly >= p.t2FailCount) failures.add(Tier.T2);
             }
+        }
+        for (String caseId : dispositions.keySet())
+            if (!candidateOnlyCriticalIds.contains(caseId))
+                throw new InvalidOwnerDisposition("Disposition is not for a candidate-only critical case");
+        if (dispositions.values().stream().anyMatch(item -> item.value() == DispositionValue.DEFECT_BLOCKS_ROUTE))
+            failures.add(Tier.T2);
+        Set<String> undisposed = new LinkedHashSet<>(candidateOnlyCriticalIds);
+        undisposed.removeAll(dispositions.keySet());
+        if (!undisposed.isEmpty()) {
+            incomplete = true;
+            unresolved.add(Tier.T2);
         }
         Map<String, SubgroupReport> subgroupReports = new LinkedHashMap<>();
         for (Map.Entry<String, MutableGroup> entry : groups.entrySet()) {
@@ -253,7 +310,8 @@ final class RouteVerdictCalculator {
                 candidateT1, baselineT1, sharedT1,
                 reserveCandidateOnly, candidateT2 > 0 && !failures.contains(Tier.T2), deviation,
                 Map.copyOf(candidateComponents), Map.copyOf(baselineComponents),
-                Collections.unmodifiableMap(subgroupReports), p.sha256, frozen.size() - included);
+                Collections.unmodifiableMap(subgroupReports), p.sha256, frozen.size() - included,
+                Collections.unmodifiableSet(new LinkedHashSet<>(undisposed)));
     }
 
     private record ArmResolution(boolean incomplete, boolean confirmedT1, Set<String> components,
