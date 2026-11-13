@@ -147,7 +147,8 @@ final class StageRunner {
                 path.begin(item.generationId(), item.cellId());
                 result = item.execute(client, properties, path);
             } catch (Exception ex) {
-                failure = ex instanceof ArmAssertingInterceptor.ArmMismatch ? "ARM_MISMATCH" : "HTTP_ERROR";
+                failure = ex instanceof AbstractClassBAdapter.InputDefect ? "INPUT_DEFECT"
+                        : ex instanceof ArmAssertingInterceptor.ArmMismatch ? "ARM_MISMATCH" : "HTTP_ERROR";
             } finally {
                 path.end();
             }
