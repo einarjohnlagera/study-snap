@@ -1,6 +1,6 @@
 {
   "routes": {
-    "INTERACTIVE_QUIZ": {"margin": 10, "workflows": ["NOTE_ADAPTIVE", "PLAN_ADAPTIVE", "TEACHER_QUIZ", "BOARD_EXAM", "LONG_EXAM", "STUDY_TIP"]},
+    "INTERACTIVE_QUIZ": {"margin": 11, "workflows": ["NOTE_ADAPTIVE", "PLAN_ADAPTIVE", "TEACHER_QUIZ", "BOARD_EXAM", "LONG_EXAM", "STUDY_TIP"]},
     "PAID_INTERACTIVE": {"margin": 5, "workflows": ["INTERVIEW_GENERATION", "COLLECTION_COMPANION"]},
     "CRITIQUE": {"margin": 4, "workflows": ["ASK_COMPANION", "INTERVIEW_CRITIQUE"]}
   },
@@ -10,7 +10,7 @@
     "TEACHER_QUIZ": {"route": "INTERACTIVE_QUIZ", "primarySize": 30, "subgroups": {}},
     "BOARD_EXAM": {"route": "INTERACTIVE_QUIZ", "primarySize": 30, "subgroups": {}},
     "LONG_EXAM": {"route": "INTERACTIVE_QUIZ", "primarySize": 30, "subgroups": {"DIRECT": 10, "LONG_EXAM_POOL": 10, "BOARD_EXAM_POOL": 10}},
-    "STUDY_TIP": {"route": "INTERACTIVE_QUIZ", "primarySize": 12, "subgroups": {}},
+    "STUDY_TIP": {"route": "INTERACTIVE_QUIZ", "primarySize": 30, "subgroups": {}},
     "INTERVIEW_GENERATION": {"route": "PAID_INTERACTIVE", "primarySize": 30, "subgroups": {}},
     "COLLECTION_COMPANION": {"route": "PAID_INTERACTIVE", "primarySize": 12, "subgroups": {}},
     "ASK_COMPANION": {"route": "CRITIQUE", "primarySize": 12, "subgroups": {}},
