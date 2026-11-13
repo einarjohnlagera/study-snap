@@ -18,6 +18,7 @@ import org.springframework.http.client.ClientHttpResponse;
 
 /** Section 5 body-level arm guard and reservation path for every workflow. */
 final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
+    private static final ThreadLocal<byte[]> IN_FLIGHT_REQUEST_BODY = new ThreadLocal<>();
     static final class ArmMismatch extends RuntimeException {
         ArmMismatch(String message) { super(message); }
     }
@@ -36,6 +37,8 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
     private final AtomicReference<CaseContext> activeCase = new AtomicReference<>();
     private final AtomicLong caseSequence = new AtomicLong();
     private final Queue<MeteringInterceptor.Call> calls = new ConcurrentLinkedQueue<>();
+    private final Queue<String> bodyDigests = new ConcurrentLinkedQueue<>();
+    private final Queue<Integer> requestQuestionCounts = new ConcurrentLinkedQueue<>();
     private final AtomicInteger consecutiveHttpErrors = new AtomicInteger();
 
     ArmAssertingInterceptor(ObjectMapper mapper, String model, String key, Path outDir,
@@ -55,10 +58,16 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
     }
     void end() { activeCase.set(null); context.remove(); }
     List<MeteringInterceptor.Call> calls() { return List.copyOf(calls); }
+    List<String> bodyDigests() { return List.copyOf(bodyDigests); }
+    List<Integer> requestQuestionCounts() { return List.copyOf(requestQuestionCounts); }
+    static byte[] inFlightRequestBody() { return IN_FLIGHT_REQUEST_BODY.get(); }
 
     @Override public ClientHttpResponse intercept(HttpRequest request, byte[] body,
             ClientHttpRequestExecution execution) throws IOException {
+        bodyDigests.add(digest(body));
         JsonNode json = mapper.readTree(body);
+        requestQuestionCounts.add(json.path("text").path("format").path("schema")
+                .path("properties").path("questions").path("minItems").asInt(0));
         if (!model.equals(json.path("model").asText(null))) {
             ledger.stopRunOnly("Arm model mismatch");
             throw new ArmMismatch("Outgoing model differs from arm model");
@@ -73,6 +82,7 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
         active.meter().redactRaw(escapedBody.substring(1, escapedBody.length() - 1));
         boolean closed = false;
         int before = active.meter().calls().size();
+        IN_FLIGHT_REQUEST_BODY.set(body.clone());
         try {
             ClientHttpResponse response = active.meter().intercept(request, body, execution);
             MeteringInterceptor.Call call = active.meter().calls().get(before);
@@ -92,10 +102,20 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
             if (ex instanceof IOException) noteHttpError();
             throw ex;
         } finally {
+            IN_FLIGHT_REQUEST_BODY.remove();
             if (!closed && !reservation.closed()) {
                 try { reservation.abandon(); }
                 catch (StageCapLedger.LedgerFailure ignored) { /* unresolved reservation remains charged on replay */ }
             }
+        }
+    }
+
+    static String digest(byte[] body) {
+        try {
+            byte[] hash = java.security.MessageDigest.getInstance("SHA-256").digest(body);
+            return java.util.HexFormat.of().formatHex(hash);
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
         }
     }
 
