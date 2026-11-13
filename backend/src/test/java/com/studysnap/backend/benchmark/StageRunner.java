@@ -140,7 +140,7 @@ final class StageRunner {
                 outcomes.add(CaseArmOutcome.classify(item.id(), List.of(), false, true, "INCONCLUSIVE"));
                 continue;
             }
-            int before = path.calls().size();
+            int before = path.receipts().size();
             CallResult result = null;
             String failure = null;
             try {
@@ -151,7 +151,8 @@ final class StageRunner {
             } finally {
                 path.end();
             }
-            List<MeteringInterceptor.Call> newCalls = path.calls().subList(before, path.calls().size());
+            List<MeteringInterceptor.Call> newCalls = path.receipts().subList(before, path.receipts().size())
+                    .stream().map(ArmAssertingInterceptor.CallReceipt::call).toList();
             Set<AttemptRef> parseFailures = result == null ? Set.of() : result.parseSchemaFailures();
             List<AttemptOutcome> attempts = new ArrayList<>();
             for (int index = 0; index < newCalls.size(); index++) {
@@ -171,7 +172,8 @@ final class StageRunner {
             }
             boolean stoppedBeforeCompletion = ledger.stopped()
                     && !("Three consecutive HTTP errors".equals(ledger.stopReason()) && result == null);
-            if (result != null && "INCONCLUSIVE_SIGNAL_MISMATCH".equals(result.failureClass()))
+            if (result != null && result.failureClass() != null
+                    && result.failureClass().startsWith("INCONCLUSIVE_"))
                 stoppedBeforeCompletion = true;
             String failureClass = result != null ? result.failureClass() : failure;
             outcomes.add(CaseArmOutcome.classify(item.id(), attempts,

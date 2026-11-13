@@ -6,6 +6,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.ExamQuestionPoolEntity;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.NoteEntity;
@@ -27,6 +28,7 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.repository.CourseProgramCatalogRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
+import com.studysnap.backend.repository.ExamQuestionPoolRepository;
 import com.studysnap.backend.repository.NoteCourseProgramRepository;
 import com.studysnap.backend.repository.NoteCollectionItemRepository;
 import com.studysnap.backend.repository.NoteCollectionRepository;
@@ -57,7 +59,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import org.springframework.core.task.TaskExecutor;
+import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.web.client.RestClient;
 
@@ -74,6 +78,8 @@ final class ClassAServiceHarness {
     private final List<NoteEntity> notes = new ArrayList<>();
     private final List<StudyPackEntity> packs = new ArrayList<>();
     private final Map<UUID, QuickReviewSessionEntity> sessions = new HashMap<>();
+    private ExamQuestionPoolEntity pool;
+    private BatchTaggingExecutor batchExecutor;
     final UUID userId;
     final ClassACaseManifest.Case item;
     final StudySnapProperties properties;
@@ -173,6 +179,46 @@ final class ClassAServiceHarness {
     List<StudyPackEntity> packs() { return List.copyOf(packs); }
     QuickReviewSessionEntity session(UUID id) { return sessions.get(id); }
     List<QuickReviewSessionEntity> savedSessions() { return List.copyOf(sessions.values()); }
+    BatchTaggingExecutor batchExecutor() { return batchExecutor; }
+
+    void installBatchExecutor(int workers) {
+        batchExecutor = new BatchTaggingExecutor(item.caseId(), Executors.newFixedThreadPool(workers));
+        collaborators.put(AsyncTaskExecutor.class, batchExecutor);
+    }
+
+    void prepareLongExamDirect() {
+        prepareBoardExam();
+        for (StudyPackEntity pack : packs) {
+            when(mocked(NoteRepository.class).findById(pack.getNoteId()))
+                    .thenReturn(Optional.of(notes.stream().filter(note -> note.getId().equals(pack.getNoteId()))
+                            .findFirst().orElseThrow()));
+        }
+    }
+
+    UUID preparePool(String mode) {
+        StudyPackEntity pack = pack(0);
+        pool = new ExamQuestionPoolEntity();
+        pool.setId(id(item.caseId() + ":pool:" + mode));
+        pool.setStudyPackId(pack.getId());
+        pool.setMode(mode);
+        pool.setQuestions(List.of());
+        pool.setPoolSize(0);
+        pool.setGenerationStatus("PENDING");
+        pool.setGenerationStatusAt(OffsetDateTime.now(ZoneOffset.UTC));
+        pool.setServedQuestionKeys(List.of());
+        pool.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        when(mocked(ExamQuestionPoolRepository.class).findByIdForUpdate(pool.getId()))
+                .thenAnswer(invocation -> Optional.of(pool));
+        when(mocked(ExamQuestionPoolRepository.class).save(any(ExamQuestionPoolEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(mocked(StudyPackRepository.class).findById(pack.getId())).thenReturn(Optional.of(pack));
+        return pool.getId();
+    }
+
+    List<QuizItem> persistedPoolQuestions(UUID poolId) {
+        return mocked(ExamQuestionPoolRepository.class).findByIdForUpdate(poolId)
+                .orElseThrow().getQuestions();
+    }
 
     void prepareNoteAdaptive() {
         StudyPackEntity pack = pack(0);

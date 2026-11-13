@@ -19,11 +19,14 @@ import org.springframework.http.client.ClientHttpResponse;
 /** Section 5 body-level arm guard and reservation path for every workflow. */
 final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
     private static final ThreadLocal<byte[]> IN_FLIGHT_REQUEST_BODY = new ThreadLocal<>();
+    private static final String OUTPUT_TOKENS_DETAILS = "output_tokens_details";
+    private static final String REASONING_TOKENS = "reasoning_tokens";
     static final class ArmMismatch extends RuntimeException {
         ArmMismatch(String message) { super(message); }
     }
     private record CaseContext(long token, String generationId, String cellId) {}
-    private record Context(long token, String cellId, MeteringInterceptor meter) {}
+    private record Context(long token, String cellId, String generationId, MeteringInterceptor meter) {}
+    record CallReceipt(MeteringInterceptor.Call call, int questionCount, String bodyDigest) {}
     private final ObjectMapper mapper;
     private final String model;
     private final String key;
@@ -36,9 +39,9 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
     private final ThreadLocal<Context> context = new ThreadLocal<>();
     private final AtomicReference<CaseContext> activeCase = new AtomicReference<>();
     private final AtomicLong caseSequence = new AtomicLong();
-    private final Queue<MeteringInterceptor.Call> calls = new ConcurrentLinkedQueue<>();
     private final Queue<String> bodyDigests = new ConcurrentLinkedQueue<>();
     private final Queue<Integer> requestQuestionCounts = new ConcurrentLinkedQueue<>();
+    private final Queue<CallReceipt> receipts = new ConcurrentLinkedQueue<>();
     private final AtomicInteger consecutiveHttpErrors = new AtomicInteger();
 
     ArmAssertingInterceptor(ObjectMapper mapper, String model, String key, Path outDir,
@@ -57,17 +60,21 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
         context.set(newContext(current, generationId));
     }
     void end() { activeCase.set(null); context.remove(); }
-    List<MeteringInterceptor.Call> calls() { return List.copyOf(calls); }
+    void stopRun(String reason) { ledger.stopRunOnly(reason); }
+    List<MeteringInterceptor.Call> calls() { return receipts().stream().map(CallReceipt::call).toList(); }
     List<String> bodyDigests() { return List.copyOf(bodyDigests); }
     List<Integer> requestQuestionCounts() { return List.copyOf(requestQuestionCounts); }
+    List<CallReceipt> receipts() { return List.copyOf(receipts); }
     static byte[] inFlightRequestBody() { return IN_FLIGHT_REQUEST_BODY.get(); }
 
     @Override public ClientHttpResponse intercept(HttpRequest request, byte[] body,
             ClientHttpRequestExecution execution) throws IOException {
-        bodyDigests.add(digest(body));
+        String bodyDigest = digest(body);
+        bodyDigests.add(bodyDigest);
         JsonNode json = mapper.readTree(body);
-        requestQuestionCounts.add(json.path("text").path("format").path("schema")
-                .path("properties").path("questions").path("minItems").asInt(0));
+        int questionCount = json.path("text").path("format").path("schema")
+                .path("properties").path("questions").path("minItems").asInt(0);
+        requestQuestionCounts.add(questionCount);
         if (!model.equals(json.path("model").asText(null))) {
             ledger.stopRunOnly("Arm model mismatch");
             throw new ArmMismatch("Outgoing model differs from arm model");
@@ -86,7 +93,7 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
         try {
             ClientHttpResponse response = active.meter().intercept(request, body, execution);
             MeteringInterceptor.Call call = active.meter().calls().get(before);
-            calls.add(call);
+            receipts.add(new CallReceipt(call, questionCount, bodyDigest));
             if (response.getStatusCode().is2xxSuccessful() && !usable(call.usage())) {
                 reservation.settle(null, null);
             } else {
@@ -98,7 +105,10 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
             return response;
         } catch (IOException | RuntimeException ex) {
             List<MeteringInterceptor.Call> recorded = active.meter().calls();
-            if (recorded.size() > before) calls.add(recorded.get(before));
+            if (recorded.size() > before) {
+                MeteringInterceptor.Call call = recorded.get(before);
+                receipts.add(new CallReceipt(call, questionCount, bodyDigest));
+            }
             if (ex instanceof IOException) noteHttpError();
             throw ex;
         } finally {
@@ -123,8 +133,13 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
         CaseContext current = activeCase.get();
         if (current == null) throw new IllegalStateException("No case-call context");
         Context local = context.get();
-        if (local == null || local.token() != current.token()) {
-            local = newContext(current, current.generationId() + "-worker-" + Thread.currentThread().threadId());
+        String batch = BatchTaggingExecutor.currentBatch();
+        String generationId = batch == null
+                ? current.generationId() + "-worker-" + Thread.currentThread().threadId() : batch;
+        if (local == null || local.token() != current.token()
+                || batch != null && !local.generationId().equals(batch)
+                || batch == null && local.generationId().startsWith(current.generationId() + "-batch-")) {
+            local = newContext(current, generationId);
             context.set(local);
         }
         return local;
@@ -134,7 +149,7 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
         MeteringInterceptor meter = new MeteringInterceptor(mapper, outDir, model, priceIn, priceOut,
                 ledger.cap(stage), Integer.MAX_VALUE, List.of(key));
         meter.begin(generationId, current.cellId());
-        return new Context(current.token(), current.cellId(), meter);
+        return new Context(current.token(), current.cellId(), generationId, meter);
     }
 
     private void noteHttpError() {
@@ -145,8 +160,8 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
     private static boolean usable(JsonNode usage) {
         return usage != null && nonnegative(usage.path("input_tokens"))
                 && nonnegative(usage.path("output_tokens"))
-                && (usage.path("output_tokens_details").path("reasoning_tokens").isMissingNode()
-                    || nonnegative(usage.path("output_tokens_details").path("reasoning_tokens")));
+                && (usage.path(OUTPUT_TOKENS_DETAILS).path(REASONING_TOKENS).isMissingNode()
+                    || nonnegative(usage.path(OUTPUT_TOKENS_DETAILS).path(REASONING_TOKENS)));
     }
     private static boolean nonnegative(JsonNode token) {
         return token.isIntegralNumber() && token.canConvertToLong() && token.asLong() >= 0;
