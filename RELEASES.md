@@ -10,13 +10,13 @@ Theme: the interactive features that still run on `gpt-4.1` and `gpt-4.1-mini` m
 
 - **Acceptance criteria preregistered BEFORE any comparison (documents).** Per workflow: blind answer-key correctness (no worse than the current model by a stated margin), parse and schema validity (no worse than the measured baseline; the current model's parse-failure rate is measured on the same inputs first, because 2 of 10 recent Long Exam calls is too small a sample to set a threshold), latency against the CURRENT timeouts (extracted from code and stated in the preregistration), cost per call, workflow compatibility (the existing suites on the candidate model) and regression risk. Never edited after results are seen. Provisional: by about 2026-11-20.
 - **Benchmark preparation for the routes still pinned (backend test harness).** Reuse the existing benchmark method (`docs/claude-plans/2026-10-16-llm-model-migration-benchmark-design.md`; the harness under `backend/src/test/.../benchmark/`) for `INTERACTIVE_QUIZ` (Adaptive Practice and Quick Review, the Quick Review study tip, teacher quizzes, Board Exam generation, Long Exam and its pool), `PAID_INTERACTIVE` (Interview Practice, the collection companion) and `CRITIQUE` (Ask Companion, Interview critique). Challenge Quiz is already on `TIERED` and is NOT included.
-- **Owner-run benchmark on the owner's OpenAI key.** Candidates: `gpt-6-luna` (the provider's listed replacement) and `gpt-6.1-sol` where Luna fails a gate; eight workflows, N = 30 inputs, three arms. Estimated about $11 to $25 (about $14 to $31 with a 25% re-run buffer); **proposed hard cap $40, metered per arm, NOT yet approved by the owner.** The key never enters a prompt, a file or Claude's context. Provisional window 2026-11-21 to 2026-11-28.
+- **Owner-run benchmark on the owner's OpenAI key.** Candidates: `gpt-6-luna` (the provider's listed replacement) and `gpt-6.1-sol` where Luna fails a gate; **superseded by preregistration Revision 2.1 (see Shipped): ten workflows, a pooled route design, and STAGED caps approved separately (Stage 1 $12 conditionally approved by the owner 2026-11-13, Stage 2 $80 and Stage 3 $55 proposed, not approved) instead of one $40 cap.** The key never enters a prompt, a file or Claude's context. Provisional window 2026-11-21 to 2026-11-28.
 - **Review and a per-workflow decision** (provisional 2026-12-01 to 2026-12-05), then the owner's **attended environment saves** of `LLM_MODEL_INTERACTIVE_QUIZ`, `LLM_MODEL_PAID_INTERACTIVE` and `LLM_MODEL_CRITIQUE`, each a Render redeploy treated as a deploy, at least 24 hours apart (provisional 2026-12-08 to 2026-12-12), about three days of buffer before the internal target 2026-12-15.
 
 ### Open owner decisions at kickoff (none is closed by the kickoff)
 
-- Read the three `LLM_MODEL_*` values from the Render dashboard and confirm them (Claude has no read access to Render environment variables and must never call the update tool; `PAID_INTERACTIVE` and `CRITIQUE` have no lines in the retained logs).
-- Approve the spend cap and the owner-run schedule once the preregistration is written.
+- ~~Read the three `LLM_MODEL_*` values from the Render dashboard~~ **DONE 2026-11-13 (Addendum 1): the three are unset in Render, so the `application.yaml:200-202` defaults are production (`gpt-4.1-mini`, `gpt-4.1`, `gpt-4.1-mini`); `LLM_READ_TIMEOUT_SECONDS` still to confirm.**
+- Approve the remaining staged caps (Stage 2, Stage 3), the freeze of the preregistration, the class-B sampling frame and the owner-run schedule; Stage 1 is approved conditionally (see Shipped).
 - The Board Exam "Redo Missed" slot (between pricing and the migration's environment saves, as recommended, or after the migration).
 
 Not in this release: any production model switch authorized by this kickoff, unrelated prompt improvements, the three verifier switches, Challenge Quiz changes, any entitlement, quota or pricing change.
@@ -31,7 +31,13 @@ Anti-drift: no production model switch, environment-variable change or deploy by
 
 ### Shipped
 
-_(nothing yet)_
+_(no code yet)_ **Preparation record (documents only, merged into `releases/v0.182.0`):**
+
+- **Preregistration DRAFT, Revision 2.1** (`docs/claude-plans/2026-11-12-v0182-llm-migration-preregistration.md`, merged as #1584 and #1585) with the response to Product UX (`2026-11-12-v0182-revised-plan-response-to-product-ux.md`). Product UX's decisions (received 2026-11-13) are applied: risk-weighted scope (six class A workflows with full evaluation, four class B lighter, the study tip PROPOSED lighter), pooled route evaluation with independent workflow safety gates, a three-tier failure taxonomy (T1 reproducible blockers, T2 critical semantic failures confirmed on a frozen reserve, T3 pooled noncritical statistics), gates unchanged, and the roadmap priority order. Statistics were re-derived by the release session (tier-3 worst-case false-fail .12165, .11493, .09671; staged spend reproduced). Section order and every criterion are unchanged by the addenda; the preregistration is NOT frozen.
+- **Deadline rule reconciled (owner, 2026-11-13):** the 2026-12-15 `gpt-6-luna` fallback covers only INCONCLUSIVE or noncritical-only routes; a confirmed T1 or T2 failure returns to the owner with a mitigation, an alternative model or containment; 2027-01-14 is the hard backstop.
+- **Stage 1 spend cap ($12, baseline plus Luna primary) conditionally approved by the owner 2026-11-13**; the condition and the runner's one-call headroom requirement are recorded in the preregistration. Stages 2 and 3 are proposals only. No paid run has started and the harness runner does not yet enforce a cumulative cap.
+- **Addendum 1 (2026-11-13):** production routing values recorded (the three `LLM_MODEL_*` variables are unset in Render; code defaults are production). `application.yaml` is not changed; no model switch is authorized.
+- Dated usage reads (2026-11-12, read-only): Interview Practice and Ask Companion counters zero for September to November; one Ask Companion session ever; teacher quizzes 8 ever; 121 of 910 collections carry a companion (some may be copies); Quick Review 90 sessions in 30 days, Challenge 47, Adaptive 9, Long Exam 0.
 
 ## v0.181.0 - Affordable NoteLib
 
