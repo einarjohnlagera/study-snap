@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.http.HttpRequest;
@@ -33,6 +34,7 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
     private final BigDecimal outPrice;
     private final BigDecimal spendStop;
     private final int maxCalls;
+    private final List<String> rawRedactions;
     private final List<Call> calls = new ArrayList<>();
     private BigDecimal total = BigDecimal.ZERO;
     private String generationId;
@@ -44,6 +46,11 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
 
     MeteringInterceptor(ObjectMapper mapper, Path outDir, String model, BigDecimal inPrice,
                         BigDecimal outPrice, BigDecimal spendStop, int maxCalls) throws IOException {
+        this(mapper, outDir, model, inPrice, outPrice, spendStop, maxCalls, List.of());
+    }
+
+    MeteringInterceptor(ObjectMapper mapper, Path outDir, String model, BigDecimal inPrice,
+                        BigDecimal outPrice, BigDecimal spendStop, int maxCalls, List<String> rawRedactions) throws IOException {
         this.mapper = mapper;
         this.rawDir = outDir.resolve("raw");
         Files.createDirectories(rawDir);
@@ -52,6 +59,7 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
         this.outPrice = outPrice;
         this.spendStop = spendStop;
         this.maxCalls = maxCalls;
+        this.rawRedactions = new ArrayList<>(rawRedactions);
     }
 
     void begin(String id, String leg) {
@@ -66,6 +74,7 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
     }
 
     List<Call> calls() { return List.copyOf(calls); }
+    void redactRaw(String value) { if (value != null && !value.isEmpty()) rawRedactions.add(value); }
     BigDecimal total() { return total; }
     boolean stopped() { return stopped; }
     boolean unmetered() { return unmetered; }
@@ -124,7 +133,14 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
         }
         String error = json.path("error").path("message").asText("");
         String safeId = generationId.replaceAll("[^A-Za-z0-9_-]", "_");
-        Files.write(rawDir.resolve(safeId + "-" + thisAttempt + ".json"), bytes);
+        byte[] rawBytes = bytes;
+        if (!rawRedactions.isEmpty()) {
+            String sanitized = new String(bytes, StandardCharsets.UTF_8);
+            for (String secret : rawRedactions) if (secret != null && !secret.isEmpty())
+                sanitized = sanitized.replace(secret, "[REDACTED]");
+            rawBytes = sanitized.getBytes(StandardCharsets.UTF_8);
+        }
+        Files.write(rawDir.resolve(safeId + "-" + thisAttempt + ".json"), rawBytes);
         Call call = new Call(generationId, leg, thisAttempt, elapsed, response.getStatusCode().value(),
                 usage.isMissingNode() ? null : usage.deepCopy(), items.isArray() ? items.size() : 0,
                 List.copyOf(types), texts, json.path("output_text").isTextual(), input, output, reasoning, conservative, nonAdditive, error, false);
