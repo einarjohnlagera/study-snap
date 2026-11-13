@@ -261,6 +261,10 @@ A **deviation** includes changed sample/strata, model ID, prompt/schema, request
 
 _None. No generation has begun._
 
+### Addenda (dated records that append evidence without changing any criterion)
+
+- **Addendum 1, 2026-11-13: production routing values (precondition 2(a), partly discharged).** The owner read the Render environment for `notelib-backend-prod` and reported that **none of `LLM_MODEL_INTERACTIVE_QUIZ`, `LLM_MODEL_PAID_INTERACTIVE` or `LLM_MODEL_CRITIQUE` is set**; production therefore runs on the code defaults at `backend/src/main/resources/application.yaml:200-202`: **`INTERACTIVE_QUIZ` = `gpt-4.1-mini`, `PAID_INTERACTIVE` = `gpt-4.1`, `CRITIQUE` = `gpt-4.1-mini`** (consistent with the 2026-11-11 production log read for `INTERACTIVE_QUIZ`). These are the BASELINE arms (section 5). The owner's screenshot also shows `LLM_MODEL_FREE` = `gpt-6-luna` and `LLM_MODEL_PREMIUM` = `gpt-6.1-sol` (the Study Pack family, outside this evaluation). **The owner's 2026-11-13 screenshot of the Render environment list filtered on `LLM_` shows exactly `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL_FREE`, `LLM_MODEL_PREMIUM`, `LLM_PROMPT_DIR` and `LLM_PROVIDER`** (values other than the two model names are masked and not recorded here). The list is alphabetical, so there is no `LLM_CONNECT_TIMEOUT_SECONDS` (it would sort between `LLM_BASE_URL` and `LLM_MODEL_FREE`); **`LLM_READ_TIMEOUT_SECONDS` is NOT yet confirmed** because the screenshot ends after `LLM_PROVIDER`, where it would sort (the code defaults are 10 s connect and 180 s read at `application.yaml:232-240`). Because the three variables are unset, a later model switch can be made by an attended environment save (the plan) or by changing the code defaults in a backend release; **this addendum changes no default and authorizes neither.**
+
 ## 11. Appendix A — harness inventory (inventory only)
 
 | Existing file | Covers today | Needed for this evaluation |
@@ -282,7 +286,7 @@ _None. No generation has begun._
 
 **Genuinely open for owner before paid generation/freeze:**
 - **Stage 1 ($12) APPROVED conditionally by the owner on 2026-11-13 (O6, see the revision log); Stages 2 ($80) and 3 ($55) NOT approved.** Still open: executable per-arm/per-workflow allocations after provider price confirmation (sections 2 and 5), and the runner that enforces the caps. The current runner cannot enforce stage or cumulative reservations; Sol calls require a separate decision.
-- Read the **three** exact `LLM_MODEL_*` production values and effective connect/read timeouts from Render; record privately/datestamp the values in an addendum, never infer them from defaults (section 2).
+- **DONE 2026-11-13 (Addendum 1):** the three `LLM_MODEL_*` values are unset in Render, so the code defaults are production (`gpt-4.1-mini`, `gpt-4.1`, `gpt-4.1-mini`). **Still open:** `LLM_READ_TIMEOUT_SECONDS` (the 2026-11-13 screenshot ends before where it would sort; `LLM_CONNECT_TIMEOUT_SECONDS` is absent, so 10 s applies).
 - Confirm exact candidate model IDs, availability to this key, prices, Responses strict structured-output and omitted-reasoning behavior from provider documentation, with URL and read date (sections 2 and 5).
 - Fix the class-B sampling frame and strata, Interview Practice source-count/difficulty frame, synthetic-input choice, private manifest/reserve handling, B scoring/validation mechanism, and supplemental A ambiguity/explanation receipt before generation (sections 6 and 7).
 - Approve the **PROPOSED** stage-1 and confirmation sizes, margins, T1 two-recheck reproduction rule, T2 confirmation pass rule, Sol-versus-Luna improvement rule, fixed per-workflow USD ceilings, schedule and monitoring triggers (sections 1, 5, 8 and 9). Section 1 states the O1 all-tier range and the correlation limits explicitly before output.
