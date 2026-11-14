@@ -110,6 +110,7 @@ class ClassAWorkflowAdaptersTest {
         assertThat(body.has("temperature")).isFalse();
         assertThat(body.has("reasoning")).isFalse();
         assertThat(adapter.deliveredQuestions()).isNotEmpty();
+        assertThat(adapter.deliveredContent()).isSameAs(adapter.deliveredQuestions());
         // Blind key review needs the answer key of every delivered question; a redacted DTO would hide it.
         assertThat(adapter.deliveredQuestions()).allSatisfy(question ->
                 assertThat(question.getCorrectIndex() != null || question.getCorrectIndices() != null)
