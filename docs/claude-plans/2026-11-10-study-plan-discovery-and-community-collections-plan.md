@@ -63,8 +63,8 @@ deferred. Not part of v0.180.0, and not bundled with the interactive LLM migrati
 - R2: the adoption action is **Add study plan / Add review set** (purpose noun); "Start this …" is retired on
   public cards; after Phase 2b the primary action is **View study plan / View review set**.
 - R3: null `learnerLevel` → "Study Plan". R4: the 120 s cap stays; the TTL lever is closed.
-- R5: the nine-section reconciliation is **DORMANT** indefinitely; guardrail: never unpublish and republish ALE
-  or PNLE. R6: the freshness wording rule is fixed.
+- R5: the nine-section reconciliation is **DORMANT** indefinitely; guardrail: never send a PUBLIC visibility
+  request to the ALE or PNLE roots at all, even when already public. R6: the freshness wording rule is fixed.
 - Release coordination re-written for `v0.180.0` deployed and `v0.181.0` in progress (section F).
 
 | Product UX decision | Where it landed |
@@ -246,6 +246,8 @@ needs a destination. Phase 1's **copy and grouping** do not depend on Phase 2 an
 
 ### Phase 0: Publication-boundary fail-closed fix (backend)
 
+**Amended 2026-11-14 (independent cold review and open-items verification; see `docs/claude-plans/2026-11-14-phase0-open-items-verification.md` and Scope 2.6):** the detach rule (`updateParent` null on a PUBLIC child sets it PRIVATE, whatever its former parent's visibility), Goal delete sets children PRIVATE regardless of the Goal's visibility, three existing tests change (`:4341`, `:3942`, `:4432`), pre-check P3 becomes a roster comparison, two leak paths closed only by the write-side fixes, and optional guard (g) is an owner decision.
+
 **Implementation-ready scope (2026-11-11):** `docs/claude-plans/2026-11-11-collection-publication-boundary-phase0-scope.md`
 carries the exact methods, named acceptance tests, the owner-run read-only pre-checks and the deploy inputs. The
 text below stays the summary; where they differ, the scope file is newer.
@@ -301,7 +303,7 @@ text below stays the summary; where they differ, the scope file is newer.
      The viewer chrome (tab, nav, empty-state headings, list description) stays viewer-keyed: STUDENT and anonymous → "Official Study Plans", BOARD_EXAM → "Official Review Sets", TEACHER → "Official Lesson Plans", PROFESSIONAL, PARENT and null → "Official Collections". So a TEACHER sees an "Official Lesson Plans" tab above cards labelled "CELE Review Set". **This is intended.** A TEACHER who adopts that set still sees "Lesson Plan" in their own library. That is acceptable: the cards follow the content and the library follows the viewer. **No card ever says "Lesson Plan" for a board-exam set.** Validate the resolver against all 5 profile types plus null × all 8 production roots in a unit test.
      - **Adoption action wording (SETTLED R2, 2026-11-11):** every Official root is a Goal (`isGoal = childCount > 0`, CONFIRMED Card:63 at `d5eaf383`; CTA Card:79-83). So every card today says "Start this Goal" (STUDENT), "Start this Course" (TEACHER) or "Start this Collection" (null), and "Continue this …" once adopted (Card:80). Phase 1a changes the **adoption action on public cards** to **"Add study plan"** or **"Add review set"**, the noun taken from the collection's PURPOSE (the resolver row above: an exam-slug or `BOARD_EXAM_REVIEW` row → "Add review set"; every other row, null `learnerLevel` included → "Add study plan"), never from the viewer's profile and never "Start" ("Start" suggests a study session; the action creates a private copy). The adoption behaviour (`adopt` / `adoptGoal`, the discovery-intent path, routing to the new copy) is unchanged. **This retires the `goalSingular` noun problem ("Start this Goal") on public cards** because the wording no longer uses `goalSingular`. `getCollectionLabels`' own `goalSingular` stays as it is for owner surfaces.
      - **Adopted state (PROPOSAL):** "Open my copy", matching journey C4 and the Phase 2b page, replacing "Continue this {goalSingular|singular}" (Card:80). Pinned today by `published-plans-page-client.test.tsx:176`, `dashboard-study-plan-section.test.tsx:212`, `:289`, and the docs `collections.md:164`, `:1157-1158`, `:1165` (CONFIRMED). The "Sign in to adopt" label (Card:82) is outside R2; leave it unless Product UX says otherwise.
-     - **Where it applies (CONFIRMED):** `PublicStudyPlanCard` renders on `/collections/published` (PPC:267, :315) **and on the exam hub** (`exam-hub-official-review-sets.tsx:6`), so the hub's card actions change with it (its heading does not). `DashboardStudyPlanSection` has its own CTA (`dashboard-study-plan-section.tsx:361-362`, "Open this plan" for an owned source) and is rendered on the dashboard (`dashboard/page.tsx:932`, `:1016`) **and in onboarding** (`onboarding/page.tsx:1850`, `:2197`). Whether R2 covers this section (it shows public plans) is **To verify with Product UX**; if yes, `onboarding/page.test.tsx:558`, `:614`, `:869` move too.
+     - **Where it applies (CONFIRMED):** `PublicStudyPlanCard` renders on `/collections/published` (PPC:267, :315) **and on the exam hub** (`exam-hub-official-review-sets.tsx:6`), so the hub's card actions change with it (its heading does not). `DashboardStudyPlanSection` has its own CTA (`dashboard-study-plan-section.tsx:361-362`, "Open this plan" for an owned source) and is rendered on the dashboard (`dashboard/page.tsx:932`, `:1016`) **and in onboarding** (`onboarding/page.tsx:1850`, `:2197`). **SETTLED 2026-11-14 (Product UX): R2 covers this section.** The final copy, the "Added to your library." confirmation (a separate one-time flag, shown after a successful adoption only), the secondary "Browse study plans / Browse review sets" link on the onboarding **completion step only**, the deferral of the practice-first already-owned edge (no ownership data there; would need a new request) and the full test and doc list are in `docs/claude-plans/2026-11-14-phase1a-dashboard-onboarding-wording-scope.md`. `onboarding/page.test.tsx:558`, `:614`, `:867`, `:869` move too.
      - **After Phase 2b (Phase 1b and the 2b page):** primary **"View study plan" / "View review set"**; secondary **"Add study plan" / "Add review set"**, or **"Open my copy"** when the viewer already has one.
      - **Open question for Product UX, not blocking:** do `subjectSingular`, `sectionSingular` and `primarySingular` follow the purpose rule on public surfaces? Recommend yes only on the 2b public page, which is a later phase.
      - **Also fix:** `dashboard-study-plan-section.tsx:171` does not pass the slug, which leaves a hole in the rule. `public-library-page-client.tsx:1598` hard-codes "Looking for a full Study Plan…".
@@ -552,8 +554,7 @@ Three cases. They must not be collapsed into one rule.
 
 **⚠️ DORMANT (owner R5, 2026-11-11): reconciliation is deferred indefinitely unless a concrete reason appears.**
 The existing published-stamp contract is preserved, particularly for ALE and PNLE. No production data write, and
-no unpublish/republish of these sets as a cleanup shortcut. **Guardrail: never unpublish and republish ALE or
-PNLE.** Reason (CONFIRMED Svc:2068-2080 at `d5eaf383`): a publish calls `publishChildCollections`, which sets
+no unpublish/republish of these sets as a cleanup shortcut. **Guardrail: never send a PUBLIC visibility request to the ALE or PNLE roots at all, even when they are already public** (cold review, 2026-11-14: `updateVisibility` runs `publishChildCollections` on every PUBLIC call with no `previousVisibility` guard, Svc:1067-1068; the UI offers Publish only while private, but the API accepts a repeat call; an optional guard is an owner decision, see the Phase 0 open-items verification, option (g)). Reason (CONFIRMED Svc:2068-2080 at `d5eaf383`): a publish calls `publishChildCollections`, which sets
 every ordered child PUBLIC with no condition, so a round trip would flip the nine sections PUBLIC (exposing them
 by their own id) as an unreviewed side effect; and on a re-flip `last_update_published_at` is already set
 (Svc:1080-1085), so nothing else in the round trip is a reset either. The procedure below is kept only as the
@@ -733,16 +734,18 @@ deferred; Explore = discovery, public page = evaluation and sharing, personal co
 community publishing, no structured year, no migrations now; the nine PRIVATE-but-stamped sections keep behaving
 exactly as today.
 
+**Settled (Product UX, 2026-11-14):** R2 covers the dashboard and onboarding recommendation card; the final Phase 1a copy, the confirmation, the completion-step Browse link and the practice-first deferral are in the Phase 1a addendum. A cold Opus review (2026-11-14) confirmed 11 of 15 Phase 0 and Phase 1a claims, found 4 partly right, and none falsified; its corrections are in the Phase 0 open-items verification.
+
 **To verify (before the relevant brief; none blocks the artifacts):**
-- Whether R2 also covers `DashboardStudyPlanSection` (dashboard and onboarding; it shows public plans with its
-  own CTA, `dashboard-study-plan-section.tsx:361-362`). Product UX call.
-- "Open my copy" as the adopted-state label (PROPOSAL); the "Sign in to adopt" label is untouched by R2.
-- Phase 0 open items listed in the scope artifact, section 8 (including `inspectSourceUpdate`'s ancestor gate).
+- The Phase 0 open items are closed in the Phase 0 open-items verification; what remains is the owner's decision on the optional repeat-PUBLIC guard (g).
+- The child-page "Publish settings" modal flow was not read.
 - `explore-page-client.test.tsx` and `server-public-*` line numbers carried from 2026-11-10 were not re-read.
 
 **Artifacts:**
 - `docs/claude-plans/2026-11-11-collection-publication-boundary-phase0-scope.md`: Phase 0, implementation-ready
   (methods, named tests, owner-run read-only pre-checks, deploy inputs).
+- `docs/claude-plans/2026-11-14-phase0-open-items-verification.md`: closes the Phase 0 open items and records the cold review.
+- `docs/claude-plans/2026-11-14-phase1a-dashboard-onboarding-wording-scope.md`: final Phase 1a dashboard and onboarding scope.
 - `docs/claude-plans/2026-11-11-public-collection-http-status-spike-protocol.md`: the R1 Preview spike,
   decision tree and results template.
 

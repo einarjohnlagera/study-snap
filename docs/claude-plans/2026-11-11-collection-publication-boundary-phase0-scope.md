@@ -67,17 +67,16 @@ listed as Official. The change is **additive and only narrows reachability**.
   republish still skips `publishInitialCurriculum` (Svc:1083) and rows added while private stay unpublished.
 - **Nine sections:** already PRIVATE, so a no-op for them (but see the republish caution).
 - **Republish caution (unchanged behaviour, CONFIRMED Svc:2075-2076):** a republish sets **every** child PUBLIC.
-  After this change an unpublish/republish round trip of ALE or PNLE would flip the nine PUBLIC. R5 forbids it.
+  After this change an unpublish/republish round trip of ALE or PNLE would flip the nine PUBLIC. R5 forbids it, and the cold review (2026-11-14) widened the guardrail: **any** PUBLIC visibility request, even on an already-public Goal, runs `publishChildCollections` (Svc:1067-1068, no `previousVisibility` guard), so never send one to the ALE or PNLE roots. **Option (g), OWNER DECISION, not included by default:** skip the child cascade when the Goal is already PUBLIC; it closes the accidental-flip route in code but changes API behaviour. Also (low): `updateVisibility` and `delete` take no row lock while `publishReviewSetUpdate` locks the root `FOR UPDATE` (Svc:802); an unpublish queued behind a publish can still send update notifications after commit (Svc:822). Accept and record, or add the lock.
 
 ### 2.3 Goal delete (CONFIRMED Svc:1564-1581; `V83__collection_parent_hierarchy.sql:2` `ON DELETE SET NULL`)
 - **Before:** the row is deleted; children survive with `parent_collection_id = NULL`, i.e. become roots, and a
   PUBLIC one then matches `listPublic`'s root query (Svc:286) as an Official card.
 - **After (PROPOSAL):** inside the existing `@Transactional delete`, before `collectionRepository.delete`, if
   `collection.getSourcePlanId() == null` (a source, not an adopted copy), load its children and set those whose
-  visibility is `PUBLIC` to `PRIVATE` (`saveAll`, flushed before the delete in the same transaction). Only PUBLIC
+  visibility is `PUBLIC` to `PRIVATE` (**whatever the Goal's own visibility is**, corrected by the cold review) (`saveAll`, flushed before the delete in the same transaction). Only PUBLIC
   children matter; PRIVATE ones and every stamp are left as they are. Children are not deleted (E7).
-- **ASSUMPTION to verify:** children always share the Goal's owner, so the owner-scoped query finds them all;
-  else use `findByParentCollectionIdIn(List.of(id))` (Svc:308 uses it).
+- **CONFIRMED 2026-11-14:** children always share the Goal's owner: every parent assignment is owner-scoped (`updateParent` requires both owned by the caller; `adoptGoalChild` and `createSubjectAddition` attach only the adopter's own copies), and a production read found 0 children whose owner differs from their parent's. The owner-scoped query therefore finds them all.
 
 ### 2.4 `listPublic` count parity (CONFIRMED Svc:283-335)
 - **Before:** item and ready counts include items whose note is no longer PUBLIC (Svc:313-320).
@@ -101,6 +100,13 @@ listed as Official. The change is **additive and only narrows reachability**.
 - **Recommendation (PROPOSAL): always `null` on the public mapper** (simplest, no extra lookup, matches the
   existing `resolvedLearnerLevel = null` rationale at Svc:3645-3651). `listPublic`'s summary emits it too, but
   only for roots, where it is already null. The DTO field stays (no shape change).
+
+### 2.6 Detach (`updateParent` with a null parent) and the leak paths it closes (added 2026-11-14)
+- **Before (CONFIRMED by code reading, not reproduced):** `PATCH /collections/{id}/parent` with a null parent (`updateParent`, Svc:~897-910; `NoteCollectionController.java:174-182`, USER or ADMIN) detaches a child and **leaves its `visibility` untouched**; it also clears `sibling_position`, `term_label` and `term_order`. The only guard, `assertPublishedSubjectMoveKeepsTermsCoherent` (Svc:3461-3477), blocks a published child only when it carries a term label or the destination uses terms. So a published **term-less** child (every board-exam Goal's sections) detached from its Goal becomes a **PUBLIC top-level collection**, which `listPublic` shows on Explore as an "Official" card. A PUBLIC child under a **PRIVATE** parent is also reachable today (an unguarded single-child publish, or a move under a private Goal) and is promoted the same way.
+- **After (PROPOSAL):** when `updateParent` detaches (`parentId == null`) a child that is **PUBLIC, whatever its former parent's visibility**, set it PRIVATE in the same transaction, leaving every `published_at` stamp untouched; the curator can republish it deliberately as a standalone plan. Re-parenting to another parent is unchanged.
+- **Adopter-visible consequence (intended, previously unlisted):** a detached child now reads RETIRED in an adopter's source-update report instead of MOVED with its live title (Svc:2657-2668).
+- **Why write-side:** a read-time ancestor check cannot see a former child (its parent is null). Promoted roots would also surface in `PostSessionNextStepService.resolveRecommendedPlan` (:263-312), which puts the title in the next-step label, and in `NoteService.mapToPublicDetail` via `findOfficialReviewSetRootForNote` (`NoteCollectionItemRepository:53-70`, `NoteService:1615`), which names the "Official" set on the anonymous public note page. Only (2.3) and (2.6) cover those.
+- **Builder UI:** it never detaches (it creates a collection and attaches it, `study-plan-builder-page-client.tsx:2171`), so this cannot create a tenth PRIVATE-but-stamped section through the UI.
 
 ## 3. Acceptance tests (named; layer in brackets)
 
@@ -138,7 +144,8 @@ follow `GoalAdoptionPostgresIntegrationTest` (Testcontainers, Flyway on, :28-33)
     assertion].
 13. `ownerList_readyCountsUnchangedForAdoptedCopyWithPrivateNotes` [real PostgreSQL]: the authenticated `list()`
     counts for a collection holding PRIVATE notes are identical before and after the change (2.4 trap).
-Tests that pin current behaviour and must change: :4341 only (state so in the release). Must stay green:
+14. `detachingPublicChild_setsItPrivateAndKeepsStamps` [unit + real PostgreSQL]: detach a PUBLIC term-less child under a PUBLIC Goal, and under a PRIVATE Goal: PRIVATE, absent from `listPublic`, `getPublic` 404, stamps unchanged; detaching a PRIVATE child and re-parenting are unchanged; an adopter's source-update reads RETIRED, not MOVED.
+Tests that pin current behaviour and must change: **three, not one (cold review, 2026-11-14):** `:4341` (`updateVisibility_unpublishingGoalDoesNotCascadeToChildren`), and `:3942` (`detailMappersExposeAcademicTermForOwnedAndAnonymousChildReads`) and `:4432` (`adopt_carriesTermFromParentedSourceChildOntoStandaloneCopy`), which read or adopt a PUBLIC child with an unstubbed parent id so Mockito returns `Optional.empty()` and the new ancestor check would hit not-found: stub the parent lookup in both (state so in the release). Must stay green:
 :4310, :5885 `adoptGoal_snapshotsStampedPrivateChildrenForTheJob`, :5903, :5924, :5941, :3834, :3887, :4027.
 
 ## 4. Owner-run READ-ONLY pre-checks (SELECT only; re-run at release time, snapshots decay)
@@ -155,9 +162,13 @@ SELECT count(*) FROM note_collections c JOIN users u ON u.id = c.owner_user_id
 WHERE c.visibility = 'PUBLIC' AND u.role <> 'ADMIN';
 -- P2b PUBLIC adopted copies. EXPECTED 0
 SELECT count(*) FROM note_collections WHERE visibility = 'PUBLIC' AND source_plan_id IS NOT NULL;
--- P3 PUBLIC roots carrying child markers (possible orphans). EXPECTED 0
-SELECT count(*) FROM note_collections WHERE visibility = 'PUBLIC' AND parent_collection_id IS NULL
-  AND (term_label IS NOT NULL OR sibling_position IS NOT NULL);
+-- P3 roster of PUBLIC top-level collections. EXPECTED exactly the 8 known Official roots (CELE, CPALE, ALE, LET, BSCS, BSIT, BSIS, PNLE), all owned by an ADMIN. Any extra row is STOP.
+-- (Replaces the old marker check, which missed a child promoted by detach because updateParent clears sibling_position and term_label.)
+SELECT c.id, c.title, u.role AS owner_role FROM note_collections c JOIN users u ON u.id = c.owner_user_id
+WHERE c.visibility = 'PUBLIC' AND c.parent_collection_id IS NULL ORDER BY c.title;
+-- P6 children whose owner differs from their parent's owner. EXPECTED 0
+SELECT count(*) FROM note_collections c JOIN note_collections p ON p.id = c.parent_collection_id
+WHERE c.owner_user_id <> p.owner_user_id;
 -- Totals. EXPECTED 8 roots, 60 children
 SELECT count(*) FILTER (WHERE parent_collection_id IS NULL) AS public_roots,
        count(*) FILTER (WHERE parent_collection_id IS NOT NULL) AS public_children
@@ -225,13 +236,15 @@ deploy writes nothing).
   post-deploy P-checks.
 - **Republish flip (C8):** unchanged behaviour, now more likely to be exercised; R5 guardrail and test 8.
 - **Stale tests:** :4341 must change; a test still asserting "no cascade" means the change did not land.
-- **Owner-scoped child query misses a child** (2.3 ASSUMPTION): a PUBLIC orphan would survive; P3 detects it.
+- **Owner-scoped child query misses a child:** closed (2.3 CONFIRMED by construction and by data); the P3 roster and P6 detect any promoted or mismatched row.
+- **Adopters' update reports change** for a detached child (RETIRED instead of MOVED, 2.6): intended; say so in the release.
+- **Any PUBLIC request flips every child** (2.2): guardrail, and option (g) is the owner's call.
+- **Tests:** three existing tests change (section 3), plus the new overload for the `listPublic` count filter (2.4), whose authenticated path must stay byte-identical (test 13).
 
-## 8. Open items to verify before briefing
-1. `applySourceUpdate` re-check (Svc:1523-1526) and MOVED/RETIRED relocation (Svc:2657-2669): add the helper so a
-   relocated child under a withdrawn parent reads as RETIRED, not MOVED with its title? Recommend yes.
-2. `inspectSourceUpdate` does not apply `assertPublishedIfSubjectPlan` to a child source (pre-existing; out of
-   scope unless the brief chooses to align it).
-3. Children always share the Goal owner (2.3).
-4. Whether any admin UI unpublishes a single child (parent plan, verification record: ASSUMPTION).
-5. Whether `SqlCaptureStatementInspector` can assert one projection query in test 6.
+## 8. Open items (closed 2026-11-14 unless noted; evidence in `docs/claude-plans/2026-11-14-phase0-open-items-verification.md`)
+1. `applySourceUpdate` re-check and the MOVED/RETIRED relocation lookup: **include**: reuse the ancestor helper so a child under a non-public parent reads RETIRED. A withdrawn Goal is already detached before the relocation branch is reached.
+2. `inspectSourceUpdate`: the **ancestor check stays in 2.1 (with test 11)**; aligning the published-stamp check on a child source stays out of scope (no live population: 0 learners adopted a standalone child plan; all 405 child-source copies sit inside adopted Goals).
+3. Children share the Goal owner: **closed** (2.3).
+4. A curator can unpublish a single child: **CONFIRMED possible** through the API (no guard in `updateVisibility`) and the admin "Publish settings" control renders on any collection page; Phase 0 must not change child-level toggling (the nine legacy sections may come from it). The child-page modal flow was not read.
+5. `SqlCaptureStatementInspector`: **exists** (`backend/src/test/java/com/studysnap/backend/testutil/`, used by `NativeQueryPostgresIntegrationTest` and `QuickReviewSessionRepositoryTest`); registering it in the service-level integration test is an ASSUMPTION. Also: `NoteCollectionServiceProjectionIntegrationTest` is H2 but has `@AutoConfigureMockMvc` with the full context (:61-62), so the 401/403 real-request test can live there.
+6. **OPEN, owner decision:** option (g), the repeat-PUBLIC guard (2.2). Default: not included; the guardrail stands.
