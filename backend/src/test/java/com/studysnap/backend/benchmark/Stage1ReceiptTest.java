@@ -69,6 +69,11 @@ class Stage1ReceiptTest {
 
     @Test void stubbedForwardedRequestsCompareAfterRemovingOnlyModel() throws Exception {
         Stage1Receipt baseline = forwarded(MINI, NOTE, "baseline");
+        Stage1Receipt.Signal signal = baseline.cases().getFirst().llmCalls().getFirst();
+        assertThat(signal.groupId()).isEqualTo(CASE);
+        String signalJson = json.writeValueAsString(signal);
+        assertThat(signalJson).contains("\"groupId\":\"" + CASE + "\"")
+                .doesNotContain("\"input\"", "\"body\"", BASE_BODY);
         Stage1Receipt modelOnly = forwarded(LUNA, NOTE, "candidate-same");
         Stage1Receipt oneCharacter = forwarded(LUNA, "notf", "candidate-different");
         assertThat(Stage1Receipt.compare(baseline, modelOnly).getFirst().result())

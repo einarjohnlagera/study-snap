@@ -242,7 +242,7 @@ class Stage1RunPlanTest {
         StageCapLedger noTriggerLedger = new StageCapLedger(caps);
         assertThatThrownBy(() -> untriggeredPlan.dryRun(stub, noTriggerLedger))
                 .isInstanceOf(Stage1Receipt.ProtocolDeviation.class)
-                .hasMessageContaining("recorded T2 trigger");
+                .hasMessageContaining("pipeline T2 trigger record");
         assertThat(stub.forwarded).hasSize(dispatchesBefore);
         assertThat(noTriggerLedger.recordCount()).isZero();
         Stage1Receipt triggered = new Stage1Receipt(luna.head(), luna.freezeSha256(),
@@ -257,10 +257,9 @@ class Stage1RunPlanTest {
                     temp.resolve(BASELINE_41 + JSON_SUFFIX), triggeredFile),
                 temp.resolve("reserve-receipt.json"), fixtures.freeze()));
         try (StageCapLedger ledger = StageCapLedger.open(ledgerFile, caps, false)) {
-            Stage1Receipt reserve = reservePlan.dryRun(stub, ledger);
-            assertThat(reserve.cases()).extracting(Stage1Receipt.CaseRow::id)
-                    .containsExactly("a-" + NOTE_ADAPTIVE + RESERVE_SUFFIX);
-            assertThat(reserve.complete()).isTrue();
+            assertThatThrownBy(() -> reservePlan.dryRun(stub, ledger))
+                    .isInstanceOf(Stage1Receipt.ProtocolDeviation.class)
+                    .hasMessageContaining("pipeline T2 trigger record");
         }
     }
 

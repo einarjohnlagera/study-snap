@@ -27,8 +27,11 @@ record Stage1Receipt(String head, String freezeSha256, String arm, String model,
         this(head, freezeSha256, arm, model, stage, startedAt, endedAt, ledgerRecordCount,
                 unreconciled, caseSetSha256, cases, triggers, null);
     }
-    record Signal(String outcome, int attempt, long latencyMs, int httpStatus) {
-        Signal(String outcome, int attempt, long latencyMs) { this(outcome, attempt, latencyMs, 0); }
+    record Signal(String outcome, int attempt, long latencyMs, int httpStatus, String groupId) {
+        Signal(String outcome, int attempt, long latencyMs, int httpStatus) {
+            this(outcome, attempt, latencyMs, httpStatus, null);
+        }
+        Signal(String outcome, int attempt, long latencyMs) { this(outcome, attempt, latencyMs, 0, null); }
     }
     record CaseRow(String id, String workflow, String manifestRowSha256,
                    CaseArmOutcome.State state, boolean firstAttemptClean, boolean finalSuccess,
@@ -72,7 +75,8 @@ record Stage1Receipt(String head, String freezeSha256, String arm, String model,
                 AttemptOutcome attempt = outcome.attempts().get(index);
                 String signal = attempt.parseSchemaFailure() ? "SCHEMA_OR_PARSE"
                         : attempt.kind() == AttemptOutcome.Kind.OK ? "SUCCESS" : attempt.kind().name();
-                signals.add(new Signal(signal, attempt.attempt(), call.call().latencyMs(), call.call().status()));
+                signals.add(new Signal(signal, attempt.attempt(), call.call().latencyMs(),
+                        call.call().status(), attempt.generationId()));
                 if (attempt.attempt() == 1)
                     indexedHashes.add(new IndexedHash(attempt.generationId(), index, call.modelRemovedDigest()));
             }

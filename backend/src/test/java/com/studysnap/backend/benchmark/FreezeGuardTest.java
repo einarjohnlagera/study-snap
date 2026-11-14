@@ -3,6 +3,7 @@ package com.studysnap.backend.benchmark;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,7 @@ class FreezeGuardTest {
     private static final String WORKFLOW = "NOTE_ADAPTIVE";
     private static final String PREREG = "docs/claude-plans/2026-11-12-v0182-llm-migration-preregistration.md";
     private static final String PARAMETERS = "backend/src/test/java/com/studysnap/backend/benchmark/frozen-route-gates.json";
+    private static final String MAPPING = "backend/src/test/java/com/studysnap/backend/benchmark/evidence-mapping.json";
     private static final String PROMPT = "backend/src/main/resources/prompts/study-pack-v1/system.txt";
     private static final String CHANGED = "changed";
     private static final String SHA = "SHA-256";
@@ -28,25 +30,38 @@ class FreezeGuardTest {
     private static final String MANIFEST_KEY = "classA.primary";
     @TempDir Path temp;
 
-    private record Fixture(Path root, Path prereg, Path parameters, Path prompt, Path manifest,
+    private record Fixture(Path root, Path prereg, Path parameters, Path mapping, Path prompt, Path manifest,
                            Path record, Path ledger) {}
 
     private Fixture fixture() throws Exception {
         Path root = temp.resolve("repo");
         Path prereg = write(root.resolve(PREREG), "draft");
         Path parameters = write(root.resolve(PARAMETERS), "gates");
+        Path mapping = write(root.resolve(MAPPING), "mapping");
         Path prompt = write(root.resolve(PROMPT), "system");
         Path manifest = write(temp.resolve("manifest.jsonl"), ROW);
         var freeze = new FreezeRecord(HEAD, FreezeRecord.sha256(prereg), FreezeRecord.sha256(parameters),
                 Map.of(manifest.toString(), FreezeRecord.sha256(manifest)),
                 Map.of(PROMPT, FreezeRecord.sha256(prompt)),
                 Map.of(ARM, new FreezeRecord.Arm(MODEL, List.of(WORKFLOW))),
-                Map.of("INTERACTIVE_QUIZ", MODEL), LocalDate.of(2026, 11, 14));
+                Map.of("INTERACTIVE_QUIZ", MODEL), LocalDate.of(2026, 11, 14),
+                java.util.Set.of(), FreezeRecord.sha256(mapping), Map.of(
+                    "QuickReviewAdaptivePracticeServiceTest", WORKFLOW,
+                    "QuickReviewStudyTipServiceTest", WORKFLOW,
+                    "GeneratedQuizServiceTest", WORKFLOW,
+                    "ChallengeQuizServiceTest", WORKFLOW,
+                    "LongExamServiceTest", WORKFLOW,
+                    "ExamQuestionPoolServiceTest", WORKFLOW,
+                    "InterviewPracticeServiceTest", WORKFLOW,
+                    "NoteCollectionServiceTest", WORKFLOW,
+                    "OpenAiAskCompanionLlmServiceTest", WORKFLOW,
+                    "OpenAiLlmStudyPackServiceTest", WORKFLOW),
+                Map.of(WORKFLOW, BigDecimal.ONE));
         Path file = temp.resolve("freeze.json");
         byte[] bytes = new ObjectMapper().findAndRegisterModules().writeValueAsBytes(freeze);
         Files.write(file, bytes);
         Files.writeString(temp.resolve(HASH_FILE), FreezeRecord.sha256(bytes));
-        return new Fixture(root, prereg, parameters, prompt, manifest, file, temp.resolve("ledger.jsonl"));
+        return new Fixture(root, prereg, parameters, mapping, prompt, manifest, file, temp.resolve("ledger.jsonl"));
     }
 
     private static Path write(Path path, String value) throws Exception {
@@ -93,6 +108,29 @@ class FreezeGuardTest {
         Files.writeString(f.parameters(), CHANGED);
         assertThatThrownBy(() -> verify(f)).isInstanceOf(FreezeRecord.InvalidFreeze.class)
                 .hasMessageContaining(PARAMETERS).hasMessageContaining(SHA);
+        assertThat(Files.exists(f.ledger())).isFalse();
+    }
+
+    @Test void changedEvidenceMappingRefusesBeforeLedger() throws Exception {
+        Fixture f = fixture();
+        Files.writeString(f.mapping(), CHANGED);
+        assertThatThrownBy(() -> verify(f)).isInstanceOf(FreezeRecord.InvalidFreeze.class)
+                .hasMessageContaining(MAPPING).hasMessageContaining(SHA);
+        assertThat(Files.exists(f.ledger())).isFalse();
+    }
+
+    @Test void missingWorkflowCostCeilingCannotMeanUnlimited() throws Exception {
+        Fixture f = fixture();
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        com.fasterxml.jackson.databind.node.ObjectNode record =
+                (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(f.record().toFile());
+        ((com.fasterxml.jackson.databind.node.ObjectNode) record.path("costForecastUsdPerDeliveredCase"))
+                .remove(WORKFLOW);
+        byte[] bytes = mapper.writeValueAsBytes(record);
+        Files.write(f.record(), bytes);
+        Files.writeString(temp.resolve(HASH_FILE), FreezeRecord.sha256(bytes));
+        assertThatThrownBy(() -> verify(f)).isInstanceOf(FreezeRecord.InvalidFreeze.class)
+                .hasMessageContaining("Missing frozen cost forecast");
         assertThat(Files.exists(f.ledger())).isFalse();
     }
 
@@ -149,7 +187,7 @@ class FreezeGuardTest {
         assertThatThrownBy(() -> verify(f, absent, workflow, MODEL, HEAD))
                 .isInstanceOf(FreezeRecord.InvalidFreeze.class).hasMessageContaining("Manifest absent");
         assertThatThrownBy(() -> verify(f, manifest, unlisted, MODEL, HEAD))
-                .isInstanceOf(FreezeRecord.InvalidFreeze.class).hasMessageContaining("Workflow absent");
+                .isInstanceOf(FreezeRecord.InvalidFreeze.class).hasMessageContaining("Missing frozen cost forecast");
     }
 
     @Test void armModelMismatchRefusesBeforeLedger() throws Exception {

@@ -318,9 +318,11 @@ final class RouteVerdictCalculator {
                                  boolean critical) {}
 
     private static ArmResolution resolve(ArmResult arm, int requiredRechecks, boolean candidate) {
-        if (arm.evidence() != Evidence.SCORED) return new ArmResolution(true, false, Set.of(), false);
-        if (arm.finalFailureClass() == null) return new ArmResolution(false, false,
-                arm.t3Components(), arm.critical());
+        if (arm.finalFailureClass() == null) return arm.evidence() == Evidence.SCORED
+                ? new ArmResolution(false, false, arm.t3Components(), arm.critical())
+                : new ArmResolution(true, false, Set.of(), false);
+        if (arm.evidence() == Evidence.MISSING || arm.evidence() == Evidence.UNMETERED)
+            return new ArmResolution(true, false, Set.of(), false);
         if (arm.rechecks().size() != requiredRechecks) return new ArmResolution(true, false, Set.of(), false);
         Recheck firstSuccess = null;
         boolean allSame = true;

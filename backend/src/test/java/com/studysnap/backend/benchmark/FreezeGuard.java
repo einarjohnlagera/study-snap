@@ -9,6 +9,7 @@ import java.util.Map;
 final class FreezeGuard {
     private static final String PREREGISTRATION = "docs/claude-plans/2026-11-12-v0182-llm-migration-preregistration.md";
     private static final String PARAMETERS = "backend/src/test/java/com/studysnap/backend/benchmark/frozen-route-gates.json";
+    private static final String EVIDENCE_MAPPING = "backend/src/test/java/com/studysnap/backend/benchmark/evidence-mapping.json";
     private static final String PROMPTS = "backend/src/main/resources/prompts/study-pack-v1/";
     private static final String RESOURCE_ROOT = "backend/src/main/resources/";
     private static final String MISSING = "MISSING";
@@ -43,10 +44,15 @@ final class FreezeGuard {
                            String head, boolean verifyLoadedResources) {
         FreezeRecord record = FreezeRecord.load(recordPath);
         try {
+            for (String workflow : workflows)
+                if (!record.costForecastUsdPerDeliveredCase().containsKey(workflow)
+                        || !record.compatibilitySuites().containsValue(workflow))
+                    throw new FreezeRecord.InvalidFreeze("Missing frozen cost forecast or compatibility suite for " + workflow);
             if (!head.equals(record.gitCommit()))
                 throw new FreezeRecord.InvalidFreeze("HEAD mismatch: " + record.gitCommit() + DIFFER + head);
             match(repoRoot, PREREGISTRATION, record.preregistrationSha256());
             match(repoRoot, PARAMETERS, record.parametersSha256());
+            match(repoRoot, EVIDENCE_MAPPING, record.evidenceMappingSha256());
             for (var entry : record.manifests().entrySet()) matchExternal(entry.getKey(), entry.getValue());
             for (var entry : record.prompts().entrySet()) {
                 if (!entry.getKey().startsWith(PROMPTS)) throw new FreezeRecord.InvalidFreeze("Prompt path outside prompt directory: " + entry.getKey());

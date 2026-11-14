@@ -202,6 +202,17 @@ class RouteVerdictCalculatorTest {
                 Set.of(), false, PARSE_FAILURE, rechecks, false, false);
     }
 
+    @Test void meteredRepeatedFailureConfirmsT1WithoutCallingTheFailedOutputScored() throws Exception {
+        FrozenGateParameters p = parameters();
+        List<RouteVerdictCalculator.CaseRecord> records = cases(p, CRITIQUE);
+        RouteVerdictCalculator.ArmResult failed = new RouteVerdictCalculator.ArmResult(
+                RouteVerdictCalculator.Evidence.UNSCORABLE, Set.of(), false, PARSE_FAILURE,
+                List.of(recheck(PARSE_FAILURE, null), recheck(PARSE_FAILURE, null)), false, false);
+        records.set(0, withArms(records.get(0), emptyArm(), failed));
+        assertThat(calculate(p, CRITIQUE, records, Map.of()).failedTiers())
+                .contains(RouteVerdictCalculator.Tier.T1);
+    }
+
     @Test void t1BothSameClassDifferentClassAndOneSuccess() throws Exception {
         FrozenGateParameters p = parameters();
         List<RouteVerdictCalculator.CaseRecord> records = cases(p, CRITIQUE);

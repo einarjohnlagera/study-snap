@@ -129,11 +129,12 @@ final class RecheckRunner {
                         : comparison.deviation().getMessage();
                 RouteVerdictCalculator.Evidence evidence = deviation != null
                         ? RouteVerdictCalculator.Evidence.MISSING
-                        : outcome.state() == CaseArmOutcome.State.COMPLETE
-                            ? RouteVerdictCalculator.Evidence.SCORED
-                            : outcome.state() == CaseArmOutcome.State.INCONCLUSIVE
-                                ? RouteVerdictCalculator.Evidence.MISSING
-                                : RouteVerdictCalculator.Evidence.UNSCORABLE;
+                        : outcome.state() == CaseArmOutcome.State.INCONCLUSIVE
+                            ? RouteVerdictCalculator.Evidence.MISSING
+                            : outcome.attempts().stream().anyMatch(attempt ->
+                                attempt.kind() == AttemptOutcome.Kind.UNMETERED)
+                                ? RouteVerdictCalculator.Evidence.UNMETERED
+                                : RouteVerdictCalculator.Evidence.SCORED;
                 repeats.add(new RecheckReceipt.Repeat(recheckIndex, outcome.failureClass(), evidence,
                         deviation, delivered.lineSha256().get(item.caseId()), delivered.fileSha256()));
                 }
@@ -144,7 +145,8 @@ final class RecheckRunner {
                     List.copyOf(repeats)));
         }
         RecheckReceipt receipt = new RecheckReceipt(verified.head(), verified.sha256(), original.arm(),
-                original.model(), decision.freezeEligibleFailureClasses(), List.copyOf(resultCases));
+                original.model(), decision.freezeEligibleFailureClasses(), List.copyOf(resultCases),
+                original.caseSetSha256());
         receipt.write(outputRoot.resolve("recheck-receipt.json"));
         return receipt;
     }

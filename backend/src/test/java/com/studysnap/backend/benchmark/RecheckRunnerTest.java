@@ -114,7 +114,7 @@ class RecheckRunnerTest {
         assertThat(rechecks.cases().getFirst().repeats())
                 .extracting(RecheckReceipt.Repeat::evidence)
                 .containsExactly(RouteVerdictCalculator.Evidence.SCORED,
-                        RouteVerdictCalculator.Evidence.UNSCORABLE);
+                        RouteVerdictCalculator.Evidence.SCORED);
         assertThat(RecheckReceipt.read(outputRoot.resolve("recheck-receipt.json")))
                 .isEqualTo(rechecks);
         assertThat(Files.readString(outputRoot.resolve("recheck-receipt.json")))

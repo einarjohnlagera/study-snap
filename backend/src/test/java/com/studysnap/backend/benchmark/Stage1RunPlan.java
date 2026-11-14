@@ -31,13 +31,21 @@ final class Stage1RunPlan implements StageRunner.RunPlanProvider {
     }
     record Config(StageRunner.RunInput input, String arm, Path freezeFile, Path parametersFile,
                   Map<String, Path> manifests, String reserveWorkflow, boolean explicitlySelected,
-                  List<Path> baselineReceipts, Path receiptFile, FreezeRecord dryRecord) {}
+                  List<Path> baselineReceipts, Path receiptFile, FreezeRecord dryRecord,
+                  Path t2TriggerRecord) {
+        Config(StageRunner.RunInput input, String arm, Path freezeFile, Path parametersFile,
+               Map<String, Path> manifests, String reserveWorkflow, boolean explicitlySelected,
+               List<Path> baselineReceipts, Path receiptFile, FreezeRecord dryRecord) {
+            this(input, arm, freezeFile, parametersFile, manifests, reserveWorkflow,
+                    explicitlySelected, baselineReceipts, receiptFile, dryRecord, null);
+        }
+    }
     private record RunFile(String arm, String model, StageCapLedger.Stage stage,
                            BigDecimal priceIn, BigDecimal priceOut,
                            Map<String, ForecastReservation> forecasts, Path outputDir,
                            Path receiptFile, Path freezeFile, Path parametersFile,
                            Map<String, Path> manifests, String reserveWorkflow,
-                           boolean explicitlySelected, List<Path> baselineReceipts) {}
+                           boolean explicitlySelected, List<Path> baselineReceipts, Path t2TriggerRecord) {}
     private record Row(String id, String workflow, boolean reserve, boolean classA, String hash, String raw) {}
     private static final String CLASS_A_PRIMARY = "classA.primary";
     private static final String CLASS_B_PRIMARY = "classB.primary";
@@ -158,22 +166,38 @@ final class Stage1RunPlan implements StageRunner.RunPlanProvider {
                                 List<Row> allPrimary) throws IOException {
         if (config.baselineReceipts() == null || config.baselineReceipts().size() != 3)
             throw new Stage1Receipt.ProtocolDeviation("Reserve requires baseline-versus-candidate receipts");
+        if (config.t2TriggerRecord() == null)
+            throw new Stage1Receipt.ProtocolDeviation("Reserve requires pipeline T2 trigger record");
+        T2TriggerRecord trigger = T2TriggerRecord.readAndVerify(config.t2TriggerRecord(), workflow);
+        if (!trigger.linkedPath(T2TriggerRecord.CANDIDATE).equals(
+                    config.baselineReceipts().get(2).toAbsolutePath().normalize())
+                || !trigger.linkedPath(T2TriggerRecord.MINI).equals(
+                    config.baselineReceipts().get(0).toAbsolutePath().normalize())
+                || !trigger.linkedPath(T2TriggerRecord.FOUR_ONE).equals(
+                    config.baselineReceipts().get(1).toAbsolutePath().normalize())
+                || !trigger.linkedPath(T2TriggerRecord.PARAMETERS).equals(
+                    config.parametersFile().toAbsolutePath().normalize()))
+            throw new Stage1Receipt.ProtocolDeviation("Reserve trigger links differ from run inputs");
+        if (!FreezeRecord.sha256(trigger.linkedPath(T2TriggerRecord.MAPPING))
+                    .equals(record.evidenceMappingSha256())
+                || !FreezeRecord.sha256(trigger.linkedPath(T2TriggerRecord.PARAMETERS))
+                    .equals(record.parametersSha256()))
+            throw new Stage1Receipt.ProtocolDeviation("Reserve trigger mapping or parameters differ from freeze");
         List<Stage1Receipt> receipts = config.baselineReceipts().stream().map(Stage1Receipt::read).toList();
         Map<String, String> hashes = new HashMap<>();
         allPrimary.forEach(row -> hashes.put(row.id(), row.hash()));
-        String freezeHash = dry ? DRY_RUN : FreezeRecord.sha256(config.freezeFile());
-        String head = dry ? DRY_RUN : record.gitCommit();
+        String freezeHash = dry ? trigger.freezeSha256() : FreezeRecord.sha256(config.freezeFile());
+        String head = record.gitCommit();
         Stage1Receipt.requireCompleteBaselines(receipts.subList(0, 2), caseSetHash,
                 hashes, record, freezeHash, head);
         Stage1Receipt candidate = receipts.get(2);
-        if (!candidate.arm().equals(LUNA) || !candidate.complete()
+        if (!candidate.arm().equals(LUNA) || candidate.unreconciled()
                 || !caseSetHash.equals(candidate.caseSetSha256())
                 || !freezeHash.equals(candidate.freezeSha256()) || !head.equals(candidate.head())
                 || candidate.cases().size() != hashes.size()
                 || !candidate.cases().stream().map(Stage1Receipt.CaseRow::id).collect(java.util.stream.Collectors.toSet())
                     .equals(hashes.keySet())
-                || candidate.cases().stream().anyMatch(row -> !row.manifestRowSha256().equals(hashes.get(row.id())))
-                || candidate.triggers().get(workflow) != RouteVerdictCalculator.Tier.T2)
+                || candidate.cases().stream().anyMatch(row -> !row.manifestRowSha256().equals(hashes.get(row.id()))))
             throw new Stage1Receipt.ProtocolDeviation("Reserve lacks recorded T2 trigger for " + workflow);
         Stage1Receipt baseline = receipts.subList(0, 2).stream()
                 .filter(receipt -> receipt.cases().stream().anyMatch(row -> workflow.equals(row.workflow())))
@@ -360,13 +384,13 @@ final class Stage1RunPlan implements StageRunner.RunPlanProvider {
                     || file.priceIn() == null || file.priceOut() == null || file.forecasts() == null
                     || file.outputDir() == null || file.receiptFile() == null || file.freezeFile() == null
                     || file.parametersFile() == null || file.manifests() == null
-                    || file.baselineReceipts() == null)
+                    || file.baselineReceipts() == null || file.reserveWorkflow() != null && file.t2TriggerRecord() == null)
                 throw new InvalidRunPlan("Incomplete real-run input");
             var input = new StageRunner.RunInput(file.model(), key, file.stage(),
                     null, file.forecasts(), file.priceIn(), file.priceOut(), path, file.outputDir());
             return new Config(input, file.arm(), file.freezeFile(), file.parametersFile(), file.manifests(),
                     file.reserveWorkflow(), file.explicitlySelected(), file.baselineReceipts(),
-                    file.receiptFile(), null);
+                    file.receiptFile(), null, file.t2TriggerRecord());
         } catch (IOException exception) {
             throw new InvalidRunPlan("Cannot read real-run input", exception);
         }

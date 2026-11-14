@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -18,14 +19,23 @@ import java.util.Set;
 record FreezeRecord(String gitCommit, String preregistrationSha256, String parametersSha256,
                     Map<String, String> manifests, Map<String, String> prompts,
                     Map<String, Arm> arms, Map<String, String> baselineModelsByRoute,
-                    LocalDate ownerApprovalDate, Set<String> recheckEligibleFailureClasses) {
+                    LocalDate ownerApprovalDate, Set<String> recheckEligibleFailureClasses,
+                    String evidenceMappingSha256, Map<String, String> compatibilitySuites,
+                    Map<String, BigDecimal> costForecastUsdPerDeliveredCase) {
     record Arm(String model, List<String> workflows) {}
+    FreezeRecord(String gitCommit, String preregistrationSha256, String parametersSha256,
+                 Map<String, String> manifests, Map<String, String> prompts,
+                 Map<String, Arm> arms, Map<String, String> baselineModelsByRoute,
+                 LocalDate ownerApprovalDate, Set<String> recheckEligibleFailureClasses) {
+        this(gitCommit, preregistrationSha256, parametersSha256, manifests, prompts, arms,
+                baselineModelsByRoute, ownerApprovalDate, recheckEligibleFailureClasses, null, null, null);
+    }
     FreezeRecord(String gitCommit, String preregistrationSha256, String parametersSha256,
                  Map<String, String> manifests, Map<String, String> prompts,
                  Map<String, Arm> arms, Map<String, String> baselineModelsByRoute,
                  LocalDate ownerApprovalDate) {
         this(gitCommit, preregistrationSha256, parametersSha256, manifests, prompts, arms,
-                baselineModelsByRoute, ownerApprovalDate, Set.of());
+                baselineModelsByRoute, ownerApprovalDate, Set.of(), null, null, null);
     }
 
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules()
@@ -48,7 +58,15 @@ record FreezeRecord(String gitCommit, String preregistrationSha256, String param
                     || record.arms() == null || record.arms().isEmpty()
                     || record.baselineModelsByRoute() == null || record.baselineModelsByRoute().isEmpty()
                     || record.ownerApprovalDate() == null || record.recheckEligibleFailureClasses() == null
-                    || record.recheckEligibleFailureClasses().stream().anyMatch(value -> value == null || value.isBlank()))
+                    || record.recheckEligibleFailureClasses().stream().anyMatch(value -> value == null || value.isBlank())
+                    || !digest(record.evidenceMappingSha256())
+                    || record.compatibilitySuites() == null || record.compatibilitySuites().size() != 10
+                    || record.compatibilitySuites().entrySet().stream().anyMatch(item -> item.getKey().isBlank()
+                        || item.getValue() == null || item.getValue().isBlank())
+                    || record.costForecastUsdPerDeliveredCase() == null
+                    || record.costForecastUsdPerDeliveredCase().entrySet().stream().anyMatch(item ->
+                        item.getKey().isBlank() || item.getValue() == null
+                        || item.getValue().signum() <= 0))
                 throw new InvalidFreeze("Incomplete freeze record");
             record.manifests().values().forEach(FreezeRecord::requireDigest);
             record.prompts().values().forEach(FreezeRecord::requireDigest);
@@ -63,6 +81,11 @@ record FreezeRecord(String gitCommit, String preregistrationSha256, String param
                         || arm.workflows().stream().distinct().count() != arm.workflows().size())
                     throw new InvalidFreeze("Invalid arm " + name);
             });
+            Set<String> frozenWorkflows = record.arms().values().stream()
+                    .flatMap(arm -> arm.workflows().stream()).collect(java.util.stream.Collectors.toSet());
+            if (!record.costForecastUsdPerDeliveredCase().keySet().containsAll(frozenWorkflows)
+                    || !record.compatibilitySuites().values().containsAll(frozenWorkflows))
+                throw new InvalidFreeze("Missing frozen cost forecast or compatibility suite");
             return record;
         } catch (IOException exception) {
             throw new InvalidFreeze("Missing or malformed freeze record: " + file, exception);

@@ -9,7 +9,8 @@ import java.util.Set;
 
 /** Content-free T1 repeat evidence for preregistration sections 1 and 8. */
 record RecheckReceipt(String head, String freezeSha256, String arm, String model,
-                      Set<String> recheckEligibleFailureClasses, List<Case> cases) {
+                      Set<String> recheckEligibleFailureClasses, List<Case> cases,
+                      String caseSetSha256) {
     RecheckReceipt {
         if (cases == null || cases.stream().anyMatch(item -> item.repeats() == null
                 || item.repeats().size() != 2 || item.repeats().get(0).recheckIndex() != 1
