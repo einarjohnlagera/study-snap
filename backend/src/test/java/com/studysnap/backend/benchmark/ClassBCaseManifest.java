@@ -46,6 +46,21 @@ final class ClassBCaseManifest {
     private ClassBCaseManifest() {}
 
     static List<Case> load(Path path, FrozenGateParameters parameters) {
+        List<Case> cases = loadRows(path);
+        Map<Workflow, int[]> counts = new HashMap<>();
+        for (Case item : cases)
+            counts.computeIfAbsent(item.workflow(), ignored -> new int[2])[item.reserve() ? 1 : 0]++;
+        for (Workflow workflow : Workflow.values()) {
+            FrozenGateParameters.Workflow frozen = parameters.workflows.get(workflow.name());
+            if (frozen == null) throw new InvalidManifest("Unknown frozen workflow: " + workflow);
+            int[] count = counts.getOrDefault(workflow, new int[2]);
+            if (count[0] != frozen.primarySize() || count[1] != parameters.reserveSize)
+                throw new InvalidManifest("Fixture count differs from frozen parameters: " + workflow);
+        }
+        return cases;
+    }
+
+    static List<Case> loadRows(Path path) {
         try {
             Path repo = StageRunner.findRepo(Path.of("").toAbsolutePath().normalize());
             if (path.toAbsolutePath().normalize().startsWith(repo.resolve(PRIVATE_PATH)))
@@ -55,7 +70,6 @@ final class ClassBCaseManifest {
                 throw new InvalidManifest(PRIVATE_DIRECTORY);
             List<Case> cases = new ArrayList<>();
             Set<String> ids = new HashSet<>();
-            Map<Workflow, int[]> counts = new HashMap<>();
             for (String line : Files.readAllLines(path)) {
                 if (line.isBlank()) throw new InvalidManifest("Blank class-B fixture row");
                 com.fasterxml.jackson.databind.JsonNode raw = JSON.readTree(line);
@@ -67,15 +81,7 @@ final class ClassBCaseManifest {
                 Case item = JSON.readValue(line, Case.class);
                 validate(item);
                 if (!ids.add(item.fixtureId())) throw new InvalidManifest("Duplicate fixtureId");
-                counts.computeIfAbsent(item.workflow(), ignored -> new int[2])[item.reserve() ? 1 : 0]++;
                 cases.add(item);
-            }
-            for (Workflow workflow : Workflow.values()) {
-                FrozenGateParameters.Workflow frozen = parameters.workflows.get(workflow.name());
-                if (frozen == null) throw new InvalidManifest("Unknown frozen workflow: " + workflow);
-                int[] count = counts.getOrDefault(workflow, new int[2]);
-                if (count[0] != frozen.primarySize() || count[1] != parameters.reserveSize)
-                    throw new InvalidManifest("Fixture count differs from frozen parameters: " + workflow);
             }
             return List.copyOf(cases);
         } catch (IOException | IllegalArgumentException ex) {

@@ -1,10 +1,12 @@
 package com.studysnap.backend.benchmark;
 
+import com.studysnap.backend.config.AppConfig;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -15,6 +17,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BatchTaggingExecutorTest {
     private static final String REUSE_BATCH_ONE = "reuse-batch-1";
     private static final String REUSE_BATCH_TWO = "reuse-batch-2";
+    @Test void productionDelegateMatchesProductionBeanSizingAndPrefix() {
+        var production = (org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor)
+                new AppConfig().llmParallelTaskExecutor();
+        try (var tagging = BatchTaggingExecutor.production("sizing")) {
+            ThreadPoolExecutor expected = production.getThreadPoolExecutor();
+            ThreadPoolExecutor actual = (ThreadPoolExecutor) tagging.delegate();
+            assertThat(actual.getCorePoolSize()).isEqualTo(expected.getCorePoolSize());
+            assertThat(actual.getMaximumPoolSize()).isEqualTo(expected.getMaximumPoolSize());
+            assertThat(actual.getQueue().remainingCapacity())
+                    .isEqualTo(expected.getQueue().remainingCapacity());
+            AtomicReference<String> name = new AtomicReference<>();
+            tagging.execute(() -> name.set(Thread.currentThread().getName()));
+            assertThat(tagging.awaitQuiescence(Duration.ofSeconds(2))).isTrue();
+            assertThat(name.get()).startsWith(production.getThreadNamePrefix());
+        } finally {
+            production.shutdown();
+        }
+    }
     @Test void reusedWorkerDoesNotInheritThreadLocalOrMdc() throws Exception {
         var delegate = Executors.newSingleThreadExecutor();
         try (var tagging = new BatchTaggingExecutor("reuse", delegate)) {

@@ -182,7 +182,10 @@ final class ClassAServiceHarness {
     BatchTaggingExecutor batchExecutor() { return batchExecutor; }
 
     void installBatchExecutor(int workers) {
-        batchExecutor = new BatchTaggingExecutor(item.caseId(), Executors.newFixedThreadPool(workers));
+        // The one-worker variant is retained for the existing quiescence mutant tests.
+        batchExecutor = workers == 1
+                ? new BatchTaggingExecutor(item.caseId(), Executors.newSingleThreadExecutor())
+                : BatchTaggingExecutor.production(item.caseId());
         collaborators.put(AsyncTaskExecutor.class, batchExecutor);
     }
 

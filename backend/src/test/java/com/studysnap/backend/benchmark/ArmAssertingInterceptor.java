@@ -26,7 +26,12 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
     }
     private record CaseContext(long token, String generationId, String cellId) {}
     private record Context(long token, String cellId, String generationId, MeteringInterceptor meter) {}
-    record CallReceipt(MeteringInterceptor.Call call, int questionCount, String bodyDigest) {}
+    record CallReceipt(MeteringInterceptor.Call call, int questionCount, String bodyDigest,
+                       String modelRemovedDigest) {
+        CallReceipt(MeteringInterceptor.Call call, int questionCount, String bodyDigest) {
+            this(call, questionCount, bodyDigest, bodyDigest);
+        }
+    }
     private final ObjectMapper mapper;
     private final String model;
     private final String key;
@@ -72,6 +77,7 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
         String bodyDigest = digest(body);
         bodyDigests.add(bodyDigest);
         JsonNode json = mapper.readTree(body);
+        String modelRemovedDigest = modelRemovedDigest(json);
         int questionCount = json.path("text").path("format").path("schema")
                 .path("properties").path("questions").path("minItems").asInt(0);
         requestQuestionCounts.add(questionCount);
@@ -93,7 +99,7 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
         try {
             ClientHttpResponse response = active.meter().intercept(request, body, execution);
             MeteringInterceptor.Call call = active.meter().calls().get(before);
-            receipts.add(new CallReceipt(call, questionCount, bodyDigest));
+            receipts.add(new CallReceipt(call, questionCount, bodyDigest, modelRemovedDigest));
             if (response.getStatusCode().is2xxSuccessful() && !usable(call.usage())) {
                 reservation.settle(null, null);
             } else {
@@ -107,7 +113,7 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
             List<MeteringInterceptor.Call> recorded = active.meter().calls();
             if (recorded.size() > before) {
                 MeteringInterceptor.Call call = recorded.get(before);
-                receipts.add(new CallReceipt(call, questionCount, bodyDigest));
+                receipts.add(new CallReceipt(call, questionCount, bodyDigest, modelRemovedDigest));
             }
             if (ex instanceof IOException) noteHttpError();
             throw ex;
@@ -127,6 +133,12 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
         } catch (java.security.NoSuchAlgorithmException ex) {
             throw new IllegalStateException(ex);
         }
+    }
+
+    static String modelRemovedDigest(JsonNode body) throws IOException {
+        com.fasterxml.jackson.databind.node.ObjectNode copy = body.deepCopy();
+        copy.remove("model");
+        return digest(new ObjectMapper().writeValueAsBytes(copy));
     }
 
     private Context contextForThread() throws IOException {

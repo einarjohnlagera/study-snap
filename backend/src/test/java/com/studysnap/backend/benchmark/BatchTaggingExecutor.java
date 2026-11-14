@@ -1,5 +1,6 @@
 package com.studysnap.backend.benchmark;
 
+import com.studysnap.backend.config.AppConfig;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -20,6 +21,14 @@ final class BatchTaggingExecutor implements AsyncTaskExecutor, AutoCloseable {
         this.caseId = caseId;
         this.delegate = delegate;
     }
+
+    static BatchTaggingExecutor production(String caseId) {
+        var bean = (org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor)
+                new AppConfig().llmParallelTaskExecutor();
+        return new BatchTaggingExecutor(caseId, bean.getThreadPoolExecutor());
+    }
+
+    ExecutorService delegate() { return delegate; }
 
     static String currentBatch() { return CURRENT.get(); }
     int submissions() { return submissions.get(); }
