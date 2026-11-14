@@ -2,6 +2,7 @@ package com.studysnap.backend.benchmark;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.util.QuizDeduplicationUtils;
 import java.time.Duration;
 import java.util.List;
 import org.springframework.web.client.RestClient;
@@ -24,6 +25,7 @@ abstract class AbstractClassAAdapter implements StageRunner.CaseCall {
     @Override public String cellId() { return item.workflow().name() + ":" + item.stratum(); }
     @Override public String generationId() { return item.caseId(); }
     List<QuizItem> deliveredQuestions() { return deliveredQuestions; }
+    @Override public Object deliveredContent() { return deliveredQuestions; }
     List<ProductionCallSignals.Signal> signals() { return signals; }
     List<String> requestBodyDigests() { return requestBodyDigests; }
     ClassAServiceHarness harness() { return harness; }
@@ -58,11 +60,22 @@ abstract class AbstractClassAAdapter implements StageRunner.CaseCall {
             if ((result.failureClass() == null || !result.failureClass().startsWith("INCONCLUSIVE_"))
                     && !requestCountsMatch(receipts, result))
                 return production.result(generationId(), false, "INPUT_COUNT_MISMATCH", receipts);
+            if (result.failureClass() == null) {
+                String structural = structuralFailure(deliveredQuestions, item.requestedQuestionCount());
+                if (structural != null)
+                    return production.result(generationId(), false, structural, receipts);
+            }
             return result;
         }
     }
 
     protected Duration quiescenceBound() { return Duration.ofSeconds(10); }
+
+    static String structuralFailure(List<QuizItem> delivered, int requested) {
+        if (QuizDeduplicationUtils.uniqueQuestions(delivered, java.util.Set.of()).size() != delivered.size())
+            return "DUPLICATE_DELIVERY";
+        return delivered.size() < requested ? "SHORT_DELIVERY" : null;
+    }
 
     protected boolean requestCountsMatch(List<ArmAssertingInterceptor.CallReceipt> receipts,
             StageRunner.CallResult result) {

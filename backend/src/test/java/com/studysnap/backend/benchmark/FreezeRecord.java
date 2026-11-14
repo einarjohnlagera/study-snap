@@ -12,13 +12,21 @@ import java.time.LocalDate;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Section 10 detached, exact-byte freeze declaration for the section 5 arm table. */
 record FreezeRecord(String gitCommit, String preregistrationSha256, String parametersSha256,
                     Map<String, String> manifests, Map<String, String> prompts,
                     Map<String, Arm> arms, Map<String, String> baselineModelsByRoute,
-                    LocalDate ownerApprovalDate) {
+                    LocalDate ownerApprovalDate, Set<String> recheckEligibleFailureClasses) {
     record Arm(String model, List<String> workflows) {}
+    FreezeRecord(String gitCommit, String preregistrationSha256, String parametersSha256,
+                 Map<String, String> manifests, Map<String, String> prompts,
+                 Map<String, Arm> arms, Map<String, String> baselineModelsByRoute,
+                 LocalDate ownerApprovalDate) {
+        this(gitCommit, preregistrationSha256, parametersSha256, manifests, prompts, arms,
+                baselineModelsByRoute, ownerApprovalDate, Set.of());
+    }
 
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules()
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -39,7 +47,8 @@ record FreezeRecord(String gitCommit, String preregistrationSha256, String param
                     || record.prompts() == null || record.prompts().isEmpty()
                     || record.arms() == null || record.arms().isEmpty()
                     || record.baselineModelsByRoute() == null || record.baselineModelsByRoute().isEmpty()
-                    || record.ownerApprovalDate() == null)
+                    || record.ownerApprovalDate() == null || record.recheckEligibleFailureClasses() == null
+                    || record.recheckEligibleFailureClasses().stream().anyMatch(value -> value == null || value.isBlank()))
                 throw new InvalidFreeze("Incomplete freeze record");
             record.manifests().values().forEach(FreezeRecord::requireDigest);
             record.prompts().values().forEach(FreezeRecord::requireDigest);

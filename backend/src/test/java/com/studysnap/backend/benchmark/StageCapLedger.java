@@ -41,6 +41,8 @@ final class StageCapLedger implements AutoCloseable {
     private static final String RESERVATION_ID = "reservationId";
     private static final String INIT = "INIT";
     private static final String RESERVE = "RESERVE";
+    private static final String TRANSFER = "TRANSFER";
+    private static final String PARENT_RESERVATION_ID = "parentReservationId";
     private static final String SETTLE = "SETTLE";
     private static final String UNMETERED = "UNMETERED";
     private static final String ABANDON = "ABANDON";
@@ -185,6 +187,23 @@ final class StageCapLedger implements AutoCloseable {
                 cellSpent.merge(cell, forecast, BigDecimal::add);
                 attempts.put(stage, attempts.get(stage) + 1);
             }
+            case TRANSFER -> {
+                String parentId = requiredText(row, PARENT_RESERVATION_ID);
+                String childId = requiredText(row, RESERVATION_ID);
+                if (!usedIds.add(childId)) throw new IllegalArgumentException("Duplicate transferred reservation");
+                Pending parent = pending.get(parentId);
+                if (parent == null) throw new IllegalArgumentException("Unknown parent reservation");
+                BigDecimal forecast = requiredMoney(row, FORECAST);
+                if (forecast.signum() <= 0 || forecast.compareTo(parent.forecast()) > 0)
+                    throw new IllegalArgumentException("Transfer exceeds parent reservation");
+                String cell = requiredText(row, CELL);
+                pending.put(parentId, new Pending(parent.stage(), parent.cell(),
+                        parent.forecast().subtract(forecast)));
+                pending.put(childId, new Pending(parent.stage(), cell, forecast));
+                cellSpent.merge(parent.cell(), forecast.negate(), BigDecimal::add);
+                cellSpent.merge(cell, forecast, BigDecimal::add);
+                attempts.put(parent.stage(), attempts.get(parent.stage()) + 1);
+            }
             case SETTLE, UNMETERED, ABANDON, RECONCILE -> {
                 Pending entry = pending.remove(requiredText(row, RESERVATION_ID));
                 if (entry == null) throw new IllegalArgumentException("Unknown or closed reservation");
@@ -256,6 +275,25 @@ final class StageCapLedger implements AutoCloseable {
                 CELL, cellId, FORECAST, forecast));
         usedIds.add(id);
         inFlight.put(stage, inFlight.get(stage).add(forecast));
+        attempts.put(stage, attempts.get(stage) + 1);
+        return new Reservation(id, stage, cellId, forecast);
+    }
+
+    synchronized Reservation reserveFrom(Reservation parent, Stage stage, String cellId,
+                                         BigDecimal forecastUsd) {
+        requireOpen();
+        parent.ensureOpen();
+        if (stopReason != null) throw new SpendStop(stopReason);
+        if (parent.stage != stage || forecastUsd == null || forecastUsd.signum() <= 0)
+            throw new IllegalArgumentException("Invalid recheck budget transfer");
+        BigDecimal forecast = money(forecastUsd);
+        if (forecast.compareTo(parent.remainingForecast) > 0)
+            throw refuse("Recheck reservation exhausted: " + stage);
+        String id = UUID.randomUUID().toString();
+        append(Map.of(TYPE, TRANSFER, PARENT_RESERVATION_ID, parent.id,
+                RESERVATION_ID, id, CELL, cellId, FORECAST, forecast));
+        usedIds.add(id);
+        parent.remainingForecast = parent.remainingForecast.subtract(forecast);
         attempts.put(stage, attempts.get(stage) + 1);
         return new Reservation(id, stage, cellId, forecast);
     }
@@ -344,10 +382,10 @@ final class StageCapLedger implements AutoCloseable {
         private final String id;
         private final Stage stage;
         private final String cellId;
-        private final BigDecimal forecast;
+        private BigDecimal remainingForecast;
         private boolean closed;
         private Reservation(String id, Stage stage, String cellId, BigDecimal forecast) {
-            this.id = id; this.stage = stage; this.cellId = cellId; this.forecast = forecast;
+            this.id = id; this.stage = stage; this.cellId = cellId; this.remainingForecast = forecast;
         }
         String id() { return id; }
         boolean closed() { return closed; }
@@ -361,7 +399,7 @@ final class StageCapLedger implements AutoCloseable {
                 if (unmetered) append(Map.of(TYPE, UNMETERED, RESERVATION_ID, id));
                 else append(Map.of(TYPE, SETTLE, RESERVATION_ID, id,
                         CONSERVATIVE, money(conservativeUsd), BILLED, money(nonAdditiveUsd)));
-                inFlight.put(stage, inFlight.get(stage).subtract(forecast));
+                inFlight.put(stage, inFlight.get(stage).subtract(remainingForecast));
                 closed = true;
                 if (unmetered) {
                     stop(UNMETERED_REASON + stage);
@@ -371,7 +409,7 @@ final class StageCapLedger implements AutoCloseable {
                 spent.put(stage, spent.get(stage).add(conservative));
                 billed.put(stage, billed.get(stage).add(money(nonAdditiveUsd)));
                 cellSpent.merge(cellId, conservative, BigDecimal::add);
-                BigDecimal overshoot = conservative.subtract(forecast);
+                BigDecimal overshoot = conservative.subtract(remainingForecast);
                 if (overshoot.compareTo(largestOvershoot) > 0) largestOvershoot = overshoot;
             }
         }
@@ -379,7 +417,7 @@ final class StageCapLedger implements AutoCloseable {
             synchronized (StageCapLedger.this) {
                 ensureOpen();
                 append(Map.of(TYPE, ABANDON, RESERVATION_ID, id));
-                inFlight.put(stage, inFlight.get(stage).subtract(forecast));
+                inFlight.put(stage, inFlight.get(stage).subtract(remainingForecast));
                 closed = true;
             }
         }

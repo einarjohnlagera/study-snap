@@ -18,12 +18,31 @@ import java.util.Set;
 record Stage1Receipt(String head, String freezeSha256, String arm, String model,
                      StageCapLedger.Stage stage, Instant startedAt, Instant endedAt,
                      int ledgerRecordCount, boolean unreconciled, String caseSetSha256,
-                     List<CaseRow> cases, Map<String, RouteVerdictCalculator.Tier> triggers) {
-    record Signal(String outcome, int attempt, long latencyMs) {}
+                     List<CaseRow> cases, Map<String, RouteVerdictCalculator.Tier> triggers,
+                     String deliveredOutputsFileSha256) {
+    Stage1Receipt(String head, String freezeSha256, String arm, String model,
+                  StageCapLedger.Stage stage, Instant startedAt, Instant endedAt,
+                  int ledgerRecordCount, boolean unreconciled, String caseSetSha256,
+                  List<CaseRow> cases, Map<String, RouteVerdictCalculator.Tier> triggers) {
+        this(head, freezeSha256, arm, model, stage, startedAt, endedAt, ledgerRecordCount,
+                unreconciled, caseSetSha256, cases, triggers, null);
+    }
+    record Signal(String outcome, int attempt, long latencyMs, int httpStatus) {
+        Signal(String outcome, int attempt, long latencyMs) { this(outcome, attempt, latencyMs, 0); }
+    }
     record CaseRow(String id, String workflow, String manifestRowSha256,
                    CaseArmOutcome.State state, boolean firstAttemptClean, boolean finalSuccess,
                    String failureClass, BigDecimal conservativeUsd, BigDecimal billedUsd,
-                   List<Signal> llmCalls, List<String> attempt1BodyHashes) {}
+                   List<Signal> llmCalls, List<String> attempt1BodyHashes,
+                   String deliveredOutputSha256) {
+        CaseRow(String id, String workflow, String manifestRowSha256,
+                CaseArmOutcome.State state, boolean firstAttemptClean, boolean finalSuccess,
+                String failureClass, BigDecimal conservativeUsd, BigDecimal billedUsd,
+                List<Signal> llmCalls, List<String> attempt1BodyHashes) {
+            this(id, workflow, manifestRowSha256, state, firstAttemptClean, finalSuccess,
+                    failureClass, conservativeUsd, billedUsd, llmCalls, attempt1BodyHashes, null);
+        }
+    }
     enum Comparison { MATCH, INCONCLUSIVE }
     record CaseComparison(String caseId, Comparison result, ProtocolDeviation deviation) {}
     private record IndexedHash(String group, int index, String hash) {}
@@ -40,7 +59,8 @@ record Stage1Receipt(String head, String freezeSha256, String arm, String model,
     static Stage1Receipt fromRun(FreezeGuard.Verified freeze, String arm, String model,
                                  StageCapLedger.Stage stage, Instant started,
                                  String caseSetHash, Map<String, String> rowHashes,
-                                 Map<String, String> workflows, StageRunner.RunSummary run) {
+                                 Map<String, String> workflows, StageRunner.RunSummary run,
+                                 DeliveredOutputs.Written delivered) {
         List<CaseRow> rows = new ArrayList<>();
         for (CaseArmOutcome outcome : run.outcomes()) {
             List<ArmAssertingInterceptor.CallReceipt> calls = run.callsByCase()
@@ -52,7 +72,7 @@ record Stage1Receipt(String head, String freezeSha256, String arm, String model,
                 AttemptOutcome attempt = outcome.attempts().get(index);
                 String signal = attempt.parseSchemaFailure() ? "SCHEMA_OR_PARSE"
                         : attempt.kind() == AttemptOutcome.Kind.OK ? "SUCCESS" : attempt.kind().name();
-                signals.add(new Signal(signal, attempt.attempt(), call.call().latencyMs()));
+                signals.add(new Signal(signal, attempt.attempt(), call.call().latencyMs(), call.call().status()));
                 if (attempt.attempt() == 1)
                     indexedHashes.add(new IndexedHash(attempt.generationId(), index, call.modelRemovedDigest()));
             }
@@ -63,11 +83,20 @@ record Stage1Receipt(String head, String freezeSha256, String arm, String model,
             rows.add(new CaseRow(outcome.caseArmId(), workflows.get(outcome.caseArmId()),
                     rowHashes.get(outcome.caseArmId()), outcome.state(), outcome.firstAttemptClean(),
                     outcome.finalSuccess(), outcome.failureClass(), outcome.conservativeUsd(),
-                    outcome.billedUsd(), List.copyOf(signals), bodyHashes));
+                    outcome.billedUsd(), List.copyOf(signals), bodyHashes,
+                    delivered.lineSha256().get(outcome.caseArmId())));
         }
         return new Stage1Receipt(freeze.head(), freeze.sha256(), arm, model, stage, started,
                 Instant.now(), run.ledger().recordCount(), run.ledger().unreconciled(),
-                caseSetHash, List.copyOf(rows), Map.of());
+                caseSetHash, List.copyOf(rows), Map.of(), delivered.fileSha256());
+    }
+
+    static Stage1Receipt fromRun(FreezeGuard.Verified freeze, String arm, String model,
+                                 StageCapLedger.Stage stage, Instant started,
+                                 String caseSetHash, Map<String, String> rowHashes,
+                                 Map<String, String> workflows, StageRunner.RunSummary run) {
+        return fromRun(freeze, arm, model, stage, started, caseSetHash, rowHashes, workflows, run,
+                new DeliveredOutputs.Written(null, null, Map.of()));
     }
 
     boolean complete() {

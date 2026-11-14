@@ -27,6 +27,7 @@ abstract class AbstractClassBAdapter implements StageRunner.CaseCall {
     @Override public String cellId() { return item.workflow() + ":" + item.stratum(); }
     @Override public String generationId() { return item.fixtureId(); }
     String deliveredOutput() { return deliveredOutput; }
+    @Override public Object deliveredContent() { return deliveredOutput; }
     List<ProductionCallSignals.Signal> signals() { return signals; }
     List<String> requestBodyDigests() { return requestBodyDigests; }
     ClassBServiceHarness harness() { return harness; }

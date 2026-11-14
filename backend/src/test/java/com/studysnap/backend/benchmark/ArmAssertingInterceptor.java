@@ -41,6 +41,7 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
     private final BigDecimal priceIn;
     private final BigDecimal priceOut;
     private final java.util.Map<String, ForecastReservation> forecasts;
+    private final StageCapLedger.Reservation recheckBudget;
     private final ThreadLocal<Context> context = new ThreadLocal<>();
     private final AtomicReference<CaseContext> activeCase = new AtomicReference<>();
     private final AtomicLong caseSequence = new AtomicLong();
@@ -52,9 +53,17 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
     ArmAssertingInterceptor(ObjectMapper mapper, String model, String key, Path outDir,
             StageCapLedger ledger, StageCapLedger.Stage stage, BigDecimal priceIn, BigDecimal priceOut,
             java.util.Map<String, ForecastReservation> forecasts) {
+        this(mapper, model, key, outDir, ledger, stage, priceIn, priceOut, forecasts, null);
+    }
+
+    ArmAssertingInterceptor(ObjectMapper mapper, String model, String key, Path outDir,
+            StageCapLedger ledger, StageCapLedger.Stage stage, BigDecimal priceIn, BigDecimal priceOut,
+            java.util.Map<String, ForecastReservation> forecasts,
+            StageCapLedger.Reservation recheckBudget) {
         this.mapper = mapper; this.model = model; this.key = key; this.outDir = outDir;
         this.ledger = ledger; this.stage = stage; this.priceIn = priceIn; this.priceOut = priceOut;
         this.forecasts = java.util.Map.copyOf(forecasts);
+        this.recheckBudget = recheckBudget;
     }
 
     void begin(String generationId, String cellId) throws IOException {
@@ -88,7 +97,9 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
         Context active = contextForThread();
         ForecastReservation forecast = forecasts.get(active.cellId());
         if (forecast == null) throw new IllegalArgumentException("No forecast for cell " + active.cellId());
-        StageCapLedger.Reservation reservation = ledger.reserve(stage, active.cellId(), forecast.usd());
+        StageCapLedger.Reservation reservation = recheckBudget == null
+                ? ledger.reserve(stage, active.cellId(), forecast.usd())
+                : ledger.reserveFrom(recheckBudget, stage, active.cellId(), forecast.usd());
         String requestBody = new String(body, java.nio.charset.StandardCharsets.UTF_8);
         active.meter().redactRaw(requestBody);
         String escapedBody = mapper.writeValueAsString(requestBody);

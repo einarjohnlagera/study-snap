@@ -70,6 +70,20 @@ final class Stage1RunPlan implements StageRunner.RunPlanProvider {
         return prepare(false);
     }
 
+    FreezeGuard.Verified verifyFresh() {
+        if (config.freezeFile() == null)
+            throw new FreezeRecord.InvalidFreeze("Real recheck requires freeze record");
+        prepare(false);
+        Path repo = StageRunner.findRepo(Path.of("").toAbsolutePath().normalize());
+        List<String> workflows = planned.stream().map(Row::workflow).distinct().toList();
+        FreezeGuard.Verified fresh = FreezeGuard.verify(config.freezeFile(), repo, config.arm(),
+                input().model(), config.manifests(), workflows);
+        if (!fresh.sha256().equals(verified.sha256()) || !fresh.head().equals(verified.head()))
+            throw new FreezeRecord.InvalidFreeze("Freeze changed since run-plan preparation");
+        verified = fresh;
+        return fresh;
+    }
+
     private FreezeGuard.Verified prepare(boolean dry) {
         if (planned != null) return verified;
         try {
@@ -201,13 +215,23 @@ final class Stage1RunPlan implements StageRunner.RunPlanProvider {
         return List.copyOf(calls);
     }
 
+    Map<String, String> currentManifestHashes() {
+        if (planned == null) throw new FreezeRecord.InvalidFreeze("Verify freeze before reading manifest hashes");
+        Map<String, String> hashes = new LinkedHashMap<>();
+        planned.forEach(row -> hashes.put(row.id(), row.hash()));
+        return Map.copyOf(hashes);
+    }
+
     @Override public void afterRun(StageRunner.RunSummary summary) throws IOException {
         Map<String, String> hashes = new HashMap<>();
         Map<String, String> workflows = new HashMap<>();
         planned.forEach(row -> { hashes.put(row.id(), row.hash()); workflows.put(row.id(), row.workflow()); });
+        DeliveredOutputs.Written delivered = DeliveredOutputs.write(
+                input().outputDir().resolve("delivered-outputs.jsonl"), config.arm(), 0,
+                summary.outcomes(), workflows, hashes, summary.deliveredByCase());
         Stage1Receipt receipt = Stage1Receipt.fromRun(verified, config.arm(), input().model(),
                 input().stage(), started == null ? Instant.now() : started,
-                caseSetHash, hashes, workflows, summary);
+                caseSetHash, hashes, workflows, summary, delivered);
         receipt.write(config.receiptFile());
     }
 
@@ -226,10 +250,13 @@ final class Stage1RunPlan implements StageRunner.RunPlanProvider {
         Map<String, String> hashes = new HashMap<>();
         Map<String, String> workflows = new HashMap<>();
         planned.forEach(row -> { hashes.put(row.id(), row.hash()); workflows.put(row.id(), row.workflow()); });
+        DeliveredOutputs.Written delivered = DeliveredOutputs.write(
+                input().outputDir().resolve("delivered-outputs.jsonl"), config.arm(), 0,
+                summary.outcomes(), workflows, hashes, summary.deliveredByCase());
         Stage1Receipt receipt = Stage1Receipt.fromRun(
                 FreezeGuard.dryEvidence(config.dryRecord(), DRY_RUN, DRY_RUN),
                 config.arm(), input().model(), input().stage(), started, caseSetHash, hashes, workflows,
-                summary);
+                summary, delivered);
         if (config.receiptFile() != null) receipt.write(config.receiptFile());
         return receipt;
     }
@@ -247,17 +274,21 @@ final class Stage1RunPlan implements StageRunner.RunPlanProvider {
             if (!id.matches("[A-Za-z0-9._:-]{1,100}"))
                 throw new InvalidRunPlan("Case identifier must be opaque and short: " + file);
             String workflow = json.path("workflow").asText();
-            workflow = switch (workflow) {
-                case "BOARD_EXAM_DIRECT" -> "BOARD_EXAM";
-                case "INTERVIEW_PRACTICE" -> "INTERVIEW_GENERATION";
-                default -> workflow;
-            };
+            workflow = workflowName(workflow);
             if (json.path(RESERVE).asBoolean(!reserve) != reserve || !ids.add(id))
                 throw new InvalidRunPlan("Invalid reserve flag or duplicate case in " + file);
             rows.add(new Row(id, workflow, reserve, isA,
                     FreezeRecord.sha256(line.getBytes(StandardCharsets.UTF_8)), line));
         }
         return List.copyOf(rows);
+    }
+
+    static String workflowName(String workflow) {
+        return switch (workflow) {
+                case "BOARD_EXAM_DIRECT" -> "BOARD_EXAM";
+                case "INTERVIEW_PRACTICE" -> "INTERVIEW_GENERATION";
+                default -> workflow;
+        };
     }
 
     private void validateCounts(Map<String, List<Row>> byFile) throws IOException {

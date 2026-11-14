@@ -24,7 +24,7 @@ final class ClassBBlindPacketExport {
     record Output(String caseId, ClassBScoreAggregator.Arm arm, String text) {}
     record Export(List<ClassBScoreFiles.BlindItem> manifest, List<ClassBScoreAggregator.Key> armKey) {}
 
-    private static final Pattern LEAK = Pattern.compile("(?i)(?:\\bbaseline\\b|\\bcandidate\\b|\\bluna\\b|"
+    static final Pattern LEAK = Pattern.compile("(?i)(?:\\bbaseline\\b|\\bcandidate\\b|\\bluna\\b|"
             + "\\bsol\\b|\\bgpt(?:[-_. ]?[0-9])?\\b|\\b(?:codex|claude|gemini|openai|model|"
             + "modelName|modelId|token|tokens|tokenCount|token_count|inputTokens|outputTokens|"
             + "input_tokens|output_tokens|reasoning_tokens|usage|costUsd)\\b)");
@@ -115,7 +115,7 @@ final class ClassBBlindPacketExport {
         }
     }
 
-    private static void guarded(Path path, Path repo) {
+    static void guarded(Path path, Path repo) {
         Path absolute = path.toAbsolutePath().normalize();
         if (absolute.startsWith(repo.resolve(ClassBCaseManifest.PRIVATE_PATH)))
             throw new InvalidPacket(PRIVATE_DIRECTORY);

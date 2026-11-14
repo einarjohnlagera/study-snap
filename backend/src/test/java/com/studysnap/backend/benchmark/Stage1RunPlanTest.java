@@ -84,7 +84,9 @@ class Stage1RunPlanTest {
                     LUNA_ARM, new FreezeRecord.Arm(LUNA, new ArrayList<>(gates.workflows.keySet())),
                     SOL_ARM, new FreezeRecord.Arm(SOL_MODEL, gates.routes.get(PAID).workflows())),
                 Map.of(INTERACTIVE, MINI, PAID, FOUR_ONE, CRITIQUE, MINI),
-                LocalDate.of(2026, 11, 14));
+                LocalDate.of(2026, 11, 14),
+                Set.of("SCHEMA_OR_PARSE", "SHORT_DELIVERY", "DUPLICATE_DELIVERY",
+                        "ASK_COMPANION_UNAVAILABLE"));
         List<String> aPrimary = new ArrayList<>();
         List<String> aReserve = new ArrayList<>();
         Map<String, ForecastReservation> forecasts = new HashMap<>();
@@ -217,8 +219,13 @@ class Stage1RunPlanTest {
                         "b-INTERVIEW_CRITIQUE");
         assertThat(luna.cases()).noneSatisfy(row -> assertThat(row.id()).contains("reserve"));
         String receiptText = Files.readString(temp.resolve(LUNA_ARM + JSON_SUFFIX));
-        assertThat(receiptText).contains("freezeSha256", "ledgerRecordCount", "head", "manifestRowSha256");
+        assertThat(receiptText).contains("freezeSha256", "ledgerRecordCount", "head", "manifestRowSha256",
+                "deliveredOutputSha256", "deliveredOutputsFileSha256");
         assertThat(receiptText).doesNotContain(KEY, MARKER, REQUEST_MARKER);
+        Path delivered = temp.resolve("out-" + LUNA_ARM).resolve("delivered-outputs.jsonl");
+        assertThat(FreezeRecord.sha256(delivered)).isEqualTo(luna.deliveredOutputsFileSha256());
+        assertThat(Files.readAllLines(delivered)).hasSize(luna.cases().size());
+        assertThat(Files.readString(delivered)).contains("correctIndex", "explanation");
         assertThat(stub.forwarded).anySatisfy(body -> assertThat(body).contains(MARKER, REQUEST_MARKER));
         assertThat(stub.hosts).containsOnly("offline.invalid");
         assertThat(Files.readString(ledgerFile)).contains("RESERVE", "SETTLE");
