@@ -72,6 +72,7 @@ class FanOutClassAAdaptersTest {
         assertThat(outcome.firstAttemptClean()).isTrue();
         assertThat(outcome.attempts().stream().map(AttemptOutcome::generationId).distinct()).hasSize(calls);
         assertThat(adapter.deliveredQuestions()).hasSize(adapter.item.requestedQuestionCount());
+        assertThat(adapter.deliveredContent()).isSameAs(adapter.deliveredQuestions());
         assertThat(adapter.deliveredQuestions()).allSatisfy(question ->
                 assertThat(question.getCorrectIndex() != null || question.getCorrectIndices() != null)
                         .as("persisted delivered question has an answer key").isTrue());

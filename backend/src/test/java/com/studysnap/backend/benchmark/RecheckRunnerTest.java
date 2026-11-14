@@ -164,7 +164,8 @@ class RecheckRunnerTest {
         StageCapLedger ledger = new StageCapLedger(Map.of(StageCapLedger.Stage.STAGE_1, BigDecimal.ONE));
         assertThatThrownBy(() -> RecheckRunner.run(plan, null, null, ledger,
                 Map.of(), temp.resolve("rechecks")))
-                .isInstanceOf(FreezeRecord.InvalidFreeze.class);
+                .isInstanceOf(FreezeRecord.InvalidFreeze.class)
+                .hasMessageContaining("Real recheck requires freeze record");
         assertThat(ledger.attempts(StageCapLedger.Stage.STAGE_1)).isZero();
     }
 }
