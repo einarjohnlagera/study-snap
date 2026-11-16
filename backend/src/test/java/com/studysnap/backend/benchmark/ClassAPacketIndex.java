@@ -26,6 +26,14 @@ final class ClassAPacketIndex {
     int size() { return items.size(); }
 
     static ClassAPacketIndex load(Path packetDirectory) {
+        return load(packetDirectory, 2);
+    }
+
+    static ClassAPacketIndex loadPilot(Path packetDirectory) {
+        return load(packetDirectory, 1);
+    }
+
+    private static ClassAPacketIndex load(Path packetDirectory, int expectedOutputs) {
         try {
             Map<String, ClassAScoreSchemaV2.PacketQuestion> items = new LinkedHashMap<>();
             List<Path> files;
@@ -37,7 +45,7 @@ final class ClassAPacketIndex {
                 if (line.isBlank()) throw new InvalidPacket("Blank packet line in " + file);
                 JsonNode packet = JSON.readTree(line);
                 if (packet == null || !packet.isObject() || !packet.path("outputs").isArray()
-                        || packet.path("outputs").size() != 2 || !packet.path("sourceNoteTexts").isArray()
+                        || packet.path("outputs").size() != expectedOutputs || !packet.path("sourceNoteTexts").isArray()
                         || packet.path("sourceNoteTexts").isEmpty()
                         || !packet.path("requestedQuestionCount").isInt()
                         || packet.path("requestedQuestionCount").asInt() < 1)
@@ -51,7 +59,8 @@ final class ClassAPacketIndex {
                 for (JsonNode output : packet.path("outputs")) {
                     if (!output.isObject() || !output.path("items").isArray()
                             || output.path("items").size() < packet.path("requestedQuestionCount").asInt()
-                            || !java.util.Set.of("A", "B").contains(output.path("placement").asText())
+                            || !(expectedOutputs == 1 ? "A".equals(output.path("placement").asText())
+                                    : java.util.Set.of("A", "B").contains(output.path("placement").asText()))
                             || !placements.add(output.path("placement").asText()))
                         throw new InvalidPacket("Malformed packet output in " + file);
                     for (JsonNode item : output.path("items")) {
