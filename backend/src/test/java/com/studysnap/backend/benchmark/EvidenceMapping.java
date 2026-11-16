@@ -71,7 +71,7 @@ final class EvidenceMapping {
             throw new InvalidMapping("Invalid costTolerance");
         costTolerance = tolerance.decimalValue();
         if (!Set.of("conservativeUsd", BILLED_USD).contains(costFigure)
-                || !QualityScoreFiles.TYPES.containsAll(classACriticalTypes)
+                || !ClassAScoreSchemaV2.ALL_TYPES.containsAll(classACriticalTypes)
                 || classAClarityMinimum > 5 || classAFaithfulnessMinimum > 5
                 || !Set.of(TASK_FULFILLED, GROUNDED, ACTIONABLE, NO_CRITICAL_MISLEADING)
                     .containsAll(classBQualityDimensions)
