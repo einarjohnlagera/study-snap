@@ -1,0 +1,26 @@
+{
+  "bars": {
+    "minCriticalRecallCount": 19,
+    "criticalTotal": 21,
+    "minMaterialAmbiguityMaterialCount": 3,
+    "materialAmbiguityTotal": 4,
+    "minCrossFamilyRecallFraction": 0.90,
+    "minMinorWordingCount": 2,
+    "minorWordingTotal": 3,
+    "minNoncriticalFlaggedCount": 10,
+    "noncriticalTotal": 12,
+    "maxCleanControlCriticalCount": 4,
+    "cleanTotal": 93,
+    "cleanQualityFailReference": 9,
+    "minAdequateRationales": 8,
+    "ratedRationales": 10,
+    "rationaleSampleSeed": 4815162342,
+    "ownerFullReviewSizes": [7, 24, 30]
+  },
+  "limits": {
+    "P": {"model":"test-primary", "maxInvocations":13, "maxRetriesPerPacket":1, "isolationDryRuns":1,
+          "isolationDryRunPacketId":"packet-0", "tokenStop":150000},
+    "S": {"model":"test-secondary", "maxInvocations":13, "maxRetriesPerPacket":1, "isolationDryRuns":1,
+          "isolationDryRunPacketId":"packet-0", "tokenStop":150000}
+  }
+}
