@@ -15,7 +15,8 @@ record CaseArmOutcome(String caseArmId, List<AttemptOutcome> attempts, boolean f
         Map<String, List<AttemptOutcome>> groups = new LinkedHashMap<>();
         for (AttemptOutcome attempt : attempts)
             groups.computeIfAbsent(attempt.generationId(), ignored -> new java.util.ArrayList<>()).add(attempt);
-        boolean firstClean = !groups.isEmpty() && groups.values().stream().allMatch(group -> group.getFirst().clean());
+        boolean firstClean = !stopped && failureClass == null && !groups.isEmpty()
+                && groups.values().stream().allMatch(group -> group.getFirst().clean());
         boolean retried = groups.values().stream().anyMatch(group -> group.size() > 1);
         State state = stopped ? State.INCONCLUSIVE : delivered ? State.COMPLETE : State.FAILED;
         BigDecimal conservative = attempts.stream().map(AttemptOutcome::conservativeUsd)
@@ -23,7 +24,8 @@ record CaseArmOutcome(String caseArmId, List<AttemptOutcome> attempts, boolean f
         BigDecimal billed = attempts.stream().map(AttemptOutcome::billedUsd)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new CaseArmOutcome(id, List.copyOf(attempts), firstClean,
-                state == State.COMPLETE, retried, state == State.INCONCLUSIVE ? "INCONCLUSIVE" : failureClass,
+                state == State.COMPLETE, retried, state == State.INCONCLUSIVE
+                        ? failureClass == null ? "INCONCLUSIVE" : failureClass : failureClass,
                 state, conservative, billed);
     }
 }

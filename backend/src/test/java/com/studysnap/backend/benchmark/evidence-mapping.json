@@ -1,0 +1,19 @@
+{
+  "classACriticalTypes": ["WRONG_KEY", "EXPLANATION_CONTRADICTS_KEY", "CONTRADICTS_GENERATOR_INPUTS", "CONTRADICTS_FULL_NOTE", "SOURCE_CONFLICT", "SECOND_DEFENSIBLE_ANSWER"],
+  "classAFactualPass": "YES",
+  "classAGroundingPass": "GROUNDED",
+  "classAClarityMinimum": 3,
+  "classAFaithfulnessMinimum": 3,
+  "classBQualityDimensions": ["taskFulfilled", "grounded", "actionable"],
+  "classBCriticalDimension": "noCriticalMisleading",
+  "costTolerance": 1.25,
+  "costFigure": "conservativeUsd",
+  "structuralComponents": {
+    "recoveredParse": "RECOVERED_PARSE",
+    "recoveredFallback": "RECOVERED_FALLBACK",
+    "timeout": "TIMEOUT",
+    "isolatedFinalFailure": "ISOLATED_FINAL_FAILURE",
+    "cost": "COST",
+    "quality": "QUALITY"
+  }
+}

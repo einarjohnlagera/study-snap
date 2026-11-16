@@ -24,7 +24,19 @@ class OperatingCharacteristicsTest {
     private static final List<String> ROUTES = List.of(INTERACTIVE, PAID, CRITIQUE);
     @TempDir Path temp;
 
-    FrozenGateParameters parameters() throws IOException {
+    /** The Revision 2.1 parameter set (study tip N=12, Interactive margin D<=10) that the published section-1
+     * tables were computed for, derived from the current frozen file so those historical oracles stay executed. */
+    FrozenGateParameters parameters() throws IOException, NoSuchAlgorithmException {
+        ObjectNode tree = (ObjectNode) new ObjectMapper().readTree(Files.readString(GateTestFixture.SOURCE));
+        ((ObjectNode) tree.path("workflows").path("STUDY_TIP")).put("primarySize", 12);
+        ((ObjectNode) tree.path("routes").path(INTERACTIVE)).put("margin", 10);
+        Path file = temp.resolve("revision21-" + GateTestFixture.FILE_NAME);
+        writeAndHash(file, tree.toString());
+        return FrozenGateParameters.load(file);
+    }
+
+    /** The current frozen file (Revision 2.2: study tip N=30, Interactive margin D<=11), byte for byte. */
+    FrozenGateParameters currentParameters() throws IOException {
         Path file = temp.resolve(GateTestFixture.FILE_NAME);
         Files.copy(GateTestFixture.SOURCE, file);
         Files.copy(Path.of(GateTestFixture.SOURCE + GateTestFixture.SHA_SUFFIX),
@@ -32,7 +44,42 @@ class OperatingCharacteristicsTest {
         return FrozenGateParameters.load(file);
     }
 
-    @Test void worstCaseT3T2CombinedAndUnionBoundOracle() throws IOException {
+    /** Revision 2.2 oracle for the 180-case Interactive route at D<=11, computed by the release session with a
+     * second exact method (binomial difference for T3) and confirmed by MT19937 Monte Carlo (<=.002). */
+    @Test void revision22InteractiveOracleAt180CasesAndMarginEleven() throws IOException {
+        FrozenGateParameters p = currentParameters();
+        assertThat(p.workflows.get("STUDY_TIP").primarySize()).isEqualTo(30);
+        assertThat(p.routes.get(INTERACTIVE).margin()).isEqualTo(11);
+        int cases = p.routes.get(INTERACTIVE).workflows().stream()
+                .mapToInt(name -> p.workflows.get(name).primarySize()).sum();
+        assertThat(cases).isEqualTo(180);
+        double t3 = OperatingCharacteristics.t3Fail(cases, 11, .5, .5, 0);
+        double t2 = OperatingCharacteristics.t2Fail(p, INTERACTIVE, .02, .02, 0);
+        assertThat(t3).isEqualTo(.112692, org.assertj.core.data.Offset.offset(.0000015));
+        assertThat(t2).isEqualTo(.054099, org.assertj.core.data.Offset.offset(.0000015));
+        assertThat(1 - (1 - t3) * (1 - t2)).isEqualTo(.160694, org.assertj.core.data.Offset.offset(.0000015));
+        assertThat(t3 + t2).isEqualTo(.166791, org.assertj.core.data.Offset.offset(.0000015));
+        double[] rates = {0, .005, .01, .02, .05, .06};
+        double[] equivalent = {.839306, .839279, .839090, .837599, .813826, .796217};
+        double[] plusFive = {.105097, .105093, .105063, .104826, .101064, .098296};
+        double[] plusTen = {.000862, .000862, .000862, .000860, .000827, .000804};
+        for (int i = 0; i < rates.length; i++) {
+            assertThat(OperatingCharacteristics.allTierNoFail(p, INTERACTIVE, rates[i], 0))
+                    .isEqualTo(equivalent[i], org.assertj.core.data.Offset.offset(.0000015));
+            assertThat(OperatingCharacteristics.allTierNoFail(p, INTERACTIVE, rates[i], .05))
+                    .isEqualTo(plusFive[i], org.assertj.core.data.Offset.offset(.0000015));
+            assertThat(OperatingCharacteristics.allTierNoFail(p, INTERACTIVE, rates[i], .10))
+                    .isEqualTo(plusTen[i], org.assertj.core.data.Offset.offset(.0000015));
+        }
+        // The owner's 20% target: holds through the 0-5% parse grid, fails at 6% exactly as before.
+        assertThat(1 - OperatingCharacteristics.allTierNoFail(p, INTERACTIVE, .05, 0)).isLessThan(.20);
+        assertThat(1 - OperatingCharacteristics.allTierNoFail(p, INTERACTIVE, .06, 0)).isGreaterThan(.20);
+        // Paid and Critique are unchanged by the study-tip change.
+        assertThat(p.routes.get(PAID).margin()).isEqualTo(5);
+        assertThat(p.routes.get(CRITIQUE).margin()).isEqualTo(4);
+    }
+
+    @Test void worstCaseT3T2CombinedAndUnionBoundOracle() throws IOException, NoSuchAlgorithmException {
         FrozenGateParameters p = parameters();
         double[] t3Expected = {.12165, .11493, .09671};
         double[] t2Expected = {.04945, .01354, .00869};
@@ -53,7 +100,7 @@ class OperatingCharacteristicsTest {
         }
     }
 
-    @Test void allTierTableOracleIncludingReserveT1Exposure() throws IOException {
+    @Test void allTierTableOracleIncludingReserveT1Exposure() throws IOException, NoSuchAlgorithmException {
         FrozenGateParameters p = parameters();
         double[][][] expected = {
             {{.834915,.873081,.895440},{.119539,.499431,.585672},{.001233,.126638,.186708}},
@@ -74,7 +121,7 @@ class OperatingCharacteristicsTest {
                 }
     }
 
-    @Test void tierTwoSensitivityGridAndWholeRouteRangesOracle() throws IOException {
+    @Test void tierTwoSensitivityGridAndWholeRouteRangesOracle() throws IOException, NoSuchAlgorithmException {
         FrozenGateParameters p = parameters();
         double[] baselineRates = {.01, .02};
         double[] correlations = {0, .5, .8};
@@ -139,7 +186,7 @@ class OperatingCharacteristicsTest {
         }
     }
 
-    @Test void o1ConclusionAndOnePercentAtLeastOneOracle() throws IOException {
+    @Test void o1ConclusionAndOnePercentAtLeastOneOracle() throws IOException, NoSuchAlgorithmException {
         FrozenGateParameters p = parameters();
         assertThat(OperatingCharacteristics.atLeastOne(.01, 162))
                 .isCloseTo(.80371, org.assertj.core.data.Offset.offset(.000005));
@@ -162,7 +209,7 @@ class OperatingCharacteristicsTest {
                 .isCloseTo(.2178, org.assertj.core.data.Offset.offset(.00005));
     }
 
-    @Test void monteCarloSeedsReproduceAndStayNearExact() throws IOException {
+    @Test void monteCarloSeedsReproduceAndStayNearExact() throws IOException, NoSuchAlgorithmException {
         FrozenGateParameters p = parameters();
         double[][][] published = {
             {{.83150,.87110,.89713},{.83207,.87250,.89557},{.81243,.86623,.89193},
@@ -195,8 +242,8 @@ class OperatingCharacteristicsTest {
         assertThat(generator.next()).isEqualTo(.6738744415342808);
     }
 
-    @Test void declaredHashAndUnknownOrOutOfRangeFieldsAreRejected() throws IOException {
-        FrozenGateParameters p = parameters();
+    @Test void declaredHashAndUnknownOrOutOfRangeFieldsAreRejected() throws IOException, NoSuchAlgorithmException {
+        FrozenGateParameters p = currentParameters();
         assertThat(p.sha256).hasSize(64);
         Path file = temp.resolve(GateTestFixture.FILE_NAME);
         Files.writeString(file, Files.readString(file) + " ");

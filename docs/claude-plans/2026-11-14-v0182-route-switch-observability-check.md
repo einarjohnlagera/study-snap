@@ -1,0 +1,36 @@
+# v0.182.0 route-switch observability check (read-only, 2026-11-14)
+
+Status: **a read-only finding for the owner and Product UX; changes nothing.** Product UX's 2026-11-13 condition: before any production route switch, verify operation-level observability, the rollback procedure and a supported emergency replacement; an unresolved monitoring gap blocks that route's switch. This page covers observability and the rollback procedure; the emergency replacement is still the owner's decision. Method: a read of the code (`OpenAiLlmStudyPackService.java:115-133,483-486,515-523`, `OpenAiAskCompanionLlmService.java`, `AskCompanionService.java`) and read-only Render log searches on `srv-d6u0jkvgi27c73dvl9k0` on 2026-11-14 (Render retains 30 days; a search before 2026-10-15 is refused). Every production fact here decays; re-read before relying on it.
+
+## 1. What production logs per workflow
+
+All workflows that go through `OpenAiLlmStudyPackService` emit one line per HTTP attempt: `action=llm_call operation=<name> route=<ROUTE> model=<id> tier latency_ms attempt outcome input_tokens output_tokens cached_tokens reasoning_tokens`, with `outcome` one of `SUCCESS`, `HTTP_ERROR`, `TIMEOUT`, `SCHEMA_OR_PARSE`. An operation with no routing selection logs `route=CRITIQUE` (`:483-486`), which is how Interview critique is labelled.
+
+| Route | Workflow | `operation=` | Logs `llm_call`? | Production calls retained (2026-10-16 to 2026-11-14) | Baseline for rollback triggers |
+|---|---|---|---|---|---|
+| `INTERACTIVE_QUIZ` | Adaptive Practice | `note_lib_adaptive_quiz` | yes | yes (2026-11-08) | production |
+| | Quick Review study tip | `note_lib_study_tip` | yes | one call (2026-11-08) | thin |
+| | Teacher quiz | `note_lib_teacher_quiz` | yes | **none** | **benchmark only** |
+| | Board Exam generation and pool | `note_lib_board_exam` | yes | yes (pool runs 2026-11-13 15:15Z) | production |
+| | Long Exam and its pool | `note_lib_long_exam` | yes (two parallel batches, `attempt=2` seen once) | yes (2026-11-13 15:16Z) | production |
+| `PAID_INTERACTIVE` | Interview Practice | `note_lib_interview_practice` | yes | **none** | **benchmark only** |
+| | Collection companion | `note_lib_companion_draft` | yes | **none** | **benchmark only** |
+| `CRITIQUE` | Interview critique | `note_lib_interview_critique` | yes, `route=CRITIQUE` | **none** | **benchmark only** |
+| | **Ask Companion** | (`note_lib_ask_companion_answer` is only the JSON schema name) | **NO. Neither `AskCompanionService` nor `OpenAiAskCompanionLlmService` has a logger.** | none visible (a request-path search found no calls; the filter is unverified) | **none** |
+
+## 2. Findings
+
+1. **`INTERACTIVE_QUIZ`: observable.** Every workflow logs model, route, latency, tokens, attempt and outcome, and production lines exist for four of five operations. The first-hour and first-day triggers in preregistration section 9 can be applied by operation. Teacher quiz has no production baseline (the benchmark baseline is used, labelled as such).
+2. **`PAID_INTERACTIVE`: observable in form, empty in practice.** Both workflows log, but **no production call has been retained in 30 days**, so there is no pre-save baseline and the "first 10 cases" trigger may not arrive for weeks. The preregistration's fallback applies (benchmark baseline, and a monitoring gap for owner review): the save needs an **attended flow check** (one real Interview Practice session and one companion draft, then read the two `llm_call` lines, confirming `model=` shows the new value).
+3. **`CRITIQUE`: a real gap.** Interview critique logs correctly but has no recent production calls (attended flow check needed as above). **Ask Companion cannot be monitored at the model level at all**: no log line, so no model name, latency, token count, attempt or parse outcome; a parse failure surfaces to the learner as `AskCompanionUnavailableException` with first and final attempt identical and no retry. The only existing signal is the HTTP request log for `POST /ask-companion/sessions/{id}/messages` (status code and latency). **Under Product UX's condition this unresolved gap blocks the `CRITIQUE` route's production switch** until the owner chooses (a) accept request-log monitoring plus an attended manual Ask Companion check as sufficient, or (b) approve a small backend change that adds an `llm_call`-style log line to the Ask Companion service (a backend change and a deploy, needing its own scope decision; not authorized by anything today).
+4. **After a switch, the effective model can be verified from the first real call only.** Every operation prints `model=`; a zero-usage operation shows nothing until someone uses it, which is why each save of a low-use route owes an attended flow check.
+5. **Rollback procedure.** The three `LLM_MODEL_*` variables are **unset** in Render today (Addendum 1), so the recorded previous value of each is "unset", and a rollback is **deleting the variable** (back to the code defaults `gpt-4.1-mini`, `gpt-4.1`, `gpt-4.1-mini`) as an attended save and redeploy, treated and watched as a deploy. It is possible only until the provider shuts those models down on **2027-01-14**; after that the previous value is not a viable target, so a supported emergency replacement must be chosen **before** then (owner decision, still open).
+6. **A Render save is not a deploy, so every switch and rollback step is "save, then deploy".** The 2026-11-13 price save changed nothing in production until the owner's manual "Deploy latest commit"; the deploy event read `envUpdated: false, manual: true`. For any route switch or rollback, the watch clock starts at the deploy's `live` time, not at the save, and each such redeploy is treated and watched as a deploy (at least 24 hours apart per the plan).
+7. **Option (b) for Ask Companion would not add a deploy.** `v0.182.0` already bumps `backend/pom.xml`, so its merge to `main` redeploys Render regardless (`CLAUDE.md`: a release that changes `backend/` redeploys on merge); a one-line `llm_call`-style log in `OpenAiAskCompanionLlmService` could ride that merge. It still needs the owner's scope approval and the normal review, and it would be the only production code change in the release (the model switches themselves stay environment saves). This is why option (b) is cheaper than it first looks.
+8. **Side observation (no causal claim).** Long Exam and Board Exam pool-generation calls ran 2026-11-13 15:15 to 15:16Z, one minute after the database memory peak (99.1% of its limit at 14:59Z, and 96% at 15:14Z). I did not establish that the jobs cause the memory pressure; a later pool run is a cheap way to test it read-only.
+
+## 3. What the owner decides, and what changes
+
+- Per route: `INTERACTIVE_QUIZ` has no observability blocker. `PAID_INTERACTIVE` needs the attended flow check recorded in its save checklist. **`CRITIQUE` is blocked on finding 3** until option (a) or (b) is chosen.
+- The supported emergency replacement for use after 2027-01-14 (candidate models to be confirmed against official provider pages: `gpt-6-luna` is the migration target itself; `gpt-6.1-sol` is the stronger candidate; any other must be verified).
+- Nothing here authorizes a model switch, an environment change, a backend change, a deployment or a paid run.

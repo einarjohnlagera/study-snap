@@ -202,6 +202,17 @@ class RouteVerdictCalculatorTest {
                 Set.of(), false, PARSE_FAILURE, rechecks, false, false);
     }
 
+    @Test void meteredRepeatedFailureConfirmsT1WithoutCallingTheFailedOutputScored() throws Exception {
+        FrozenGateParameters p = parameters();
+        List<RouteVerdictCalculator.CaseRecord> records = cases(p, CRITIQUE);
+        RouteVerdictCalculator.ArmResult failed = new RouteVerdictCalculator.ArmResult(
+                RouteVerdictCalculator.Evidence.UNSCORABLE, Set.of(), false, PARSE_FAILURE,
+                List.of(recheck(PARSE_FAILURE, null), recheck(PARSE_FAILURE, null)), false, false);
+        records.set(0, withArms(records.get(0), emptyArm(), failed));
+        assertThat(calculate(p, CRITIQUE, records, Map.of()).failedTiers())
+                .contains(RouteVerdictCalculator.Tier.T1);
+    }
+
     @Test void t1BothSameClassDifferentClassAndOneSuccess() throws Exception {
         FrozenGateParameters p = parameters();
         List<RouteVerdictCalculator.CaseRecord> records = cases(p, CRITIQUE);
@@ -344,7 +355,8 @@ class RouteVerdictCalculatorTest {
                 oldAsk.sharedT3(), 1, oldAsk.baselineOnlyT2(), oldAsk.sharedT2(),
                 oldAsk.candidateOnlyT1(), oldAsk.baselineOnlyT1(), oldAsk.sharedT1(),
                 3, false, false,
-                oldAsk.candidateComponents(), oldAsk.baselineComponents(), oldAsk.subgroups(), p.sha256, oldAsk.missingPairs());
+                oldAsk.candidateComponents(), oldAsk.baselineComponents(), oldAsk.subgroups(), p.sha256, oldAsk.missingPairs(),
+                Set.of());
         Map<String, RouteVerdictCalculator.WorkflowReport> workflows = new HashMap<>(pass.workflows());
         workflows.put(ASK, failedAsk);
         RouteVerdictCalculator.RouteReport t2Fail = new RouteVerdictCalculator.RouteReport(

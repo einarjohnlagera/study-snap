@@ -49,12 +49,24 @@ final class StageRunner {
         String generationId();
         CallResult execute(RestClient client, StudySnapProperties properties,
                            ArmAssertingInterceptor path) throws Exception;
+        default Object deliveredContent() { return null; }
     }
     interface RunPlanProvider {
         RunInput input();
         List<CaseCall> cases();
+        default FreezeGuard.Verified verify() {
+            throw new FreezeRecord.InvalidFreeze("A verified freeze record is required for a real run");
+        }
+        default void afterRun(RunSummary summary) throws Exception {}
     }
-    record RunSummary(List<CaseArmOutcome> outcomes, StageCapLedger ledger) {}
+    record RunSummary(List<CaseArmOutcome> outcomes, StageCapLedger ledger,
+                      Map<String, List<ArmAssertingInterceptor.CallReceipt>> callsByCase,
+                      Map<String, Object> deliveredByCase) {
+        RunSummary(List<CaseArmOutcome> outcomes, StageCapLedger ledger,
+                   Map<String, List<ArmAssertingInterceptor.CallReceipt>> callsByCase) {
+            this(outcomes, ledger, callsByCase, Map.of());
+        }
+    }
 
     @Test void stageRun() throws Exception {
         assumeTrue(Boolean.getBoolean("llm.benchmark.stageRun"), "opt-in stage runner skipped");
@@ -71,8 +83,11 @@ final class StageRunner {
         LlmModelBenchmark.Config.requireKeyForTest(input.key());
         if (input.approvedCaps() != null)
             throw new IllegalArgumentException("RunPlanProvider must not supply caps; use llm.benchmark.stageCaps");
+        FreezeGuard.Verified verified = provider.verify();
+        List<CaseCall> cases = provider.cases();
         try (StageCapLedger ledger = StageCapLedger.open(file, caps, Boolean.parseBoolean(initProperty))) {
-            run(input, null, provider.cases(), ledger);
+            RunSummary summary = runVerified(input, cases, ledger, verified);
+            provider.afterRun(summary);
         }
     }
 
@@ -107,6 +122,37 @@ final class StageRunner {
 
     static RunSummary run(RunInput input, ClientHttpRequestFactory requestFactory,
                           List<CaseCall> cases, StageCapLedger ledger) throws Exception {
+        if (requestFactory == null || requestFactory instanceof SimpleClientHttpRequestFactory)
+            throw new FreezeRecord.InvalidFreeze("Direct run requires an offline stub transport");
+        return runInternal(input, requestFactory, cases, ledger, null);
+    }
+
+    static RunSummary run(StageRunner.RunInput input, ClientHttpRequestFactory requestFactory,
+                          List<CaseCall> cases, StageCapLedger ledger,
+                          StageCapLedger.Reservation budget) throws Exception {
+        if (requestFactory == null || requestFactory instanceof SimpleClientHttpRequestFactory)
+            throw new FreezeRecord.InvalidFreeze("Direct run requires an offline stub transport");
+        return runInternal(input, requestFactory, cases, ledger, budget);
+    }
+
+    static RunSummary runVerified(RunInput input, List<CaseCall> cases,
+                                  StageCapLedger ledger, FreezeGuard.Verified verified) throws Exception {
+        if (verified == null || !verified.real())
+            throw new FreezeRecord.InvalidFreeze("Verified real freeze record required");
+        return runInternal(input, null, cases, ledger, null);
+    }
+
+    static RunSummary runVerified(RunInput input, List<CaseCall> cases,
+                                  StageCapLedger ledger, FreezeGuard.Verified verified,
+                                  StageCapLedger.Reservation budget) throws Exception {
+        if (verified == null || !verified.real())
+            throw new FreezeRecord.InvalidFreeze("Verified real freeze record required");
+        return runInternal(input, null, cases, ledger, budget);
+    }
+
+    private static RunSummary runInternal(RunInput input, ClientHttpRequestFactory requestFactory,
+                          List<CaseCall> cases, StageCapLedger ledger,
+                          StageCapLedger.Reservation budget) throws Exception {
         LlmModelBenchmark.Config.requireKeyForTest(input.key());
         if (input.approvedCaps() != null
                 && !ledger.approvedCaps().equals(new StageCapLedger(input.approvedCaps()).approvedCaps()))
@@ -123,11 +169,12 @@ final class StageRunner {
         if (input.inputPath() != null) LlmModelBenchmark.Config.rejectInsideRepoForTest(input.inputPath(), repo);
         LlmModelBenchmark.Config.rejectInsideRepoForTest(input.outputDir(), repo);
         StudySnapProperties properties = ArmRouting.forModel(input.model(), input.key());
+        if (requestFactory != null) properties.getLlm().getApi().setBaseUrl("https://offline.invalid");
         requireAllSlots(properties);
         Files.createDirectories(input.outputDir());
         ObjectMapper mapper = new ObjectMapper();
         ArmAssertingInterceptor path = new ArmAssertingInterceptor(mapper, input.model(), input.key(),
-                input.outputDir(), ledger, input.stage(), input.priceIn(), input.priceOut(), input.forecasts());
+                input.outputDir(), ledger, input.stage(), input.priceIn(), input.priceOut(), input.forecasts(), budget);
         RestClient client = RestClient.builder()
                 .requestFactory(requestFactory == null ? productionFactory(properties) : requestFactory)
                 .baseUrl(properties.getLlm().getApi().getBaseUrl())
@@ -135,23 +182,28 @@ final class StageRunner {
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .requestInterceptor(path).build();
         List<CaseArmOutcome> outcomes = new ArrayList<>();
+        Map<String, List<ArmAssertingInterceptor.CallReceipt>> callsByCase = new LinkedHashMap<>();
+        Map<String, Object> deliveredByCase = new LinkedHashMap<>();
         for (CaseCall item : cases) {
             if (ledger.stopped()) {
                 outcomes.add(CaseArmOutcome.classify(item.id(), List.of(), false, true, "INCONCLUSIVE"));
                 continue;
             }
-            int before = path.calls().size();
+            int before = path.receipts().size();
             CallResult result = null;
             String failure = null;
             try {
                 path.begin(item.generationId(), item.cellId());
                 result = item.execute(client, properties, path);
             } catch (Exception ex) {
-                failure = ex instanceof ArmAssertingInterceptor.ArmMismatch ? "ARM_MISMATCH" : "HTTP_ERROR";
+                failure = ex instanceof AbstractClassBAdapter.InputDefect ? "INPUT_DEFECT"
+                        : ex instanceof ArmAssertingInterceptor.ArmMismatch ? "ARM_MISMATCH" : "HTTP_ERROR";
             } finally {
                 path.end();
             }
-            List<MeteringInterceptor.Call> newCalls = path.calls().subList(before, path.calls().size());
+            List<MeteringInterceptor.Call> newCalls = path.receipts().subList(before, path.receipts().size())
+                    .stream().map(ArmAssertingInterceptor.CallReceipt::call).toList();
+            callsByCase.put(item.id(), List.copyOf(path.receipts().subList(before, path.receipts().size())));
             Set<AttemptRef> parseFailures = result == null ? Set.of() : result.parseSchemaFailures();
             List<AttemptOutcome> attempts = new ArrayList<>();
             for (int index = 0; index < newCalls.size(); index++) {
@@ -171,14 +223,18 @@ final class StageRunner {
             }
             boolean stoppedBeforeCompletion = ledger.stopped()
                     && !("Three consecutive HTTP errors".equals(ledger.stopReason()) && result == null);
-            if (result != null && "INCONCLUSIVE_SIGNAL_MISMATCH".equals(result.failureClass()))
+            if (result != null && result.failureClass() != null
+                    && result.failureClass().startsWith("INCONCLUSIVE_"))
                 stoppedBeforeCompletion = true;
             String failureClass = result != null ? result.failureClass() : failure;
             outcomes.add(CaseArmOutcome.classify(item.id(), attempts,
                     result != null && result.delivered(), stoppedBeforeCompletion, failureClass));
+            if (result != null && result.delivered() && !stoppedBeforeCompletion
+                    && item.deliveredContent() != null)
+                deliveredByCase.put(item.id(), item.deliveredContent());
         }
         writeSummary(input, ledger, outcomes, mapper);
-        return new RunSummary(List.copyOf(outcomes), ledger);
+        return new RunSummary(List.copyOf(outcomes), ledger, Map.copyOf(callsByCase), Map.copyOf(deliveredByCase));
     }
 
     /** Same connect and read timeouts as production (preregistration section 3): a latency or timeout

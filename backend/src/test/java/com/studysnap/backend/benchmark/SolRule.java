@@ -21,7 +21,9 @@ final class SolRule {
     static boolean justified(FrozenGateParameters parameters, Comparison comparison) {
         RouteVerdictCalculator.RouteReport luna = comparison.luna();
         RouteVerdictCalculator.RouteReport sol = comparison.sol();
-        if (luna.verdict() != RouteVerdictCalculator.Verdict.FAIL
+        if (!luna.undisposedCriticalCaseIds().isEmpty()
+                || !sol.undisposedCriticalCaseIds().isEmpty()
+                || luna.verdict() != RouteVerdictCalculator.Verdict.FAIL
                 || sol.verdict() != RouteVerdictCalculator.Verdict.PASS
                 || !luna.workflows().keySet().equals(sol.workflows().keySet())
                 || !parameters.sha256.equals(luna.parameterSha256())

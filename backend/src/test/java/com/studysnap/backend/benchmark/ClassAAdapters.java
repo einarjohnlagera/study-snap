@@ -19,6 +19,11 @@ final class ClassAAdapters {
             case TEACHER_QUIZ -> new TeacherQuizAdapter(item);
             case BOARD_EXAM_DIRECT -> new BoardExamDirectAdapter(item);
             case INTERVIEW_PRACTICE -> new InterviewPracticeAdapter(item);
+            case LONG_EXAM -> switch (item.subgroup()) {
+                case DIRECT -> new LongExamDirectAdapter(item);
+                case LONG_EXAM_POOL -> new LongExamPoolAdapter(item);
+                case BOARD_EXAM_POOL -> new BoardExamPoolAdapter(item);
+            };
         };
     }
 }

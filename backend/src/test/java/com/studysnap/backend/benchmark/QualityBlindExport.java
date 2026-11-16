@@ -135,7 +135,7 @@ public final class QualityBlindExport {
         item.put("explanation", required(q,"explanation"));
         return item;
     }
-    private static Object answer(JsonNode q) {
+    static Object answer(JsonNode q) {
         if ("MULTI_SELECT".equals(format(q))) {
             JsonNode indices = q.path("correctIndices");
             if (!indices.isArray()) throw new IllegalArgumentException("MULTI_SELECT lacks correctIndices");
