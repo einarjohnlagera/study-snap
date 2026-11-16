@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Preregistration sections 4, 7 and 8 mapping and detached-hash mutation checks. */
 class EvidenceMappingTest {
     private static final Path SOURCE = Path.of("src/test/java/com/studysnap/backend/benchmark/evidence-mapping.json");
+    private static final String NEW_HASH = "555e4abe87706815a8ecfc4fa8461b17948be53218f2943151d61ddde456b367";
     private static final ObjectMapper JSON = new ObjectMapper();
     @TempDir Path temp;
 
@@ -41,9 +42,18 @@ class EvidenceMappingTest {
         ObjectNode listed = score("WRONG_KEY");
         ObjectNode unlisted = score("OTHER");
         assertThat(map.criticalA(listed)).isTrue();
+        assertThat(map.criticalA(score("KEY_NOT_DEFENSIBLE"))).isTrue();
+        assertThat(map.qualityA(score("KEY_NOT_DEFENSIBLE"))).isFalse();
         assertThat(map.qualityA(listed)).isFalse();
         assertThat(map.criticalA(unlisted)).isFalse();
         assertThat(map.qualityA(unlisted)).isTrue();
+    }
+
+    @Test void shippedMappingHashAndNewCriticalTypeArePinned() throws Exception {
+        EvidenceMapping shipped = EvidenceMapping.load(SOURCE);
+        assertThat(shipped.sha256).isEqualTo(NEW_HASH);
+        assertThat(FreezeRecord.sha256(SOURCE)).isEqualTo(NEW_HASH);
+        assertThat(shipped.classACriticalTypes).contains("KEY_NOT_DEFENSIBLE");
     }
 
     @Test void mappingBytesControlInterpretationAndDetachedHash() throws Exception {
