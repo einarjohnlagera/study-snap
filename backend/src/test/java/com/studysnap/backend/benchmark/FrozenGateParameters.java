@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.HexFormat;
 import java.util.Collections;
+import java.math.BigInteger;
 
 /** Frozen section 1, 4, 6, 8 and 9 route-gate parameters and exact-byte digest. */
 final class FrozenGateParameters {
@@ -40,6 +41,10 @@ final class FrozenGateParameters {
     private static final String PRIMARY_SIZE = "primarySize";
     private static final String SUBGROUPS = "subgroups";
     private static final String INVALID_FIELD = "Invalid ";
+    private static final String FRB = "frb";
+    private static final Set<String> OPTIONAL_ROOT_FIELDS = Set.of(FRB);
+    private static final Set<String> FRB_FIELDS = Set.of("routeAlpha", "familyBudget", "classBWorkflows", RESERVE_SIZE);
+    private static final Set<String> RATIONAL_FIELDS = Set.of("numerator", "denominator");
     static final class InvalidParameters extends RuntimeException {
         InvalidParameters(String message) { super(message); }
         InvalidParameters(String message, Throwable cause) { super(message, cause); }
@@ -72,9 +77,16 @@ final class FrozenGateParameters {
     final List<Integer> monteCarloSeeds;
     final int perCaseEventCap;
     final String sha256;
+    final boolean frbEnabled;
+    final Rational frbRouteAlpha;
+    final Rational frbFamilyBudget;
+    final Set<String> frbClassBWorkflows;
 
     private FrozenGateParameters(JsonNode root, String hash) {
-        requireFields(root, ROOT_FIELDS);
+        if (!root.isObject()) throw new InvalidParameters("Parameter root must be an object");
+        Set<String> keys = Set.copyOf(root.properties().stream().map(Map.Entry::getKey).toList());
+        if (!keys.containsAll(ROOT_FIELDS) || !union(ROOT_FIELDS, OPTIONAL_ROOT_FIELDS).containsAll(keys))
+            throw new InvalidParameters("Missing or unknown parameter field");
         routes = readRoutes(root.get(ROUTES));
         workflows = readWorkflows(root.get(WORKFLOWS));
         reserveSize = positive(root, RESERVE_SIZE);
@@ -115,7 +127,50 @@ final class FrozenGateParameters {
             int count = route.workflows().stream().mapToInt(name -> workflows.get(name).primarySize()).sum();
             if (route.margin() > count) throw new InvalidParameters("Route margin exceeds case count");
         }
+        frbEnabled = root.has(FRB);
+        if (frbEnabled) {
+            JsonNode block = root.get(FRB);
+            requireFields(block, FRB_FIELDS);
+            frbRouteAlpha = rational(block.get("routeAlpha"));
+            frbFamilyBudget = rational(block.get("familyBudget"));
+            List<String> names = strings(block, "classBWorkflows");
+            if (Set.copyOf(names).size() != names.size() || !workflows.keySet().containsAll(names))
+                throw new InvalidParameters("Invalid class-B workflows");
+            frbClassBWorkflows = Set.copyOf(names);
+            int declaredReserve = positive(block, RESERVE_SIZE);
+            if (declaredReserve != reserveSize || declaredReserve != 30)
+                throw new InvalidParameters("FRB reserve size differs from protocol");
+        } else {
+            frbRouteAlpha = null;
+            frbFamilyBudget = null;
+            frbClassBWorkflows = Set.of();
+        }
         sha256 = hash;
+    }
+
+    int declaredK(String route) {
+        Route declaration = routes.get(route);
+        if (declaration == null) throw new InvalidParameters("Unknown route: " + route);
+        return declaration.workflows().size();
+    }
+
+    private static Set<String> union(Set<String> first, Set<String> second) {
+        java.util.HashSet<String> result = new java.util.HashSet<>(first);
+        result.addAll(second);
+        return result;
+    }
+
+    private static Rational rational(JsonNode node) {
+        requireFields(node, RATIONAL_FIELDS);
+        JsonNode numeratorNode = node.get("numerator");
+        JsonNode denominatorNode = node.get("denominator");
+        if (!numeratorNode.isIntegralNumber() || !denominatorNode.isIntegralNumber())
+            throw new InvalidParameters("FRB fractions must be integers");
+        BigInteger numerator = numeratorNode.bigIntegerValue();
+        BigInteger denominator = denominatorNode.bigIntegerValue();
+        if (numerator.signum() <= 0 || denominator.signum() <= 0 || numerator.compareTo(denominator) > 0)
+            throw new InvalidParameters("FRB fraction outside (0, 1]");
+        return new Rational(numerator, denominator);
     }
 
     static FrozenGateParameters load(Path file) {

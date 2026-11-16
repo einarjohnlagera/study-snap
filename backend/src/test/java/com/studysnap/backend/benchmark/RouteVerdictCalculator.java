@@ -1,5 +1,6 @@
 package com.studysnap.backend.benchmark;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -10,7 +11,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Sections 4 and 8 paired case, workflow, subgroup and route gate. */
+/** Sections 4 and 8 paired case, workflow, subgroup and route gate.
+ * FRB leaves isolatedCriticalIncident false; Brief 5f replaces that legacy classification.
+ */
 final class RouteVerdictCalculator {
     private RouteVerdictCalculator() {}
 
@@ -29,24 +32,52 @@ final class RouteVerdictCalculator {
 
     record ArmResult(Evidence evidence, Set<String> t3Components, boolean critical,
                      String finalFailureClass, List<Recheck> rechecks, boolean providerRejected,
-                     boolean unusable) {
+                     boolean unusable, int criticalQuestions, int unresolvedQuestions) {
         ArmResult {
+            if (criticalQuestions < 0 || unresolvedQuestions < 0 || critical != (criticalQuestions > 0))
+                throw new InvalidCaseSet("Inconsistent arm critical counts");
             t3Components = t3Components == null ? Set.of() : Set.copyOf(t3Components);
             rechecks = rechecks == null ? List.of() : List.copyOf(rechecks);
         }
+        ArmResult(Evidence evidence, Set<String> t3Components, boolean critical,
+                  String finalFailureClass, List<Recheck> rechecks, boolean providerRejected,
+                  boolean unusable) {
+            this(evidence, t3Components, critical, finalFailureClass, rechecks,
+                    providerRejected, unusable, critical ? 1 : 0, 0);
+        }
     }
-    record Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass) {
-        Recheck { t3Components = t3Components == null ? Set.of() : Set.copyOf(t3Components); }
+    record Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass,
+                   int criticalQuestions, int unresolvedQuestions) {
+        Recheck {
+            if (criticalQuestions < 0 || unresolvedQuestions < 0 || critical != (criticalQuestions > 0))
+                throw new InvalidCaseSet("Inconsistent recheck critical counts");
+            t3Components = t3Components == null ? Set.of() : Set.copyOf(t3Components);
+        }
+        Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass) {
+            this(evidence, t3Components, critical, finalFailureClass, critical ? 1 : 0, 0);
+        }
     }
     record CaseRecord(String id, String workflow, String route, String subgroup,
                       String baselineCaseId, String candidateCaseId,
-                      ArmResult baseline, ArmResult candidate) {}
+                      ArmResult baseline, ArmResult candidate, int requestedQuestions) {
+        CaseRecord(String id, String workflow, String route, String subgroup,
+                   String baselineCaseId, String candidateCaseId,
+                   ArmResult baseline, ArmResult candidate) {
+            this(id, workflow, route, subgroup, baselineCaseId, candidateCaseId, baseline, candidate, 0);
+        }
+    }
     record ReserveCase(String id, Evidence baselineEvidence, Evidence candidateEvidence,
                        boolean baselineCritical, boolean candidateCritical) {}
     record SubgroupReport(int paired, int candidateOnlyT3, int baselineOnlyT3,
                           int sharedT3, int candidateOnlyT2, int baselineOnlyT2,
                           int sharedT2, int candidateOnlyT1, int baselineOnlyT1,
                           int sharedT1, int d) {}
+    /** Exact pValue uses the candidate-favourable lower completion when evidence is unresolved. */
+    record FrbWorkflowReport(Tri workflowGate, ExactPairedTest.Result pValue,
+                             boolean reserveDrawn, Tri reserveGate, int unresolvedCases) {}
+    /** Route pValue follows the same lower-completion convention. */
+    record FrbRouteReport(Tri routeGate, ExactPairedTest.Result pValue, int declaredK,
+                          String alpha, String familyBudget) {}
     record WorkflowReport(Verdict verdict, Set<Tier> failedTiers, Set<Tier> inconclusiveTiers,
                           int paired, int d,
                           int candidateOnlyT3, int baselineOnlyT3, int sharedT3,
@@ -57,10 +88,33 @@ final class RouteVerdictCalculator {
                           Map<String, Integer> candidateComponents,
                           Map<String, Integer> baselineComponents,
                           Map<String, SubgroupReport> subgroups, String parameterSha256, int missingPairs,
-                          Set<String> undisposedCriticalCaseIds) {}
+                          Set<String> undisposedCriticalCaseIds,
+                          @JsonInclude(JsonInclude.Include.NON_NULL) FrbWorkflowReport frb) {
+        WorkflowReport(Verdict verdict, Set<Tier> failedTiers, Set<Tier> inconclusiveTiers,
+                       int paired, int d, int candidateOnlyT3, int baselineOnlyT3, int sharedT3,
+                       int candidateOnlyT2, int baselineOnlyT2, int sharedT2,
+                       int candidateOnlyT1, int baselineOnlyT1, int sharedT1,
+                       int reserveCandidateOnly, boolean isolatedCriticalIncident, boolean protocolDeviation,
+                       Map<String, Integer> candidateComponents, Map<String, Integer> baselineComponents,
+                       Map<String, SubgroupReport> subgroups, String parameterSha256, int missingPairs,
+                       Set<String> undisposedCriticalCaseIds) {
+            this(verdict, failedTiers, inconclusiveTiers, paired, d,
+                    candidateOnlyT3, baselineOnlyT3, sharedT3, candidateOnlyT2, baselineOnlyT2, sharedT2,
+                    candidateOnlyT1, baselineOnlyT1, sharedT1, reserveCandidateOnly,
+                    isolatedCriticalIncident, protocolDeviation, candidateComponents, baselineComponents,
+                    subgroups, parameterSha256, missingPairs, undisposedCriticalCaseIds, null);
+        }
+    }
     record RouteReport(Verdict verdict, Set<Tier> failedTiers, Set<Tier> inconclusiveTiers, int d,
                        boolean isolatedCriticalIncident, String parameterSha256,
-                       Map<String, WorkflowReport> workflows) {
+                       Map<String, WorkflowReport> workflows,
+                       @JsonInclude(JsonInclude.Include.NON_NULL) FrbRouteReport frb) {
+        RouteReport(Verdict verdict, Set<Tier> failedTiers, Set<Tier> inconclusiveTiers, int d,
+                    boolean isolatedCriticalIncident, String parameterSha256,
+                    Map<String, WorkflowReport> workflows) {
+            this(verdict, failedTiers, inconclusiveTiers, d, isolatedCriticalIncident,
+                    parameterSha256, workflows, null);
+        }
         Map<String, Set<String>> undisposedCriticalCaseIds() {
             Map<String, Set<String>> result = new LinkedHashMap<>();
             workflows.forEach((workflow, report) -> {
@@ -85,10 +139,24 @@ final class RouteVerdictCalculator {
                                  Map<String, List<ReserveCase>> reserves,
                                  Map<String, Boolean> compatibilitySuites,
                                  List<OwnerDisposition> dispositions) {
+        return calculate(parameters, route, frozenCaseIds, cases, reserves, compatibilitySuites,
+                dispositions, Map.of(), Map.of());
+    }
+
+    static RouteReport calculate(FrozenGateParameters parameters, String route,
+                                 Map<String, Set<String>> frozenCaseIds,
+                                 List<CaseRecord> cases,
+                                 Map<String, List<ReserveCase>> reserves,
+                                 Map<String, Boolean> compatibilitySuites,
+                                 List<OwnerDisposition> dispositions,
+                                 Map<String, Boolean> reserveDrawnByWorkflow,
+                                 Map<String, Integer> requestedQuestionsByCaseId) {
         cases = cases == null ? List.of() : cases;
         reserves = reserves == null ? Map.of() : reserves;
         compatibilitySuites = compatibilitySuites == null ? Map.of() : compatibilitySuites;
         dispositions = dispositions == null ? List.of() : dispositions;
+        if (parameters.frbEnabled && (reserveDrawnByWorkflow == null || requestedQuestionsByCaseId == null))
+            throw new InvalidCaseSet("Missing FRB inputs");
         FrozenGateParameters.Route routeValues = parameters.routes.get(route);
         if (routeValues == null) throw new InvalidCaseSet("Unknown route: " + route);
         validateFrozen(parameters, route, frozenCaseIds);
@@ -128,6 +196,7 @@ final class RouteVerdictCalculator {
         boolean isolated = false;
         int totalD = 0;
         int totalMissing = 0;
+        List<RouteT2.WorkflowInput> frbInputs = new ArrayList<>();
         for (String workflow : routeValues.workflows()) {
             WorkflowReport report = workflow(parameters, workflow, frozenCaseIds.get(workflow),
                     byWorkflow.getOrDefault(workflow, List.of()), reserves.get(workflow),
@@ -140,6 +209,37 @@ final class RouteVerdictCalculator {
             routeInconclusive.addAll(report.inconclusiveTiers());
             inconclusive |= report.verdict() == Verdict.INCONCLUSIVE;
             isolated |= report.isolatedCriticalIncident();
+            if (parameters.frbEnabled) frbInputs.add(frbWorkflowInput(parameters, workflow,
+                    frozenCaseIds.get(workflow), byWorkflow.getOrDefault(workflow, List.of()),
+                    reserves.get(workflow), reserveDrawnByWorkflow, requestedQuestionsByCaseId));
+        }
+        FrbRouteReport frbRoute = null;
+        if (parameters.frbEnabled) {
+            RouteT2.DetailedDecision gates = RouteT2.decideDetailed(new RouteT2.RouteInput(
+                    parameters.declaredK(route), parameters.frbRouteAlpha, parameters.frbFamilyBudget,
+                    frbInputs, parameters.reserveSize));
+            if (gates.routeGate() == Tri.FAIL) routeFailures.add(Tier.T2);
+            if (gates.routeGate() == Tri.INCONCLUSIVE) {
+                routeInconclusive.add(Tier.T2);
+                inconclusive = true;
+            }
+            List<Integer> pooledKnown = new ArrayList<>();
+            List<Tri.Unresolved> pooledUnresolved = new ArrayList<>();
+            for (RouteT2.WorkflowInput input : frbInputs) {
+                pooledKnown.addAll(input.knownPrimaryDifferences());
+                pooledUnresolved.addAll(input.unresolved());
+                WorkflowReport old = reports.get(input.workflow());
+                RouteT2.WorkflowDecision gate = gates.workflows().get(input.workflow());
+                reports.put(input.workflow(), withFrb(old, gate, input));
+                if (gate.workflowGate() == Tri.FAIL) routeFailures.add(Tier.T2);
+                if (gate.workflowGate() == Tri.INCONCLUSIVE) {
+                    routeInconclusive.add(Tier.T2);
+                    inconclusive = true;
+                }
+            }
+            frbRoute = new FrbRouteReport(gates.routeGate(), ExactPairedTest.test(
+                    lowest(pooledKnown, pooledUnresolved)), parameters.declaredK(route),
+                    fraction(parameters.frbRouteAlpha), fraction(parameters.frbFamilyBudget));
         }
         // Missing pairs are excluded from D, but each could still be a baseline-only event (-1). Only a D that
         // exceeds the margin even after crediting every missing pair as -1 is a T3 FAIL; otherwise the evidence
@@ -150,7 +250,37 @@ final class RouteVerdictCalculator {
                 : inconclusive ? Verdict.INCONCLUSIVE : Verdict.PASS;
         return new RouteReport(verdict, Set.copyOf(routeFailures), Set.copyOf(routeInconclusive),
                 totalD, isolated,
-                parameters.sha256, Collections.unmodifiableMap(reports));
+                parameters.sha256, Collections.unmodifiableMap(reports), frbRoute);
+    }
+
+    private static String fraction(Rational value) { return value.num() + "/" + value.den(); }
+
+    private static List<Integer> lowest(List<Integer> known, List<Tri.Unresolved> ranges) {
+        List<Integer> result = new ArrayList<>(known);
+        for (Tri.Unresolved range : ranges) result.add(range.lowestDifference());
+        return result;
+    }
+
+    private static WorkflowReport withFrb(WorkflowReport old, RouteT2.WorkflowDecision gate,
+                                          RouteT2.WorkflowInput input) {
+        Set<Tier> failed = new LinkedHashSet<>(old.failedTiers());
+        Set<Tier> unresolved = new LinkedHashSet<>(old.inconclusiveTiers());
+        if (gate.workflowGate() == Tri.FAIL) failed.add(Tier.T2);
+        if (gate.workflowGate() == Tri.INCONCLUSIVE) unresolved.add(Tier.T2);
+        Verdict verdict = !failed.isEmpty() ? Verdict.FAIL
+                : old.verdict() == Verdict.INCONCLUSIVE || gate.workflowGate() == Tri.INCONCLUSIVE
+                    ? Verdict.INCONCLUSIVE : Verdict.PASS;
+        FrbWorkflowReport frb = new FrbWorkflowReport(gate.primaryGate(),
+                ExactPairedTest.test(lowest(input.knownPrimaryDifferences(), input.unresolved())),
+                input.reserveWasDrawn(), gate.reserveGate(),
+                input.unresolved().size() + input.reserveUnresolved().size());
+        return new WorkflowReport(verdict, Set.copyOf(failed), Set.copyOf(unresolved), old.paired(), old.d(),
+                old.candidateOnlyT3(), old.baselineOnlyT3(), old.sharedT3(),
+                old.candidateOnlyT2(), old.baselineOnlyT2(), old.sharedT2(),
+                old.candidateOnlyT1(), old.baselineOnlyT1(), old.sharedT1(), old.reserveCandidateOnly(),
+                old.isolatedCriticalIncident(), old.protocolDeviation(), old.candidateComponents(),
+                old.baselineComponents(), old.subgroups(), old.parameterSha256(), old.missingPairs(),
+                old.undisposedCriticalCaseIds(), frb);
     }
 
     private static void validateFrozen(FrozenGateParameters parameters, String route,
@@ -165,6 +295,90 @@ final class RouteVerdictCalculator {
             for (String id : ids) if (id == null || !all.add(id))
                 throw new InvalidCaseSet("Duplicate frozen case ID");
         }
+    }
+
+    private static RouteT2.WorkflowInput frbWorkflowInput(FrozenGateParameters p, String name,
+            Set<String> frozen, List<CaseRecord> cases, List<ReserveCase> reserve,
+            Map<String, Boolean> decisions, Map<String, Integer> requested) {
+        boolean classB = p.frbClassBWorkflows.contains(name);
+        if (!classB && (reserve != null || decisions.containsKey(name)))
+            throw new InvalidReserve("Class-A workflow has reserve input");
+        if (classB && !decisions.containsKey(name))
+            throw new InvalidCaseSet("Class-B workflow lacks recorded reserve decision");
+        if (classB && decisions.get(name) == null)
+            throw new InvalidCaseSet("Null recorded reserve decision");
+        Map<String, CaseRecord> byId = new HashMap<>();
+        for (CaseRecord item : cases) byId.put(item.id(), item);
+        List<Integer> known = new ArrayList<>();
+        List<ClassBReserve.PairCritical> pairs = classB ? new ArrayList<>() : null;
+        List<Tri.Unresolved> ranges = new ArrayList<>();
+        for (String id : frozen) {
+            CaseRecord item = byId.get(id);
+            Integer mapped = requested.get(id);
+            int recordWidth = item == null ? 0 : item.requestedQuestions();
+            if (recordWidth < 0 || mapped != null && mapped <= 0
+                    || mapped != null && recordWidth > 0 && recordWidth != mapped)
+                throw new InvalidCaseSet("Invalid or conflicting requested question count: " + id);
+            int width = classB ? 1 : recordWidth > 0 ? recordWidth : mapped == null ? 0 : mapped;
+            if (width <= 0) throw new InvalidCaseSet("Missing requested question count: " + id);
+            if (item != null) {
+                validateRawArm(item.baseline(), width, classB);
+                validateRawArm(item.candidate(), width, classB);
+            }
+            ArmResolution baseline = item == null || item.baseline() == null ? null
+                    : resolve(item.baseline(), p.t1RecheckCount, false);
+            ArmResolution candidate = item == null || item.candidate() == null ? null
+                    : resolve(item.candidate(), p.t1RecheckCount, true);
+            validateFrbArm(baseline, width, classB);
+            validateFrbArm(candidate, width, classB);
+            boolean baselineUsable = baseline != null && !baseline.incomplete && !baseline.confirmedT1;
+            boolean candidateUsable = candidate != null && !candidate.incomplete && !candidate.confirmedT1;
+            if (baselineUsable && candidateUsable && baseline.unresolvedQuestions == 0
+                    && candidate.unresolvedQuestions == 0) {
+                known.add(candidate.criticalQuestions - baseline.criticalQuestions);
+                if (classB) pairs.add(new ClassBReserve.PairCritical(
+                        candidate.criticalQuestions, baseline.criticalQuestions));
+            } else {
+                int baselineLow = baselineUsable ? baseline.criticalQuestions : 0;
+                int baselineHigh = baselineUsable
+                        ? baseline.criticalQuestions + baseline.unresolvedQuestions : width;
+                int candidateLow = candidateUsable ? candidate.criticalQuestions : 0;
+                int candidateHigh = candidateUsable
+                        ? candidate.criticalQuestions + candidate.unresolvedQuestions : width;
+                ranges.add(new Tri.Unresolved(candidateLow - baselineHigh,
+                        candidateHigh - baselineLow));
+            }
+        }
+        List<Integer> reserveKnown = null;
+        List<Tri.Unresolved> reserveUnknown = new ArrayList<>();
+        if (reserve != null) {
+            reserveKnown = new ArrayList<>();
+            for (ReserveCase item : reserve) {
+                if (item.baselineEvidence() == Evidence.SCORED && item.candidateEvidence() == Evidence.SCORED)
+                    reserveKnown.add((item.candidateCritical() ? 1 : 0) - (item.baselineCritical() ? 1 : 0));
+                else reserveUnknown.add(new Tri.Unresolved(-1, 1));
+            }
+        }
+        boolean drawn = classB && decisions.get(name);
+        if (classB && drawn && (reserve == null || reserve.size() != p.reserveSize))
+            throw new InvalidReserve("Reserve size differs from declaration");
+        return new RouteT2.WorkflowInput(name, classB, known, pairs, ranges, drawn,
+                reserveKnown, reserveUnknown);
+    }
+
+    private static void validateFrbArm(ArmResolution arm, int width, boolean classB) {
+        if (arm == null) return;
+        if ((long) arm.criticalQuestions + arm.unresolvedQuestions > (classB ? 1 : width))
+            throw new InvalidCaseSet("Arm counts exceed requested questions");
+    }
+
+    private static void validateRawArm(ArmResult arm, int width, boolean classB) {
+        if (arm == null) return;
+        if ((long) arm.criticalQuestions() + arm.unresolvedQuestions() > (classB ? 1 : width))
+            throw new InvalidCaseSet("Arm counts exceed requested questions");
+        for (Recheck check : arm.rechecks())
+            if ((long) check.criticalQuestions() + check.unresolvedQuestions() > (classB ? 1 : width))
+                throw new InvalidCaseSet("Recheck counts exceed requested questions");
     }
 
     private static WorkflowReport workflow(FrozenGateParameters p, String name, Set<String> frozen,
@@ -252,7 +466,7 @@ final class RouteVerdictCalculator {
         if (cases.size() >= p.unusableMinCases
                 && unusable / (double) cases.size() >= p.unusableFraction) failures.add(Tier.T1);
         int reserveCandidateOnly = 0;
-        boolean deviation = candidateT2 == 0 && reserve != null;
+        boolean deviation = !p.frbEnabled && candidateT2 == 0 && reserve != null;
         Set<String> reserveIds = new HashSet<>();
         if (reserve != null) for (ReserveCase item : reserve) {
             if (item == null || item.id() == null || !reserveIds.add(item.id()) || frozen.contains(item.id()))
@@ -261,7 +475,11 @@ final class RouteVerdictCalculator {
                     && item.candidateCritical() && !item.baselineCritical())
                 candidateOnlyCriticalIds.add(item.id());
         }
-        if (candidateT2 > 0) {
+        if (p.frbEnabled && reserve != null) for (ReserveCase item : reserve)
+            if (item.candidateEvidence() == Evidence.SCORED
+                    && item.baselineEvidence() == Evidence.SCORED
+                    && item.candidateCritical() && !item.baselineCritical()) reserveCandidateOnly++;
+        if (!p.frbEnabled && candidateT2 > 0) {
             if (reserve == null || reserve.size() != p.reserveSize) {
                 incomplete = true;
                 unresolved.add(Tier.T2);
@@ -308,36 +526,38 @@ final class RouteVerdictCalculator {
         return new WorkflowReport(verdict, Set.copyOf(failures), Set.copyOf(unresolved), cases.size(), d,
                 candidateT3, baselineT3, sharedT3, candidateT2, baselineT2, sharedT2,
                 candidateT1, baselineT1, sharedT1,
-                reserveCandidateOnly, candidateT2 > 0 && !failures.contains(Tier.T2), deviation,
+                reserveCandidateOnly, !p.frbEnabled && candidateT2 > 0 && !failures.contains(Tier.T2), deviation,
                 Map.copyOf(candidateComponents), Map.copyOf(baselineComponents),
                 Collections.unmodifiableMap(subgroupReports), p.sha256, frozen.size() - included,
                 Collections.unmodifiableSet(new LinkedHashSet<>(undisposed)));
     }
 
     private record ArmResolution(boolean incomplete, boolean confirmedT1, Set<String> components,
-                                 boolean critical) {}
+                                 boolean critical, int criticalQuestions, int unresolvedQuestions) {}
 
     private static ArmResolution resolve(ArmResult arm, int requiredRechecks, boolean candidate) {
         if (arm.finalFailureClass() == null) return arm.evidence() == Evidence.SCORED
-                ? new ArmResolution(false, false, arm.t3Components(), arm.critical())
-                : new ArmResolution(true, false, Set.of(), false);
+                ? new ArmResolution(false, false, arm.t3Components(), arm.critical(),
+                    arm.criticalQuestions(), arm.unresolvedQuestions())
+                : new ArmResolution(true, false, Set.of(), false, 0, 0);
         if (arm.evidence() == Evidence.MISSING || arm.evidence() == Evidence.UNMETERED)
-            return new ArmResolution(true, false, Set.of(), false);
-        if (arm.rechecks().size() != requiredRechecks) return new ArmResolution(true, false, Set.of(), false);
+            return new ArmResolution(true, false, Set.of(), false, 0, 0);
+        if (arm.rechecks().size() != requiredRechecks) return new ArmResolution(true, false, Set.of(), false, 0, 0);
         Recheck firstSuccess = null;
         boolean allSame = true;
         for (Recheck check : arm.rechecks()) {
-            if (check.evidence() != Evidence.SCORED) return new ArmResolution(true, false, Set.of(), false);
+            if (check.evidence() != Evidence.SCORED) return new ArmResolution(true, false, Set.of(), false, 0, 0);
             if (check.finalFailureClass() == null && firstSuccess == null) firstSuccess = check;
             if (!arm.finalFailureClass().equals(check.finalFailureClass())) allSame = false;
         }
         if (firstSuccess != null) {
             Set<String> components = new LinkedHashSet<>(firstSuccess.t3Components());
             components.add("ISOLATED_FINAL_FAILURE");
-            return new ArmResolution(false, false, Set.copyOf(components), firstSuccess.critical());
+            return new ArmResolution(false, false, Set.copyOf(components), firstSuccess.critical(),
+                    firstSuccess.criticalQuestions(), firstSuccess.unresolvedQuestions());
         }
-        if (allSame) return new ArmResolution(!candidate, true, Set.of(), false);
-        return new ArmResolution(true, false, Set.of(), false);
+        if (allSame) return new ArmResolution(!candidate, true, Set.of(), false, 0, 0);
+        return new ArmResolution(true, false, Set.of(), false, 0, 0);
     }
 
     private static final class MutableGroup {
