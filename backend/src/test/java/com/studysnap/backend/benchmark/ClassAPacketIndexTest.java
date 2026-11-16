@@ -63,4 +63,53 @@ class ClassAPacketIndexTest {
         assertThatThrownBy(() -> ClassAPacketIndex.load(temp.resolve("packets")))
                 .isInstanceOf(ClassAPacketIndex.InvalidPacket.class);
     }
+
+    @Test void stageOneStillRequiresTwoOutputsAndPilotRequiresOneAOutput() throws Exception {
+        var exported = export(temp);
+        Path file = exported.packets().getFirst();
+        String two = Files.readString(file);
+        com.fasterxml.jackson.databind.JsonNode root = JSON.readTree(two);
+        ((ObjectNode) root).withArray("outputs").remove(1);
+        String one = JSON.writeValueAsString(root) + "\n";
+        Files.writeString(file, one);
+        assertThatThrownBy(() -> ClassAPacketIndex.load(temp.resolve("packets")))
+                .isInstanceOf(ClassAPacketIndex.InvalidPacket.class);
+        assertThat(ClassAPacketIndex.loadPilot(temp.resolve("packets")).size()).isEqualTo(1);
+        Files.writeString(file, two);
+        assertThat(ClassAPacketIndex.load(temp.resolve("packets")).size()).isEqualTo(2);
+        assertThatThrownBy(() -> ClassAPacketIndex.loadPilot(temp.resolve("packets")))
+                .isInstanceOf(ClassAPacketIndex.InvalidPacket.class);
+    }
+
+    @Test void pilotRejectsBPlacementDuplicateIdAndBlankLine() throws Exception {
+        var exported = export(temp);
+        Path file = exported.packets().getFirst();
+        ObjectNode root = (ObjectNode) JSON.readTree(Files.readString(file));
+        root.withArray("outputs").remove(1);
+        String one = JSON.writeValueAsString(root) + "\n";
+        Files.writeString(file, one.replace("\"placement\":\"A\"", "\"placement\":\"B\""));
+        assertThatThrownBy(() -> ClassAPacketIndex.loadPilot(temp.resolve("packets")))
+                .isInstanceOf(ClassAPacketIndex.InvalidPacket.class);
+        var items = ((ObjectNode) root.withArray("outputs").get(0)).withArray("items");
+        items.add(items.get(0));
+        Files.writeString(file, JSON.writeValueAsString(root) + "\n");
+        assertThatThrownBy(() -> ClassAPacketIndex.loadPilot(temp.resolve("packets")))
+                .isInstanceOf(ClassAPacketIndex.InvalidPacket.class).hasMessageContaining("Duplicate packet item id");
+        Files.writeString(file, one + "\n");
+        assertThatThrownBy(() -> ClassAPacketIndex.loadPilot(temp.resolve("packets")))
+                .isInstanceOf(ClassAPacketIndex.InvalidPacket.class).hasMessageContaining("Blank packet line");
+    }
+
+    @Test void pilotRunsTheSameQuestionValidationAsStageOne() throws Exception {
+        var exported = export(temp);
+        Path file = exported.packets().getFirst();
+        ObjectNode root = (ObjectNode) JSON.readTree(Files.readString(file));
+        root.withArray("outputs").remove(1);
+        ObjectNode question = (ObjectNode) root.withArray("outputs").get(0).path("items").get(0).path("question");
+        question.remove("correctIndex");
+        Files.writeString(file, JSON.writeValueAsString(root) + "\n");
+        assertThatThrownBy(() -> ClassAPacketIndex.loadPilot(temp.resolve("packets")))
+                .isInstanceOf(ClassAPacketIndex.InvalidPacket.class)
+                .hasMessageContaining("packet key index");
+    }
 }

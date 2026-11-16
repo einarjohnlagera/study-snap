@@ -277,7 +277,7 @@ final class ClassAScoreSchemaV2 {
         }
         return fragment;
     }
-    private static String normalize(String source) {
+    static String normalize(String source) {
         return Normalizer.normalize(source, Normalizer.Form.NFKC)
                 .replace('‘', '\'').replace('’', '\'').replace('“', '"').replace('”', '"')
                 .replace('–', '-').replace('—', '-').replace('−', '-')
