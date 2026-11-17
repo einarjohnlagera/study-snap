@@ -33,7 +33,8 @@ final class ResultsPipeline {
                  Map<String, ReserveInput> reserves, Path compatibilityReports, Instant headCommitTime,
                  Path ownerDispositions, Path report, Path triggerRecord, boolean synthetic) {}
     record Result(Map<String, RouteVerdictCalculator.RouteReport> routes, Path report, Path triggerRecord,
-                  Map<String, Set<String>> triggers) {}
+                  Map<String, Set<String>> triggers,
+                  Map<String, List<RouteVerdictCalculator.CaseRecord>> caseRecords) {}
     private record FrozenCase(String workflow, String subgroup, int requiredQuestions,
                               String manifestRowSha256) {}
     private record ArmEvidence(Stage1Receipt receipt, Map<String, Stage1Receipt.CaseRow> rows,
@@ -55,6 +56,8 @@ final class ResultsPipeline {
     private static final String ROUTES_FIELD = "routes";
     private static final String RESERVE_RESULTS_FIELD = "reserveResults";
     private static final String MISSING_RECHECK_DIRECTORY = "Missing recheck output directory: ";
+    private static final Set<String> CLASS_B_WORKFLOWS = java.util.Arrays.stream(ClassBCaseManifest.Workflow.values())
+            .map(Enum::name).collect(java.util.stream.Collectors.toUnmodifiableSet());
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
     private ResultsPipeline() {}
 
@@ -93,7 +96,9 @@ final class ResultsPipeline {
             if (!mini.receipt().arm().equals(BASELINE_MINI_ARM) || !paid.receipt().arm().equals(BASELINE_41_ARM)
                     || !freeze.arms().get(candidate.arm()).model().equals(candidate.model()))
                 throw new InvalidInput("Receipt arm or model differs from freeze");
-            ScoreEvidence.Loaded scores = ScoreEvidence.load(input.classA(), input.classB(), mapping);
+            ScoreEvidence.ClassBArmNames classBNames = classBNames(freeze, candidate.arm());
+            ScoreEvidence.Loaded scores = ScoreEvidence.load(input.classA(), input.classB(), mapping, classBNames);
+            boolean classBSupplied = classBSupplied(input.classB());
             Instant headTime = input.synthetic() ? input.headCommitTime() : committedHeadTime(input.repoRoot());
             Map<String, CompatibilitySuiteEvidence.State> suites = CompatibilitySuiteEvidence.read(
                     input.compatibilityReports(), freeze.compatibilitySuites(), headTime);
@@ -113,6 +118,7 @@ final class ResultsPipeline {
                 Stage1Receipt.CaseRow candidateRow = target.rows().get(id);
                 requireRow(fixture, baselineRow, baseline.receipt().arm());
                 requireRow(fixture, candidateRow, target.receipt().arm());
+                guardClassBPair(id, fixture, baseline, target, scores, input.classB(), classBSupplied);
                 RouteVerdictCalculator.ArmResult b = arm(id, fixture, baseline, scores, mapping,
                         freeze.costForecastUsdPerDeliveredCase().get(workflow));
                 RouteVerdictCalculator.ArmResult c = arm(id, fixture, target, scores, mapping,
@@ -149,7 +155,7 @@ final class ResultsPipeline {
             }
             Map<String, Map<String, List<RouteVerdictCalculator.ReserveCase>>> reserveByRoute =
                     loadReserves(input.reserves(), freeze, parameters, mapping, frozenReserve,
-                            frozen, freezeHash, caseSetHash);
+                            frozen, freezeHash, caseSetHash, candidate.arm());
             Map<String, RouteVerdictCalculator.RouteReport> routeReports = new LinkedHashMap<>();
             Map<String, Object> deadline = new LinkedHashMap<>();
             for (var route : parameters.routes.entrySet()) {
@@ -180,7 +186,10 @@ final class ResultsPipeline {
             T2TriggerRecord.create(linked, recheckLinks, triggers, freezeHash, trigger);
             writeReport(input, freezeHash, parameters, mapping, mini, paid, target, scores, suites,
                     costs, dispositions, reserveByRoute, routeReports, deadline, excludedEvidence);
-            return new Result(Map.copyOf(routeReports), input.report(), trigger, Map.copyOf(triggers));
+            Map<String, List<RouteVerdictCalculator.CaseRecord>> immutableRecords = new LinkedHashMap<>();
+            records.forEach((route, cases) -> immutableRecords.put(route, List.copyOf(cases)));
+            return new Result(Map.copyOf(routeReports), input.report(), trigger, Map.copyOf(triggers),
+                    Map.copyOf(immutableRecords));
         } catch (Exception exception) {
             if (exception instanceof InvalidInput invalid) throw invalid;
             throw new InvalidInput("Results pipeline refused: " + exception.getMessage(), exception);
@@ -293,6 +302,57 @@ final class ResultsPipeline {
         if (row != null && (!fixture.workflow().equals(row.workflow())
                 || !fixture.manifestRowSha256().equals(row.manifestRowSha256())))
             throw new InvalidInput("Receipt row differs from frozen manifest: " + arm + "/" + row.id());
+    }
+
+    private static ScoreEvidence.ClassBArmNames classBNames(FreezeRecord freeze, String candidateArm) {
+        FreezeRecord.Arm paid = freeze.arms().get(BASELINE_41_ARM);
+        if (paid == null) throw new InvalidInput("Baseline 41 arm absent from freeze");
+        return new ScoreEvidence.ClassBArmNames(candidateArm, workflow ->
+                paid.workflows().contains(workflow) ? BASELINE_41_ARM : BASELINE_MINI_ARM);
+    }
+
+    private static boolean classBSupplied(ScoreEvidence.FilesB files) {
+        try { return Files.size(files.key()) > 0 || Files.size(files.scores()) > 0; }
+        catch (IOException exception) { throw new InvalidInput("Cannot inspect class-B score files", exception); }
+    }
+
+    private static void guardClassBPair(String id, FrozenCase fixture, ArmEvidence baseline,
+            ArmEvidence candidate, ScoreEvidence.Loaded scores, ScoreEvidence.FilesB files, boolean supplied) {
+        if (!supplied || !CLASS_B_WORKFLOWS.contains(fixture.workflow())) return;
+        boolean baselineUsable = usableOutput(id, fixture, baseline);
+        boolean candidateUsable = usableOutput(id, fixture, candidate);
+        if (!baselineUsable && !candidateUsable) return;
+        for (ArmEvidence source : List.of(baseline, candidate)) {
+            String arm = source.receipt().arm();
+            boolean hasFact = scores.get(id, arm) != null;
+            if (baselineUsable && candidateUsable && !hasFact)
+                throw new InvalidInput("Missing class-B fact for case " + id + " arm " + arm
+                        + " expected key " + id + "\\u0000" + arm + " in " + files.key());
+            if (baselineUsable != candidateUsable && hasFact)
+                throw new InvalidInput("Unpaired class-B case " + id + " has key for arm " + arm
+                        + " expected no key in " + files.key());
+        }
+    }
+
+    private static boolean usableOutput(String id, FrozenCase fixture, ArmEvidence source) {
+        Stage1Receipt.CaseRow row = source.rows().get(id);
+        if (row == null) return false;
+        if (row.state() == CaseArmOutcome.State.COMPLETE && row.finalSuccess()
+                && structurallyComplete(source.outputs().get(id), fixture)) return true;
+        if (row.state() != CaseArmOutcome.State.FAILED || source.rechecks() == null
+                || source.recheckDirectory() == null) return false;
+        RecheckReceipt.Case item = source.rechecks().cases().stream()
+                .filter(value -> id.equals(value.caseId())).findFirst().orElse(null);
+        if (item == null) return false;
+        for (RecheckReceipt.Repeat repeat : item.repeats()) {
+            if (repeat.protocolDeviation() != null || repeat.finalFailureClass() != null
+                    || repeat.evidence() != RouteVerdictCalculator.Evidence.SCORED) continue;
+            Path path = source.recheckDirectory().resolve(id).resolve("recheck-" + repeat.recheckIndex())
+                    .resolve("delivered-outputs.jsonl");
+            if (structurallyComplete(DeliveredOutputs.readRecheck(path, source.rechecks(), item, repeat), fixture))
+                return true;
+        }
+        return false;
     }
 
     private static RouteVerdictCalculator.ArmResult missing() {
@@ -414,7 +474,7 @@ final class ResultsPipeline {
     private static Map<String, Map<String, List<RouteVerdictCalculator.ReserveCase>>> loadReserves(
             Map<String, ReserveInput> inputs, FreezeRecord freeze, FrozenGateParameters parameters,
             EvidenceMapping mapping, Map<String, FrozenCase> frozenReserve,
-            Map<String, FrozenCase> frozen, String freezeHash, String primaryCaseSetHash) {
+            Map<String, FrozenCase> frozen, String freezeHash, String primaryCaseSetHash, String candidateArm) {
         Map<String, Map<String, List<RouteVerdictCalculator.ReserveCase>>> result = new HashMap<>();
         if (inputs.isEmpty()) return result;
         for (var entry : inputs.entrySet()) {
@@ -429,7 +489,13 @@ final class ResultsPipeline {
                 throw new InvalidInput("Reserve receipt freeze or case set differs: " + workflow);
             ArmEvidence baseline = loadArm(input.baseline(), freezeHash, b.caseSetSha256(), freeze.gitCommit());
             ArmEvidence candidate = loadArm(input.candidate(), freezeHash, c.caseSetSha256(), freeze.gitCommit());
-            ScoreEvidence.Loaded scores = ScoreEvidence.load(input.classA(), input.classB(), mapping);
+            String mappedBaseline = freeze.arms().get(BASELINE_41_ARM).workflows().contains(workflow)
+                    ? BASELINE_41_ARM : BASELINE_MINI_ARM;
+            if (!b.arm().equals(mappedBaseline) || !c.arm().equals(candidateArm))
+                throw new InvalidInput("Reserve receipt arm differs from mapped arms: " + workflow);
+            ScoreEvidence.Loaded scores = ScoreEvidence.load(input.classA(), input.classB(), mapping,
+                    classBNames(freeze, candidateArm));
+            boolean classBSupplied = classBSupplied(input.classB());
             List<RouteVerdictCalculator.ReserveCase> rows = new ArrayList<>();
             for (Stage1Receipt.CaseRow row : c.cases()) {
                 FrozenCase fixture = frozenReserve.get(row.id());
@@ -437,6 +503,7 @@ final class ResultsPipeline {
                     throw new InvalidInput("Reserve case overlaps primary or workflow differs: " + row.id());
                 requireRow(fixture, row, c.arm());
                 requireRow(fixture, baseline.rows().get(row.id()), b.arm());
+                guardClassBPair(row.id(), fixture, baseline, candidate, scores, input.classB(), classBSupplied);
                 RouteVerdictCalculator.ArmResult left = arm(row.id(), fixture, baseline, scores, mapping,
                         freeze.costForecastUsdPerDeliveredCase().get(workflow));
                 RouteVerdictCalculator.ArmResult right = arm(row.id(), fixture, candidate, scores, mapping,

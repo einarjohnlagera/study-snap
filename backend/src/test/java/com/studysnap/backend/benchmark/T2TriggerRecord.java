@@ -150,10 +150,13 @@ record T2TriggerRecord(Map<String, String> files, Map<String, String> recheckFil
                         || !receipt.arm().equals(recheck.arm()) || !receipt.model().equals(recheck.model()))
                     throw new InvalidTrigger("Recheck receipt identity differs: " + recheckPath);
             }
+            ScoreEvidence.ClassBArmNames classBNames = new ScoreEvidence.ClassBArmNames(candidate.arm(),
+                    workflow -> paid.cases().stream().anyMatch(row -> workflow.equals(row.workflow()))
+                            ? paid.arm() : mini.arm());
             ScoreEvidence.Loaded scores = ScoreEvidence.load(new ScoreEvidence.FilesA(paths.get(A_KEY),
                     paths.get(A_PRIMARY), paths.get(A_REVIEWS), paths.get(A_ADJUDICATIONS), paths.get(A_EXCLUSIONS)),
                     new ScoreEvidence.FilesB(paths.get(B_KEY), paths.get(B_SCORES),
-                            loadScorers(paths.get(SCORER_REGISTRY))), mapping);
+                            loadScorers(paths.get(SCORER_REGISTRY))), mapping, classBNames);
             Map<String, Stage1Receipt.CaseRow> baseline = new HashMap<>();
             mini.cases().forEach(row -> baseline.put(row.id(), row));
             paid.cases().forEach(row -> baseline.put(row.id(), row));
