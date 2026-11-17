@@ -50,6 +50,25 @@ final class ClassAScoreFilesV2 {
         return Map.copyOf(result);
     }
 
+    static Map<String, ItemScores> loadBlind(ClassAPacketIndex packets, Path pFile, Path sFile,
+                                             Path hFile, EvidenceMapping mapping) {
+        if (packets == null || mapping == null) throw new InvalidScoreFiles("Packet index and mapping required");
+        Map<String, JsonNode> keys = new LinkedHashMap<>();
+        packets.itemIds().forEach(id -> keys.put(id, com.fasterxml.jackson.databind.node.NullNode.getInstance()));
+        Map<String, String> rolesByReviewer = new HashMap<>();
+        Map<String, Slot> p = readScorers(pFile, "P", keys, packets, mapping, rolesByReviewer);
+        Map<String, Slot> s = readScorers(sFile, "S", keys, packets, mapping, rolesByReviewer);
+        Map<String, HumanRow> h = readHumans(hFile, keys, packets, mapping, rolesByReviewer);
+        Map<String, ItemScores> result = new LinkedHashMap<>();
+        for (String id : keys.keySet()) {
+            ItemScores item = new ItemScores(id, p.getOrDefault(id, Slot.missing()),
+                    s.getOrDefault(id, Slot.missing()), h.get(id));
+            if (item.h() != null) crossCheck(item, mapping);
+            result.put(id, item);
+        }
+        return Map.copyOf(result);
+    }
+
     static boolean needsHumanReview(ItemScores item, EvidenceMapping mapping) {
         if (item.p().status() != Status.OK || item.s().status() != Status.OK) return true;
         JsonNode p = item.p().row(), s = item.s().row();

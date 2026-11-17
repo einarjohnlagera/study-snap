@@ -22,7 +22,12 @@ final class ClassABlindPacketExport {
     record Output(String caseId, String arm, JsonNode questions) {}
     /** {@code exclusions} (arm-side, private, next to the arm key) lists every fixture left out of the packet and why;
      * the results pipeline must treat each as INCONCLUSIVE, never as a pass or a failure of the candidate. */
-    record Export(List<Path> packets, Path armKey, int itemCount, Path exclusions, Map<String, String> excluded) {}
+    record Export(List<Path> packets, Path armKey, int itemCount, Path exclusions, Map<String, String> excluded,
+                  String exclusionsSha256) {
+        Export(List<Path> packets, Path armKey, int itemCount, Path exclusions, Map<String, String> excluded) {
+            this(packets, armKey, itemCount, exclusions, excluded, null);
+        }
+    }
     static final class InvalidPacket extends RuntimeException {
         InvalidPacket(String message) { super(message); }
         InvalidPacket(String message, Throwable cause) { super(message, cause); }
@@ -193,8 +198,10 @@ final class ClassABlindPacketExport {
             for (var entry : excluded.entrySet())
                 excludedLines.add(JSON.writeValueAsString(Map.of("caseId", entry.getKey(), "reason", entry.getValue())));
             Files.writeString(exclusionsPath, excludedLines.isEmpty() ? "" : String.join(NEWLINE, excludedLines) + NEWLINE);
+            String exclusionsSha256 = FreezeRecord.sha256(exclusionsPath);
+            Files.writeString(IntegritySupport.detached(exclusionsPath), exclusionsSha256 + NEWLINE);
             return new Export(List.copyOf(packets.keySet()), armKeyPath, serial, exclusionsPath,
-                    Collections.unmodifiableMap(new java.util.TreeMap<>(excluded)));
+                    Collections.unmodifiableMap(new java.util.TreeMap<>(excluded)), exclusionsSha256);
         } catch (IOException | IllegalArgumentException exception) {
             if (exception instanceof InvalidPacket invalid) throw invalid;
             throw new InvalidPacket("Cannot export class-A packet", exception);

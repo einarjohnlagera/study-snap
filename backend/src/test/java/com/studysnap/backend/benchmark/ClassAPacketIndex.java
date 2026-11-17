@@ -24,6 +24,7 @@ final class ClassAPacketIndex {
     private ClassAPacketIndex(Map<String, ClassAScoreSchemaV2.PacketQuestion> items) { this.items = Map.copyOf(items); }
     ClassAScoreSchemaV2.PacketQuestion get(String id) { return items.get(id); }
     int size() { return items.size(); }
+    java.util.Set<String> itemIds() { return items.keySet(); }
 
     static ClassAPacketIndex load(Path packetDirectory) {
         return load(packetDirectory, 2);

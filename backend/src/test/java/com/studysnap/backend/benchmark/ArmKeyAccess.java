@@ -16,8 +16,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Gate for new arm-key readers. Existing ScoreEvidence and other harness readers still open keys
- * directly; briefs 5e/5g must rewire them before this is structurally enforced on the results pipeline.
+ * Gate for new arm-key readers. The FRB path is key-free; every other direct reader is listed in
+ * ArmKeyReaderGuardTest's allowlist with a retire condition, and new direct readers fail the build.
  * Caller timestamps prove only consistent ordering. The operator must externally anchor the lock by
  * committing its hash-only record before opening the key; byte-identical findings supply the durable check.
  */
