@@ -20,7 +20,15 @@ record RecheckReceipt(String head, String freezeSha256, String arm, String model
     record Case(String caseId, String originalFailureClass, List<Repeat> repeats) {}
     record Repeat(int recheckIndex, String finalFailureClass,
                   RouteVerdictCalculator.Evidence evidence, String protocolDeviation,
-                  String deliveredOutputSha256, String deliveredOutputsFileSha256) {}
+                  String deliveredOutputSha256, String deliveredOutputsFileSha256,
+                  boolean providerRejected) {
+        Repeat(int recheckIndex, String finalFailureClass,
+               RouteVerdictCalculator.Evidence evidence, String protocolDeviation,
+               String deliveredOutputSha256, String deliveredOutputsFileSha256) {
+            this(recheckIndex, finalFailureClass, evidence, protocolDeviation,
+                    deliveredOutputSha256, deliveredOutputsFileSha256, false);
+        }
+    }
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
 
     void write(Path path) throws IOException {
