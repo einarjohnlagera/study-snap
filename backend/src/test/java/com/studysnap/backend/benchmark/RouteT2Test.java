@@ -55,7 +55,8 @@ class RouteT2Test {
                 List.of(new ClassBReserve.PairCritical(0, 0)), List.of(new Tri.Unresolved(-1, 1)),
                 true, Collections.nCopies(30, 0));
         RouteT2.RouteInput input = route(List.of(missing, classA(SECOND, List.of(), List.of())));
-        assertThatThrownBy(() -> RouteT2.decide(input)).isInstanceOf(InvalidReserve.class);
+        assertThat(RouteT2.decideDetailed(input).workflows().get(FIRST).workflowGate())
+                .isEqualTo(Tri.INCONCLUSIVE);
         RouteT2.WorkflowInput permitted = new RouteT2.WorkflowInput(FIRST, true, List.of(0),
                 List.of(new ClassBReserve.PairCritical(0, 0)), List.of(new Tri.Unresolved(-1, 1)), false, null);
         assertThat(decide(List.of(permitted, classA(SECOND, List.of(), List.of()))))
