@@ -74,7 +74,14 @@ final class RouteVerdictCalculator {
                           int sharedT1, int d) {}
     /** Exact pValue uses the candidate-favourable lower completion when evidence is unresolved. */
     record FrbWorkflowReport(Tri workflowGate, ExactPairedTest.Result pValue,
-                             boolean reserveDrawn, Tri reserveGate, int unresolvedCases) {}
+                             boolean reserveDrawn, Tri reserveGate, int unresolvedCases,
+                             @JsonInclude(JsonInclude.Include.NON_NULL) String reserveCause,
+                             @JsonInclude(JsonInclude.Include.NON_NULL) Map<String, String> unresolvedReasonsByCaseId) {
+        FrbWorkflowReport(Tri workflowGate, ExactPairedTest.Result pValue,
+                          boolean reserveDrawn, Tri reserveGate, int unresolvedCases) {
+            this(workflowGate, pValue, reserveDrawn, reserveGate, unresolvedCases, null, null);
+        }
+    }
     /** Route pValue follows the same lower-completion convention. */
     record FrbRouteReport(Tri routeGate, ExactPairedTest.Result pValue, int declaredK,
                           String alpha, String familyBudget) {}
@@ -197,6 +204,7 @@ final class RouteVerdictCalculator {
         int totalD = 0;
         int totalMissing = 0;
         List<RouteT2.WorkflowInput> frbInputs = new ArrayList<>();
+        Map<String, Map<String, String>> frbReasons = new HashMap<>();
         for (String workflow : routeValues.workflows()) {
             WorkflowReport report = workflow(parameters, workflow, frozenCaseIds.get(workflow),
                     byWorkflow.getOrDefault(workflow, List.of()), reserves.get(workflow),
@@ -211,7 +219,8 @@ final class RouteVerdictCalculator {
             isolated |= report.isolatedCriticalIncident();
             if (parameters.frbEnabled) frbInputs.add(frbWorkflowInput(parameters, workflow,
                     frozenCaseIds.get(workflow), byWorkflow.getOrDefault(workflow, List.of()),
-                    reserves.get(workflow), reserveDrawnByWorkflow, requestedQuestionsByCaseId));
+                    reserves.get(workflow), reserveDrawnByWorkflow, requestedQuestionsByCaseId,
+                    frbReasons));
         }
         FrbRouteReport frbRoute = null;
         if (parameters.frbEnabled) {
@@ -230,7 +239,7 @@ final class RouteVerdictCalculator {
                 pooledUnresolved.addAll(input.unresolved());
                 WorkflowReport old = reports.get(input.workflow());
                 RouteT2.WorkflowDecision gate = gates.workflows().get(input.workflow());
-                reports.put(input.workflow(), withFrb(old, gate, input));
+                reports.put(input.workflow(), withFrb(old, gate, input, frbReasons.get(input.workflow())));
                 if (gate.workflowGate() == Tri.FAIL) routeFailures.add(Tier.T2);
                 if (gate.workflowGate() == Tri.INCONCLUSIVE) {
                     routeInconclusive.add(Tier.T2);
@@ -262,7 +271,7 @@ final class RouteVerdictCalculator {
     }
 
     private static WorkflowReport withFrb(WorkflowReport old, RouteT2.WorkflowDecision gate,
-                                          RouteT2.WorkflowInput input) {
+                                          RouteT2.WorkflowInput input, Map<String, String> reasons) {
         Set<Tier> failed = new LinkedHashSet<>(old.failedTiers());
         Set<Tier> unresolved = new LinkedHashSet<>(old.inconclusiveTiers());
         if (gate.workflowGate() == Tri.FAIL) failed.add(Tier.T2);
@@ -273,7 +282,8 @@ final class RouteVerdictCalculator {
         FrbWorkflowReport frb = new FrbWorkflowReport(gate.primaryGate(),
                 ExactPairedTest.test(lowest(input.knownPrimaryDifferences(), input.unresolved())),
                 input.reserveWasDrawn(), gate.reserveGate(),
-                input.unresolved().size() + input.reserveUnresolved().size());
+                input.unresolved().size() + (gate.reserveGate() == null ? 0 : input.reserveUnresolved().size()),
+                gate.cause(), reasons);
         return new WorkflowReport(verdict, Set.copyOf(failed), Set.copyOf(unresolved), old.paired(), old.d(),
                 old.candidateOnlyT3(), old.baselineOnlyT3(), old.sharedT3(),
                 old.candidateOnlyT2(), old.baselineOnlyT2(), old.sharedT2(),
@@ -299,7 +309,8 @@ final class RouteVerdictCalculator {
 
     private static RouteT2.WorkflowInput frbWorkflowInput(FrozenGateParameters p, String name,
             Set<String> frozen, List<CaseRecord> cases, List<ReserveCase> reserve,
-            Map<String, Boolean> decisions, Map<String, Integer> requested) {
+            Map<String, Boolean> decisions, Map<String, Integer> requested,
+            Map<String, Map<String, String>> reasonsByWorkflow) {
         boolean classB = p.frbClassBWorkflows.contains(name);
         if (!classB && (reserve != null || decisions.containsKey(name)))
             throw new InvalidReserve("Class-A workflow has reserve input");
@@ -312,6 +323,7 @@ final class RouteVerdictCalculator {
         List<Integer> known = new ArrayList<>();
         List<ClassBReserve.PairCritical> pairs = classB ? new ArrayList<>() : null;
         List<Tri.Unresolved> ranges = new ArrayList<>();
+        Map<String, String> reasons = new LinkedHashMap<>();
         for (String id : frozen) {
             CaseRecord item = byId.get(id);
             Integer mapped = requested.get(id);
@@ -339,6 +351,14 @@ final class RouteVerdictCalculator {
                 if (classB) pairs.add(new ClassBReserve.PairCritical(
                         candidate.criticalQuestions, baseline.criticalQuestions));
             } else {
+                if (classB && Boolean.TRUE.equals(decisions.get(name))) {
+                    String baselineReason = unresolvedReason(item == null ? null : item.baseline(), baseline);
+                    String candidateReason = unresolvedReason(item == null ? null : item.candidate(), candidate);
+                    String reason = baselineReason == null ? "candidate:" + candidateReason
+                            : candidateReason == null ? "baseline:" + baselineReason
+                            : "baseline:" + baselineReason + ",candidate:" + candidateReason;
+                    reasons.put(id, reason);
+                }
                 int baselineLow = baselineUsable ? baseline.criticalQuestions : 0;
                 int baselineHigh = baselineUsable
                         ? baseline.criticalQuestions + baseline.unresolvedQuestions : width;
@@ -362,8 +382,26 @@ final class RouteVerdictCalculator {
         boolean drawn = classB && decisions.get(name);
         if (classB && drawn && (reserve == null || reserve.size() != p.reserveSize))
             throw new InvalidReserve("Reserve size differs from declaration");
+        if (drawn && !ranges.isEmpty()) {
+            Map<String, String> ordered = new LinkedHashMap<>();
+            reasons.entrySet().stream().sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> ordered.put(entry.getKey(), entry.getValue()));
+            reasonsByWorkflow.put(name, Collections.unmodifiableMap(ordered));
+        }
         return new RouteT2.WorkflowInput(name, classB, known, pairs, ranges, drawn,
                 reserveKnown, reserveUnknown);
+    }
+
+    private static String unresolvedReason(ArmResult arm, ArmResolution resolution) {
+        if (resolution != null && !resolution.incomplete && !resolution.confirmedT1
+                && resolution.unresolvedQuestions == 0) return null;
+        if (arm == null || arm.evidence() == Evidence.MISSING) return "MISSING";
+        if (arm.evidence() == Evidence.UNMETERED) return "UNMETERED";
+        if (resolution.confirmedT1) return "CONFIRMED_T1";
+        if (resolution.incomplete && arm.finalFailureClass() != null) return "INCOMPLETE_RECHECK";
+        if (arm.evidence() == Evidence.UNSCORABLE || resolution.unresolvedQuestions > 0)
+            return "UNSCORABLE";
+        return null;
     }
 
     private static void validateFrbArm(ArmResolution arm, int width, boolean classB) {

@@ -29,7 +29,10 @@ final class RouteT2 {
         }
     }
 
-    record WorkflowDecision(Tri primaryGate, Tri reserveGate) {
+    record WorkflowDecision(Tri primaryGate, Tri reserveGate, String cause) {
+        WorkflowDecision(Tri primaryGate, Tri reserveGate) {
+            this(primaryGate, reserveGate, null);
+        }
         Tri workflowGate() {
             if (primaryGate == Tri.FAIL || reserveGate == Tri.FAIL) return Tri.FAIL;
             if (primaryGate == Tri.INCONCLUSIVE || reserveGate == Tri.INCONCLUSIVE) return Tri.INCONCLUSIVE;
@@ -87,11 +90,13 @@ final class RouteT2 {
             if (workflow.primaryPairsOrNull() == null || workflow.primaryPairsOrNull().size() != known.size())
                 throw new InvalidInput("Class-B primary pairs differ from known cases");
             if (!workflow.unresolved().isEmpty()) {
-                if (workflow.reserveWasDrawn() || workflow.reserveDifferencesOrNull() != null
-                        || !workflow.reserveUnresolved().isEmpty())
+                if (!workflow.reserveWasDrawn() && (workflow.reserveDifferencesOrNull() != null
+                        || !workflow.reserveUnresolved().isEmpty()))
                     throw new InvalidReserve("Reserve with unresolved primary evidence");
                 validatePairs(known, workflow.primaryPairsOrNull());
-                gates.put(workflow.workflow(), new WorkflowDecision(primary, null));
+                // A drawn reserve is not evaluated while primary evidence is unresolved.
+                gates.put(workflow.workflow(), new WorkflowDecision(primary, null,
+                        workflow.reserveWasDrawn() ? "DRAWN_RESERVE_WITH_UNRESOLVED_PRIMARY" : null));
                 continue;
             }
             if (workflow.reserveUnresolved().isEmpty()) {
