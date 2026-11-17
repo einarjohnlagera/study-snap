@@ -14,8 +14,20 @@ final class RecheckPlan {
     record Decision(List<Eligible> eligible, List<Refused> refused,
                     Set<String> freezeEligibleFailureClasses) {}
     private static final Set<String> NEVER = Set.of("HTTP_ERROR", "TIMEOUT", "INPUT_DEFECT", "ARM_MISMATCH");
+    static final String PROVIDER_REJECTION = "PROVIDER_REJECTION";
     private static final String ASK_UNAVAILABLE = "ASK_COMPANION_UNAVAILABLE";
     private RecheckPlan() {}
+
+    static boolean isRejectionCase(Stage1Receipt.CaseRow row) {
+        return row.state() == CaseArmOutcome.State.FAILED
+                && "HTTP_ERROR".equals(row.failureClass())
+                && row.llmCalls().stream().anyMatch(call -> call.httpStatus() == 400 || call.httpStatus() == 422);
+    }
+
+    static boolean isEligible(Stage1Receipt.CaseRow row, DeliveredOutputs.Line output,
+                              FreezeRecord freeze, String currentHash) {
+        return refusal(row, output, freeze.recheckEligibleFailureClasses(), currentHash) == null;
+    }
 
     static Decision build(Stage1Receipt receipt, Path outputsPath, FreezeRecord freeze,
                           Map<String, String> currentManifestHashes) {
@@ -45,9 +57,10 @@ final class RecheckPlan {
         if (row.state() != CaseArmOutcome.State.FAILED) return "Original case did not fail";
         String failure = row.failureClass();
         if (failure == null) return "Original failure class is missing";
-        if (NEVER.contains(failure) || failure.startsWith("INCONCLUSIVE"))
+        boolean rejection = frozen.contains(PROVIDER_REJECTION) && isRejectionCase(row);
+        if (!rejection && (NEVER.contains(failure) || failure.startsWith("INCONCLUSIVE")))
             return "Failure class is never a T1 recheck trigger: " + failure;
-        if (!frozen.contains(failure)) return "Failure class absent from freeze record: " + failure;
+        if (!rejection && !frozen.contains(failure)) return "Failure class absent from freeze record: " + failure;
         if (ASK_UNAVAILABLE.equals(failure) && row.llmCalls().stream()
                 .noneMatch(call -> call.httpStatus() >= 200 && call.httpStatus() < 300))
             return "Ask Companion has no metered HTTP 2xx call";

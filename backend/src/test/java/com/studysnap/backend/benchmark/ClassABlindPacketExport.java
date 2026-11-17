@@ -57,7 +57,9 @@ final class ClassABlindPacketExport {
                 if (selected.containsKey(caseRow.caseId()))
                     throw new InvalidPacket("Successful original cannot be replaced by a recheck");
                 for (RecheckReceipt.Repeat repeat : caseRow.repeats()) {
-                    if (repeat.evidence() != RouteVerdictCalculator.Evidence.SCORED) continue;
+                    if (repeat.evidence() != RouteVerdictCalculator.Evidence.SCORED
+                            || repeat.finalFailureClass() != null
+                            || RecheckPlan.isRejectionCase(originalRow) && repeat.providerRejected()) continue;
                     Path path = recheckDirectory.resolve(caseRow.caseId())
                             .resolve("recheck-" + repeat.recheckIndex()).resolve("delivered-outputs.jsonl");
                     DeliveredOutputs.Line line = DeliveredOutputs.readRecheck(path, rechecks, caseRow, repeat);

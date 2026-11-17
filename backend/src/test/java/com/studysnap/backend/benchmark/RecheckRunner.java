@@ -87,68 +87,101 @@ final class RecheckRunner {
                 || !original.freezeSha256().equals(verified.sha256())
                 || !original.head().equals(verified.head()))
             throw new InvalidRecheck("Original receipt differs from verified arm or freeze");
-        Files.createDirectories(outputRoot);
         RecheckPlan.Decision decision = RecheckPlan.build(original, originalOutputs,
                 verified.record(), currentManifestHashes);
-        List<RecheckReceipt.Case> resultCases = new ArrayList<>();
+        if (reservations == null) throw new InvalidRecheck("Execution reservations are missing");
+        BigDecimal required = BigDecimal.ZERO;
         for (RecheckPlan.Eligible item : decision.eligible()) {
-            StageRunner.CaseCall adapter = find(cases.get(), item.caseId());
             BigDecimal one = reservations.get(item.caseId());
             if (one == null || one.signum() <= 0)
                 throw new InvalidRecheck("Missing positive execution reservation for " + item.caseId());
-            StageCapLedger.Reservation budget = ledger.reserve(input.stage(), adapter.cellId(),
-                    one.multiply(BigDecimal.TWO));
-            List<RecheckReceipt.Repeat> repeats = new ArrayList<>();
-            try {
-                for (int recheckIndex = 1; recheckIndex <= 2; recheckIndex++) {
-                StageRunner.CaseCall fresh = find(cases.get(), item.caseId());
-                Path directory = outputRoot.resolve(item.caseId()).resolve("recheck-" + recheckIndex)
-                        .toAbsolutePath().normalize();
-                if (!directory.startsWith(outputRoot.toAbsolutePath().normalize())
-                        || ".".equals(item.caseId()) || "..".equals(item.caseId()))
-                    throw new InvalidRecheck("Case identifier escapes recheck directory");
-                StageRunner.RunInput repeatInput = new StageRunner.RunInput(input.model(), input.key(),
-                        input.stage(), input.approvedCaps(), input.forecasts(), input.priceIn(),
-                        input.priceOut(), input.inputPath(), directory);
-                StageRunner.RunSummary run = transport == null
-                        ? StageRunner.runVerified(repeatInput, List.of(fresh), ledger, verified, budget)
-                        : StageRunner.run(repeatInput, transport, List.of(fresh), ledger, budget);
-                CaseArmOutcome outcome = run.outcomes().getFirst();
-                DeliveredOutputs.Written delivered = DeliveredOutputs.write(
-                        directory.resolve("delivered-outputs.jsonl"), original.arm(), recheckIndex,
-                        run.outcomes(), Map.of(item.caseId(), item.workflow()),
-                        Map.of(item.caseId(), item.manifestRowSha256()), run.deliveredByCase());
-                Stage1Receipt check = Stage1Receipt.fromRun(verified, original.arm(), input.model(),
-                        input.stage(), Instant.now(), original.caseSetSha256(),
-                        Map.of(item.caseId(), item.manifestRowSha256()),
-                        Map.of(item.caseId(), item.workflow()), run, delivered);
-                Stage1Receipt.CaseComparison comparison = Stage1Receipt.compare(original, check).stream()
-                        .filter(result -> result.caseId().equals(item.caseId())).findFirst()
-                        .orElseThrow(() -> new InvalidRecheck("Missing recheck case " + item.caseId()));
-                String deviation = comparison.result() == Stage1Receipt.Comparison.MATCH ? null
-                        : comparison.deviation().getMessage();
-                RouteVerdictCalculator.Evidence evidence = deviation != null
-                        ? RouteVerdictCalculator.Evidence.MISSING
-                        : outcome.state() == CaseArmOutcome.State.INCONCLUSIVE
-                            ? RouteVerdictCalculator.Evidence.MISSING
-                            : outcome.attempts().stream().anyMatch(attempt ->
-                                attempt.kind() == AttemptOutcome.Kind.UNMETERED)
-                                ? RouteVerdictCalculator.Evidence.UNMETERED
-                                : RouteVerdictCalculator.Evidence.SCORED;
-                repeats.add(new RecheckReceipt.Repeat(recheckIndex, outcome.failureClass(), evidence,
-                        deviation, delivered.lineSha256().get(item.caseId()), delivered.fileSha256()));
-                }
-            } finally {
-                if (!budget.closed()) budget.abandon();
-            }
-            resultCases.add(new RecheckReceipt.Case(item.caseId(), item.originalFailureClass(),
-                    List.copyOf(repeats)));
+            required = required.add(one.multiply(BigDecimal.TWO));
         }
-        RecheckReceipt receipt = new RecheckReceipt(verified.head(), verified.sha256(), original.arm(),
-                original.model(), decision.freezeEligibleFailureClasses(), List.copyOf(resultCases),
-                original.caseSetSha256());
-        receipt.write(outputRoot.resolve("recheck-receipt.json"));
-        return receipt;
+        BigDecimal totalRemaining = ledger.approvedCaps().values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        for (StageCapLedger.Stage stage : StageCapLedger.Stage.values())
+            totalRemaining = totalRemaining.subtract(ledger.spent(stage)).subtract(ledger.inFlight(stage));
+        if (required.compareTo(ledger.remaining(input.stage())) > 0
+                || required.compareTo(totalRemaining) > 0)
+            throw new StageCapLedger.SpendStop("Recheck reservations exceed stage or total headroom");
+        Files.createDirectories(outputRoot);
+        List<RecheckReceipt.Case> resultCases = new ArrayList<>();
+        boolean paidStarted = false;
+        boolean succeeded = false;
+        try {
+            for (RecheckPlan.Eligible item : decision.eligible()) {
+                StageRunner.CaseCall adapter = find(cases.get(), item.caseId());
+                BigDecimal one = reservations.get(item.caseId());
+                StageCapLedger.Reservation budget = ledger.reserve(input.stage(), adapter.cellId(),
+                        one.multiply(BigDecimal.TWO));
+                List<RecheckReceipt.Repeat> repeats = new ArrayList<>();
+                try {
+                    for (int recheckIndex = 1; recheckIndex <= 2; recheckIndex++) {
+                        StageRunner.CaseCall fresh = find(cases.get(), item.caseId());
+                        Path directory = outputRoot.resolve(item.caseId()).resolve("recheck-" + recheckIndex)
+                                .toAbsolutePath().normalize();
+                        if (!directory.startsWith(outputRoot.toAbsolutePath().normalize())
+                                || ".".equals(item.caseId()) || "..".equals(item.caseId()))
+                            throw new InvalidRecheck("Case identifier escapes recheck directory");
+                        StageRunner.RunInput repeatInput = new StageRunner.RunInput(input.model(), input.key(),
+                                input.stage(), input.approvedCaps(), input.forecasts(), input.priceIn(),
+                                input.priceOut(), input.inputPath(), directory);
+                        int attemptsBefore = ledger.attempts(input.stage());
+                        StageRunner.RunSummary run;
+                        try {
+                            run = transport == null
+                                    ? StageRunner.runVerified(repeatInput, List.of(fresh), ledger, verified, budget)
+                                    : StageRunner.run(repeatInput, transport, List.of(fresh), ledger, budget);
+                        } finally {
+                            if (ledger.attempts(input.stage()) > attemptsBefore) paidStarted = true;
+                        }
+                        CaseArmOutcome outcome = run.outcomes().getFirst();
+                        DeliveredOutputs.Written delivered = DeliveredOutputs.write(
+                                directory.resolve("delivered-outputs.jsonl"), original.arm(), recheckIndex,
+                                run.outcomes(), Map.of(item.caseId(), item.workflow()),
+                                Map.of(item.caseId(), item.manifestRowSha256()), run.deliveredByCase());
+                        Stage1Receipt check = Stage1Receipt.fromRun(verified, original.arm(), input.model(),
+                                input.stage(), Instant.now(), original.caseSetSha256(),
+                                Map.of(item.caseId(), item.manifestRowSha256()),
+                                Map.of(item.caseId(), item.workflow()), run, delivered);
+                        Stage1Receipt.CaseComparison comparison = Stage1Receipt.compare(original, check).stream()
+                                .filter(result -> result.caseId().equals(item.caseId())).findFirst()
+                                .orElseThrow(() -> new InvalidRecheck("Missing recheck case " + item.caseId()));
+                        String deviation = comparison.result() == Stage1Receipt.Comparison.MATCH ? null
+                                : comparison.deviation().getMessage();
+                        RouteVerdictCalculator.Evidence evidence = deviation != null
+                                ? RouteVerdictCalculator.Evidence.MISSING
+                                : outcome.state() == CaseArmOutcome.State.INCONCLUSIVE
+                                    ? RouteVerdictCalculator.Evidence.MISSING
+                                    : outcome.attempts().stream().anyMatch(attempt ->
+                                        attempt.kind() == AttemptOutcome.Kind.UNMETERED)
+                                        ? RouteVerdictCalculator.Evidence.UNMETERED
+                                        : RouteVerdictCalculator.Evidence.SCORED;
+                        repeats.add(new RecheckReceipt.Repeat(recheckIndex, outcome.failureClass(), evidence,
+                                deviation, delivered.lineSha256().get(item.caseId()), delivered.fileSha256(),
+                                run.callsByCase().getOrDefault(item.caseId(), List.of()).stream()
+                                        .anyMatch(call -> call.call().status() == 400 || call.call().status() == 422)));
+                    }
+                } finally {
+                    if (!budget.closed()) budget.abandon();
+                }
+                resultCases.add(new RecheckReceipt.Case(item.caseId(), item.originalFailureClass(),
+                        List.copyOf(repeats)));
+            }
+            RecheckReceipt receipt = new RecheckReceipt(verified.head(), verified.sha256(), original.arm(),
+                    original.model(), decision.freezeEligibleFailureClasses(), List.copyOf(resultCases),
+                    original.caseSetSha256());
+            receipt.write(outputRoot.resolve("recheck-receipt.json"));
+            succeeded = true;
+            return receipt;
+        } finally {
+            if (paidStarted && !succeeded) {
+                RecheckReceipt partial = new RecheckReceipt(verified.head(), verified.sha256(), original.arm(),
+                        original.model(), decision.freezeEligibleFailureClasses(), List.copyOf(resultCases),
+                        original.caseSetSha256());
+                partial.write(outputRoot.resolve("recheck-receipt.partial.json"));
+            }
+        }
     }
 
     private static StageRunner.CaseCall find(List<StageRunner.CaseCall> calls, String id) {

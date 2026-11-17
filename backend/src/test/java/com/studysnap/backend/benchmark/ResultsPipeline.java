@@ -83,6 +83,8 @@ final class ResultsPipeline {
         try {
             requireInputs(input);
             FreezeRecord freeze = FreezeRecord.load(input.freeze());
+            if (freeze.recheckEligibleFailureClasses().contains(RecheckPlan.PROVIDER_REJECTION))
+                throw new InvalidInput("PROVIDER_REJECTION requires the FRB gate");
             FrozenGateParameters parameters = FrozenGateParameters.load(input.parameters());
             EvidenceMapping mapping = EvidenceMapping.load(input.mapping());
             if (!parameters.sha256.equals(freeze.parametersSha256())
@@ -554,7 +556,8 @@ final class ResultsPipeline {
         if (item == null) return false;
         for (RecheckReceipt.Repeat repeat : item.repeats()) {
             if (repeat.protocolDeviation() != null || repeat.finalFailureClass() != null
-                    || repeat.evidence() != RouteVerdictCalculator.Evidence.SCORED) continue;
+                    || repeat.evidence() != RouteVerdictCalculator.Evidence.SCORED
+                    || RecheckPlan.isRejectionCase(row) && repeat.providerRejected()) continue;
             Path path = source.recheckDirectory().resolve(id).resolve("recheck-" + repeat.recheckIndex())
                     .resolve("delivered-outputs.jsonl");
             if (structurallyComplete(DeliveredOutputs.readRecheck(path, source.rechecks(), item, repeat), fixture))
@@ -664,7 +667,10 @@ final class ResultsPipeline {
                                                            FreezeRecord freeze) {
         Stage1Receipt.CaseRow row = source.rows().get(id);
         return row != null && row.state() == CaseArmOutcome.State.FAILED
-                && freeze.recheckEligibleFailureClasses().contains(row.failureClass())
+                && row.failureClass() != null
+                && (freeze.recheckEligibleFailureClasses().contains(row.failureClass())
+                    || freeze.recheckEligibleFailureClasses().contains(RecheckPlan.PROVIDER_REJECTION)
+                        && RecheckPlan.isRejectionCase(row))
                 && source.rechecks() != null && source.rechecks().cases().stream()
                     .anyMatch(item -> item.caseId().equals(row.id()));
     }
@@ -699,6 +705,9 @@ final class ResultsPipeline {
         for (RecheckReceipt.Repeat repeat : item.repeats()) {
             RouteVerdictCalculator.Evidence evidence = repeat.evidence();
             if (repeat.protocolDeviation() != null) evidence = RouteVerdictCalculator.Evidence.MISSING;
+            if (RecheckPlan.isRejectionCase(original) && repeat.providerRejected()
+                    && repeat.finalFailureClass() == null)
+                evidence = RouteVerdictCalculator.Evidence.MISSING;
             ScoreEvidence.Facts facts = scores.get(id, source.receipt().arm());
             if (source.recheckDirectory() == null) throw new InvalidInput(MISSING_RECHECK_DIRECTORY + id);
             Path path = source.recheckDirectory().resolve(id).resolve("recheck-" + repeat.recheckIndex())
@@ -714,7 +723,8 @@ final class ResultsPipeline {
             if (adjudicated == null) {
                 result.add(new RouteVerdictCalculator.Recheck(evidence,
                         facts != null && facts.quality() ? Set.of(mapping.component(QUALITY_KIND)) : Set.of(),
-                        facts != null && facts.critical(), repeat.finalFailureClass()));
+                        facts != null && facts.critical(), repeat.finalFailureClass(),
+                        facts != null && facts.critical() ? 1 : 0, 0, repeat.providerRejected()));
             } else {
                 // The export scores the first successful recheck output for a failed original.
                 // Every successful recheck therefore carries the same case-and-arm fact.
@@ -724,7 +734,7 @@ final class ResultsPipeline {
                 Set<String> quality = facts != null && facts.quality()
                         ? Set.of(mapping.component(QUALITY_KIND)) : Set.of();
                 result.add(new RouteVerdictCalculator.Recheck(evidence, quality, critical > 0,
-                        repeat.finalFailureClass(), critical, unresolved));
+                        repeat.finalFailureClass(), critical, unresolved, repeat.providerRejected()));
             }
         }
         return List.copyOf(result);
@@ -999,6 +1009,25 @@ final class ResultsPipeline {
         frbSection.put("minimumPrimaryOpenedAtUtc", provenance.minimumPrimaryOpen().toString());
         frbSection.put("reserveDrawnByWorkflow", frb.bundle().reserveDrawnByWorkflow());
         frbSection.put("workflowsAwaitingReserve", frb.bundle().workflowsAwaitingReserve());
+        Map<String, Map<String, Object>> rejectionRechecks = new java.util.TreeMap<>();
+        for (ArmEvidence arm : List.of(mini, paid, candidate)) {
+            for (Stage1Receipt.CaseRow row : arm.receipt().cases()) {
+                if (!RecheckPlan.isRejectionCase(row)) continue;
+                RecheckReceipt.Case caseRechecks = arm.rechecks() == null ? null : arm.rechecks().cases().stream()
+                        .filter(item -> item.caseId().equals(row.id())).findFirst().orElse(null);
+                List<Map<String, Object>> repeats = caseRechecks == null ? List.of() : caseRechecks.repeats()
+                        .stream().map(repeat -> Map.<String, Object>of("recheckIndex", repeat.recheckIndex(),
+                                "providerRejected", repeat.providerRejected())).toList();
+                boolean reproducedThenRetried = caseRechecks != null && caseRechecks.repeats().stream()
+                        .anyMatch(repeat -> repeat.providerRejected() && repeat.finalFailureClass() == null);
+                Map<String, Object> detail = new LinkedHashMap<>();
+                detail.put("repeats", repeats);
+                detail.put("reason", reproducedThenRetried ? "REJECTION_REPRODUCED_THEN_RETRIED" : null);
+                rejectionRechecks.computeIfAbsent(row.id(), ignored -> new java.util.TreeMap<>())
+                        .put(arm.receipt().arm(), detail);
+            }
+        }
+        frbSection.put("rejectionRechecks", rejectionRechecks);
         frbSection.put("provenanceLimit", "File integrity and ordering do not prove that statuses were computed "
                 + "from the locked findings or that caller-built bundle facts came from the opened keys.");
         report.put("frb", frbSection);
