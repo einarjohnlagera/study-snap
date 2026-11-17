@@ -1038,23 +1038,72 @@ final class ResultsPipeline {
             RouteVerdictCalculator.RouteReport sol = JSON.treeToValue(solRoute,
                     RouteVerdictCalculator.RouteReport.class);
             int pairedD = sol.d() - luna.d();
+            Map<String, Integer> lunaLow = null;
+            Map<String, Integer> solHigh = null;
+            if (parameters.frbEnabled) {
+                requireFrbCounts(luna, "Luna");
+                requireFrbCounts(sol, "Sol");
+                lunaLow = luna.frb().candidateCriticalLowByCaseId();
+                solHigh = sol.frb().candidateCriticalHighByCaseId();
+                if (!lunaLow.keySet().equals(solHigh.keySet()))
+                    throw new InvalidInput("Sol comparison primary case IDs differ");
+            }
             SolRule.Comparison comparison = new SolRule.Comparison(luna, sol, pairedD,
-                    reserveFlags(lunaJson, owner.route()), reserveFlags(solJson, owner.route()),
+                    parameters.frbEnabled ? Map.of() : reserveFlags(lunaJson, owner.route()),
+                    parameters.frbEnabled ? Map.of() : reserveFlags(solJson, owner.route()),
                     t1Workflows(luna), t1Workflows(sol), owner.economicsAndOtherGatesPass(),
-                    owner.investigationComplete(), owner.samePrimaryInputs());
+                    owner.investigationComplete(), owner.samePrimaryInputs(), lunaLow, solHigh);
             boolean justified = SolRule.justified(parameters, comparison);
-            JSON.writeValue(output.toFile(), Map.of("route", owner.route(), "solJustified", justified,
-                    "solVersusLunaD", pairedD, PARAMETER_SHA_FIELD, parameters.sha256,
-                    "lunaReportSha256", owner.lunaReportSha256(), "solReportSha256", owner.solReportSha256(),
-                    "ownerDecisionInputSha256", FreezeRecord.sha256(ownerFile),
-                    "economicsAndOtherGatesPass", owner.economicsAndOtherGatesPass(),
-                    "investigationComplete", owner.investigationComplete(),
-                    "samePrimaryInputs", owner.samePrimaryInputs()));
+            if (parameters.frbEnabled) {
+                boolean required = luna.failedTiers().contains(RouteVerdictCalculator.Tier.T2);
+                List<String> ids = lunaLow.keySet().stream().sorted().toList();
+                SolT2Improvement.SolImprovement improvement = required ? SolT2Improvement.evaluate(
+                        ids.stream().map(solHigh::get).toList(), ids.stream().map(lunaLow::get).toList()) : null;
+                Map<String, Object> decision = new LinkedHashMap<>();
+                decision.put("route", owner.route());
+                decision.put("solJustified", justified);
+                decision.put("solVersusLunaD", pairedD);
+                decision.put(PARAMETER_SHA_FIELD, parameters.sha256);
+                decision.put("lunaReportSha256", owner.lunaReportSha256());
+                decision.put("solReportSha256", owner.solReportSha256());
+                decision.put("ownerDecisionInputSha256", FreezeRecord.sha256(ownerFile));
+                decision.put("economicsAndOtherGatesPass", owner.economicsAndOtherGatesPass());
+                decision.put("investigationComplete", owner.investigationComplete());
+                decision.put("samePrimaryInputs", owner.samePrimaryInputs());
+                decision.put("solT2ConjunctionRequired", required);
+                decision.put("pValueOk", improvement == null ? null : improvement.pValueOk());
+                decision.put("thirtyPercentOk", improvement == null ? null : improvement.thirtyPercentOk());
+                decision.put("threeFewerOk", improvement == null ? null : improvement.threeFewerOk());
+                decision.put("lunaCriticalTotal", lunaLow.values().stream().mapToLong(Integer::longValue).sum());
+                decision.put("solCriticalTotal", solHigh.values().stream().mapToLong(Integer::longValue).sum());
+                decision.put("selectionNote", "Sol selection is a recommendation, not an approval; Sol can look better "
+                        + "than it is after Luna failed because of regression to the mean.");
+                JSON.writeValue(output.toFile(), decision);
+            } else {
+                JSON.writeValue(output.toFile(), Map.of("route", owner.route(), "solJustified", justified,
+                        "solVersusLunaD", pairedD, PARAMETER_SHA_FIELD, parameters.sha256,
+                        "lunaReportSha256", owner.lunaReportSha256(), "solReportSha256", owner.solReportSha256(),
+                        "ownerDecisionInputSha256", FreezeRecord.sha256(ownerFile),
+                        "economicsAndOtherGatesPass", owner.economicsAndOtherGatesPass(),
+                        "investigationComplete", owner.investigationComplete(),
+                        "samePrimaryInputs", owner.samePrimaryInputs()));
+            }
             return justified;
         } catch (Exception exception) {
             if (exception instanceof InvalidInput invalid) throw invalid;
             throw new InvalidInput("Sol comparison refused: " + exception.getMessage(), exception);
         }
+    }
+
+    private static void requireFrbCounts(RouteVerdictCalculator.RouteReport report, String name) {
+        if (report.frb() == null || report.frb().candidateCriticalLowByCaseId() == null
+                || report.frb().candidateCriticalHighByCaseId() == null
+                || report.frb().candidateCriticalLowByCaseId().isEmpty()
+                || report.frb().candidateCriticalHighByCaseId().isEmpty())
+            throw new InvalidInput(name + " report lacks FRB primary critical counts");
+        if (!report.frb().candidateCriticalLowByCaseId().keySet()
+                .equals(report.frb().candidateCriticalHighByCaseId().keySet()))
+            throw new InvalidInput(name + " report FRB primary case IDs differ");
     }
 
     private static Map<String, Map<String, Boolean>> reserveFlags(JsonNode report, String route) {
