@@ -86,6 +86,7 @@ final class ResultsPipeline {
             if (freeze.recheckEligibleFailureClasses().contains(RecheckPlan.PROVIDER_REJECTION))
                 throw new InvalidInput("PROVIDER_REJECTION requires the FRB gate");
             FrozenGateParameters parameters = FrozenGateParameters.load(input.parameters());
+            if (parameters.frbEnabled) throw new InvalidInput("FRB parameters require runFrb");
             EvidenceMapping mapping = EvidenceMapping.load(input.mapping());
             if (!parameters.sha256.equals(freeze.parametersSha256())
                     || !mapping.sha256.equals(freeze.evidenceMappingSha256()))
