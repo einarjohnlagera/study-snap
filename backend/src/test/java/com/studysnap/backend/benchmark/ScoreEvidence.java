@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /** Preregistration sections 7 and 8: validated blind rows reduced to case-arm facts. */
 final class ScoreEvidence {
@@ -22,6 +23,27 @@ final class ScoreEvidence {
     record Facts(boolean critical, boolean quality, int scoredQuestions, String subgroup) {}
     record FilesA(Path key, Path primary, Path reviews, Path adjudications, Path exclusions) {}
     record FilesB(Path key, Path scores, Map<String, ClassBScoreFiles.ScorerKind> scorers) {}
+    record ClassBArmNames(String candidateArm, Function<String, String> baselineArmByWorkflow) {
+        ClassBArmNames {
+            if (candidateArm == null || candidateArm.isBlank() || baselineArmByWorkflow == null)
+                throw new InvalidScores("Class-B receipt arm labels required");
+            for (ClassBCaseManifest.Workflow workflow : ClassBCaseManifest.Workflow.values()) {
+                String baseline = baselineArmByWorkflow.apply(workflow.name());
+                if (baseline == null || baseline.isBlank() || baseline.equals(candidateArm))
+                    throw new InvalidScores("Invalid baseline receipt arm: " + workflow);
+            }
+        }
+
+        String receiptArm(ClassBScoreAggregator.Key key) {
+            if (key.arm() == ClassBScoreAggregator.Arm.CANDIDATE) return candidateArm;
+            if (key.arm() != ClassBScoreAggregator.Arm.BASELINE)
+                throw new InvalidScores("Unknown class-B key arm: " + key.arm());
+            String baseline = baselineArmByWorkflow.apply(key.workflow().name());
+            if (baseline == null || baseline.isBlank() || baseline.equals(candidateArm))
+                throw new InvalidScores("Invalid baseline receipt arm: " + key.workflow());
+            return baseline;
+        }
+    }
     record Loaded(Map<String, Facts> byCaseArm, Set<String> excluded, Map<String, String> hashes) {
         Facts get(String caseId, String arm) { return byCaseArm.get(caseId + KEY_SEPARATOR + arm); }
     }
@@ -32,6 +54,10 @@ final class ScoreEvidence {
     private ScoreEvidence() {}
 
     static Loaded load(FilesA a, FilesB b, EvidenceMapping mapping) {
+        return load(a, b, mapping, null);
+    }
+
+    static Loaded load(FilesA a, FilesB b, EvidenceMapping mapping, ClassBArmNames names) {
         if (a == null || b == null || mapping == null) throw new InvalidScores("Score inputs required");
         try {
             Map<String, Facts> facts = new LinkedHashMap<>();
@@ -92,7 +118,8 @@ final class ScoreEvidence {
             for (ClassBScoreAggregator.Key key : armKey) {
                 ClassBScoreFiles.Score score = human.get(key.itemId());
                 if (score == null) throw new InvalidScores("Unresolved human score: " + key.itemId());
-                String identity = key.caseId() + KEY_SEPARATOR + key.arm().name();
+                String identity = key.caseId() + KEY_SEPARATOR
+                        + (names == null ? key.arm().name() : names.receiptArm(key));
                 if (facts.putIfAbsent(identity, new Facts(mapping.criticalB(score), mapping.qualityB(score), 1, null)) != null)
                     throw new InvalidScores("Duplicate class-B case arm: " + identity);
             }
