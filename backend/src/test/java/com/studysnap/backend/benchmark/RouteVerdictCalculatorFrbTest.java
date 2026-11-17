@@ -575,8 +575,10 @@ class RouteVerdictCalculatorFrbTest {
         FrozenGateParameters p = frb();
         FrozenGateParameters old = copyRaw(GateTestFixture.SOURCE.toString());
         var records = cases(p, CRITIQUE);
-        var bad = new RouteVerdictCalculator.ArmResult(RouteVerdictCalculator.Evidence.SCORED,
-                Set.of("QUALITY"), false, null, List.of(), true, false);
+        var repeated = new RouteVerdictCalculator.Recheck(RouteVerdictCalculator.Evidence.SCORED,
+                Set.of(), false, "PARSE", 0, 0);
+        var bad = new RouteVerdictCalculator.ArmResult(RouteVerdictCalculator.Evidence.UNSCORABLE,
+                Set.of(), false, "PARSE", List.of(repeated, repeated), false, false, 0, 0);
         set(records, ASK, 0, zero(), bad);
         for (int i = 1; i < 6; i++) set(records, ASK, i, zero(),
                 new RouteVerdictCalculator.ArmResult(RouteVerdictCalculator.Evidence.SCORED,

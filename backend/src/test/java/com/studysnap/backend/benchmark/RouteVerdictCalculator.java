@@ -12,9 +12,21 @@ import java.util.Map;
 import java.util.Set;
 
 /** Sections 4 and 8 paired case, workflow, subgroup and route gate.
- * FRB leaves isolatedCriticalIncident false; Brief 5f replaces that legacy classification.
+ * FRB alone uses the provider-rejection pair and harness-regression rules; legacy remains unchanged.
+ * HTTP 400 and 422 share one rejection identity here. FRB leaves isolatedCriticalIncident false;
+ * Brief 5f replaces that legacy classification.
  */
 final class RouteVerdictCalculator {
+    private static final String ISOLATED_FINAL_FAILURE = "ISOLATED_FINAL_FAILURE";
+    private static final String HARNESS_REGRESSION = "HARNESS_REGRESSION";
+    private static final String RECHECK_MIXED = "RECHECK_MIXED";
+    private static final String RECHECK_UNRESOLVED = "RECHECK_UNRESOLVED";
+    private static final String BASELINE = "baseline";
+    private static final String CANDIDATE = "candidate";
+    private static final String BASELINE_PREFIX = "baseline:";
+    private static final String ARM_SEPARATOR = ";";
+    private static final String SIDE_SEPARATOR = ":";
+    private static final String COUNTS_EXCEED = "Arm counts exceed requested questions";
     private RouteVerdictCalculator() {}
 
     static final class InvalidCaseSet extends RuntimeException {
@@ -47,14 +59,18 @@ final class RouteVerdictCalculator {
         }
     }
     record Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass,
-                   int criticalQuestions, int unresolvedQuestions) {
+                   int criticalQuestions, int unresolvedQuestions, boolean providerRejected) {
         Recheck {
             if (criticalQuestions < 0 || unresolvedQuestions < 0 || critical != (criticalQuestions > 0))
                 throw new InvalidCaseSet("Inconsistent recheck critical counts");
             t3Components = t3Components == null ? Set.of() : Set.copyOf(t3Components);
         }
         Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass) {
-            this(evidence, t3Components, critical, finalFailureClass, critical ? 1 : 0, 0);
+            this(evidence, t3Components, critical, finalFailureClass, critical ? 1 : 0, 0, false);
+        }
+        Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass,
+                int criticalQuestions, int unresolvedQuestions) {
+            this(evidence, t3Components, critical, finalFailureClass, criticalQuestions, unresolvedQuestions, false);
         }
     }
     record CaseRecord(String id, String workflow, String route, String subgroup,
@@ -96,7 +112,10 @@ final class RouteVerdictCalculator {
                           Map<String, Integer> baselineComponents,
                           Map<String, SubgroupReport> subgroups, String parameterSha256, int missingPairs,
                           Set<String> undisposedCriticalCaseIds,
-                          @JsonInclude(JsonInclude.Include.NON_NULL) FrbWorkflowReport frb) {
+                          @JsonInclude(JsonInclude.Include.NON_NULL) FrbWorkflowReport frb,
+                          @JsonInclude(JsonInclude.Include.NON_NULL) List<String> causes,
+                          @JsonInclude(JsonInclude.Include.NON_NULL) Map<String, String> recheckOutcomesByCaseId,
+                          @JsonInclude(JsonInclude.Include.NON_NULL) Map<String, String> rejectionEvidenceByCaseId) {
         WorkflowReport(Verdict verdict, Set<Tier> failedTiers, Set<Tier> inconclusiveTiers,
                        int paired, int d, int candidateOnlyT3, int baselineOnlyT3, int sharedT3,
                        int candidateOnlyT2, int baselineOnlyT2, int sharedT2,
@@ -109,7 +128,21 @@ final class RouteVerdictCalculator {
                     candidateOnlyT3, baselineOnlyT3, sharedT3, candidateOnlyT2, baselineOnlyT2, sharedT2,
                     candidateOnlyT1, baselineOnlyT1, sharedT1, reserveCandidateOnly,
                     isolatedCriticalIncident, protocolDeviation, candidateComponents, baselineComponents,
-                    subgroups, parameterSha256, missingPairs, undisposedCriticalCaseIds, null);
+                    subgroups, parameterSha256, missingPairs, undisposedCriticalCaseIds, null, null, null, null);
+        }
+        WorkflowReport(Verdict verdict, Set<Tier> failedTiers, Set<Tier> inconclusiveTiers,
+                       int paired, int d, int candidateOnlyT3, int baselineOnlyT3, int sharedT3,
+                       int candidateOnlyT2, int baselineOnlyT2, int sharedT2,
+                       int candidateOnlyT1, int baselineOnlyT1, int sharedT1,
+                       int reserveCandidateOnly, boolean isolatedCriticalIncident, boolean protocolDeviation,
+                       Map<String, Integer> candidateComponents, Map<String, Integer> baselineComponents,
+                       Map<String, SubgroupReport> subgroups, String parameterSha256, int missingPairs,
+                       Set<String> undisposedCriticalCaseIds, FrbWorkflowReport frb) {
+            this(verdict, failedTiers, inconclusiveTiers, paired, d,
+                    candidateOnlyT3, baselineOnlyT3, sharedT3, candidateOnlyT2, baselineOnlyT2, sharedT2,
+                    candidateOnlyT1, baselineOnlyT1, sharedT1, reserveCandidateOnly,
+                    isolatedCriticalIncident, protocolDeviation, candidateComponents, baselineComponents,
+                    subgroups, parameterSha256, missingPairs, undisposedCriticalCaseIds, frb, null, null, null);
         }
     }
     record RouteReport(Verdict verdict, Set<Tier> failedTiers, Set<Tier> inconclusiveTiers, int d,
@@ -290,7 +323,8 @@ final class RouteVerdictCalculator {
                 old.candidateOnlyT1(), old.baselineOnlyT1(), old.sharedT1(), old.reserveCandidateOnly(),
                 old.isolatedCriticalIncident(), old.protocolDeviation(), old.candidateComponents(),
                 old.baselineComponents(), old.subgroups(), old.parameterSha256(), old.missingPairs(),
-                old.undisposedCriticalCaseIds(), frb);
+                old.undisposedCriticalCaseIds(), frb, old.causes(), old.recheckOutcomesByCaseId(),
+                old.rejectionEvidenceByCaseId());
     }
 
     private static void validateFrozen(FrozenGateParameters parameters, String route,
@@ -338,9 +372,9 @@ final class RouteVerdictCalculator {
                 validateRawArm(item.candidate(), width, classB);
             }
             ArmResolution baseline = item == null || item.baseline() == null ? null
-                    : resolve(item.baseline(), p.t1RecheckCount, false);
+                    : resolve(item.baseline(), p.t1RecheckCount, false, p.frbEnabled);
             ArmResolution candidate = item == null || item.candidate() == null ? null
-                    : resolve(item.candidate(), p.t1RecheckCount, true);
+                    : resolve(item.candidate(), p.t1RecheckCount, true, p.frbEnabled);
             validateFrbArm(baseline, width, classB);
             validateFrbArm(candidate, width, classB);
             boolean baselineUsable = baseline != null && !baseline.incomplete && !baseline.confirmedT1;
@@ -355,8 +389,8 @@ final class RouteVerdictCalculator {
                     String baselineReason = unresolvedReason(item == null ? null : item.baseline(), baseline);
                     String candidateReason = unresolvedReason(item == null ? null : item.candidate(), candidate);
                     String reason = baselineReason == null ? "candidate:" + candidateReason
-                            : candidateReason == null ? "baseline:" + baselineReason
-                            : "baseline:" + baselineReason + ",candidate:" + candidateReason;
+                            : candidateReason == null ? BASELINE_PREFIX + baselineReason
+                            : BASELINE_PREFIX + baselineReason + ",candidate:" + candidateReason;
                     reasons.put(id, reason);
                 }
                 int baselineLow = baselineUsable ? baseline.criticalQuestions : 0;
@@ -395,6 +429,7 @@ final class RouteVerdictCalculator {
     private static String unresolvedReason(ArmResult arm, ArmResolution resolution) {
         if (resolution != null && !resolution.incomplete && !resolution.confirmedT1
                 && resolution.unresolvedQuestions == 0) return null;
+        if (resolution != null && resolution.cause != null) return resolution.cause;
         if (arm == null || arm.evidence() == Evidence.MISSING) return "MISSING";
         if (arm.evidence() == Evidence.UNMETERED) return "UNMETERED";
         if (resolution.confirmedT1) return "CONFIRMED_T1";
@@ -407,13 +442,13 @@ final class RouteVerdictCalculator {
     private static void validateFrbArm(ArmResolution arm, int width, boolean classB) {
         if (arm == null) return;
         if ((long) arm.criticalQuestions + arm.unresolvedQuestions > (classB ? 1 : width))
-            throw new InvalidCaseSet("Arm counts exceed requested questions");
+            throw new InvalidCaseSet(COUNTS_EXCEED);
     }
 
     private static void validateRawArm(ArmResult arm, int width, boolean classB) {
         if (arm == null) return;
         if ((long) arm.criticalQuestions() + arm.unresolvedQuestions() > (classB ? 1 : width))
-            throw new InvalidCaseSet("Arm counts exceed requested questions");
+            throw new InvalidCaseSet(COUNTS_EXCEED);
         for (Recheck check : arm.rechecks())
             if ((long) check.criticalQuestions() + check.unresolvedQuestions() > (classB ? 1 : width))
                 throw new InvalidCaseSet("Recheck counts exceed requested questions");
@@ -426,7 +461,16 @@ final class RouteVerdictCalculator {
         Set<Tier> unresolved = new LinkedHashSet<>();
         boolean incomplete = cases.size() != frozen.size() || suitePassed == null;
         if (incomplete) unresolved.add(Tier.T1);
-        if (Boolean.FALSE.equals(suitePassed)) failures.add(Tier.T1);
+        Set<String> causes = new LinkedHashSet<>();
+        if (Boolean.FALSE.equals(suitePassed)) {
+            if (p.frbEnabled) {
+                incomplete = true;
+                unresolved.add(Tier.T1);
+                causes.add(HARNESS_REGRESSION);
+            } else failures.add(Tier.T1);
+        }
+        Map<String, String> recheckOutcomes = new LinkedHashMap<>();
+        Map<String, String> rejectionEvidence = new LinkedHashMap<>();
         int d = 0, candidateT3 = 0, baselineT3 = 0, sharedT3 = 0;
         int candidateT2 = 0, baselineT2 = 0, sharedT2 = 0;
         int candidateT1 = 0, baselineT1 = 0, sharedT1 = 0;
@@ -438,13 +482,29 @@ final class RouteVerdictCalculator {
         Map<String, MutableGroup> groups = new LinkedHashMap<>();
         for (String group : p.workflows.get(name).subgroups().keySet()) groups.put(group, new MutableGroup());
         for (CaseRecord record : cases) {
+            if (p.frbEnabled) {
+                String outcomes = armOutcomes(BASELINE, record.baseline(), false, p.t1RecheckCount);
+                String candidateOutcomes = armOutcomes(CANDIDATE, record.candidate(), true, p.t1RecheckCount);
+                if (candidateOutcomes != null) outcomes = outcomes == null ? candidateOutcomes
+                        : outcomes + ARM_SEPARATOR + candidateOutcomes;
+                if (outcomes != null) recheckOutcomes.put(record.id(), outcomes);
+                String evidence = rejectionEvidence(BASELINE, record.baseline());
+                String candidateEvidence = rejectionEvidence(CANDIDATE, record.candidate());
+                if (candidateEvidence != null) evidence = evidence == null ? candidateEvidence
+                        : evidence + ARM_SEPARATOR + candidateEvidence;
+                if (evidence != null) rejectionEvidence.put(record.id(), evidence);
+            }
             if (record.baseline() == null || record.candidate() == null) {
                 incomplete = true;
                 unresolved.add(Tier.T1);
                 continue;
             }
-            ArmResolution baseline = resolve(record.baseline(), p.t1RecheckCount, false);
-            ArmResolution candidate = resolve(record.candidate(), p.t1RecheckCount, true);
+            ArmResolution baseline = resolve(record.baseline(), p.t1RecheckCount, false, p.frbEnabled);
+            ArmResolution candidate = resolve(record.candidate(), p.t1RecheckCount, true, p.frbEnabled);
+            if (p.frbEnabled) {
+                if (baseline.cause != null) causes.add(baseline.cause);
+                if (candidate.cause != null) causes.add(candidate.cause);
+            }
             boolean baselineOriginalSucceeded = record.baseline().finalFailureClass() == null
                     && record.baseline().evidence() == Evidence.SCORED;
             MutableGroup group = record.subgroup() == null ? null : groups.get(record.subgroup());
@@ -468,7 +528,8 @@ final class RouteVerdictCalculator {
             }
             if (candidate.confirmedT1 && baselineOriginalSucceeded && !baseline.confirmedT1)
                 failures.add(Tier.T1);
-            if (record.candidate().providerRejected() && !record.baseline().providerRejected()) failures.add(Tier.T1);
+            if (!p.frbEnabled && record.candidate().providerRejected()
+                    && !record.baseline().providerRejected()) failures.add(Tier.T1);
             if (record.candidate().unusable()) unusable++;
             if (baseline.incomplete || candidate.incomplete) continue;
             included++;
@@ -561,19 +622,91 @@ final class RouteVerdictCalculator {
         }
         Verdict verdict = !failures.isEmpty() ? Verdict.FAIL
                 : incomplete ? Verdict.INCONCLUSIVE : Verdict.PASS;
+        List<String> orderedCauses = List.of(HARNESS_REGRESSION, RECHECK_MIXED, RECHECK_UNRESOLVED)
+                .stream().filter(causes::contains).toList();
         return new WorkflowReport(verdict, Set.copyOf(failures), Set.copyOf(unresolved), cases.size(), d,
                 candidateT3, baselineT3, sharedT3, candidateT2, baselineT2, sharedT2,
                 candidateT1, baselineT1, sharedT1,
                 reserveCandidateOnly, !p.frbEnabled && candidateT2 > 0 && !failures.contains(Tier.T2), deviation,
                 Map.copyOf(candidateComponents), Map.copyOf(baselineComponents),
                 Collections.unmodifiableMap(subgroupReports), p.sha256, frozen.size() - included,
-                Collections.unmodifiableSet(new LinkedHashSet<>(undisposed)));
+                Collections.unmodifiableSet(new LinkedHashSet<>(undisposed)), null,
+                orderedCauses.isEmpty() ? null : orderedCauses,
+                orderedByCaseId(recheckOutcomes), orderedByCaseId(rejectionEvidence));
+    }
+
+    private static Map<String, String> orderedByCaseId(Map<String, String> entries) {
+        if (entries.isEmpty()) return null;
+        Map<String, String> ordered = new LinkedHashMap<>();
+        entries.entrySet().stream().sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> ordered.put(entry.getKey(), entry.getValue()));
+        return Collections.unmodifiableMap(ordered);
+    }
+
+    private static String rejectionEvidence(String side, ArmResult arm) {
+        if (arm == null || !arm.providerRejected()) return null;
+        return side + SIDE_SEPARATOR + (arm.finalFailureClass() == null
+                ? "REJECTED_THEN_RETRY_SUCCEEDED" : "REJECTED_FINAL_FAILURE");
+    }
+
+    private static String armOutcomes(String side, ArmResult arm, boolean candidate, int requiredRechecks) {
+        if (arm == null || !rejectionPairApplies(arm, candidate)
+                || arm.rechecks().size() != requiredRechecks) return null;
+        return side + SIDE_SEPARATOR + String.join("+", arm.rechecks().stream()
+                .map(check -> rejectionOutcome(check).name()).toList());
     }
 
     private record ArmResolution(boolean incomplete, boolean confirmedT1, Set<String> components,
-                                 boolean critical, int criticalQuestions, int unresolvedQuestions) {}
+                                 boolean critical, int criticalQuestions, int unresolvedQuestions,
+                                 String cause) {
+        ArmResolution(boolean incomplete, boolean confirmedT1, Set<String> components,
+                      boolean critical, int criticalQuestions, int unresolvedQuestions) {
+            this(incomplete, confirmedT1, components, critical, criticalQuestions, unresolvedQuestions, null);
+        }
+    }
 
-    private static ArmResolution resolve(ArmResult arm, int requiredRechecks, boolean candidate) {
+    private enum RejectionOutcome { SAME_REJECTION, SUCCESS, DIFFERENT_REJECTION, TIMEOUT, OTHER }
+
+    private static boolean rejectionPairApplies(ArmResult arm, boolean candidate) {
+        return arm.providerRejected() && (candidate || arm.finalFailureClass() != null);
+    }
+
+    private static RejectionOutcome rejectionOutcome(Recheck check) {
+        if (check.evidence() != Evidence.SCORED) return RejectionOutcome.OTHER;
+        if ("TIMEOUT".equals(check.finalFailureClass())) return RejectionOutcome.TIMEOUT;
+        if (check.finalFailureClass() == null) return RejectionOutcome.SUCCESS;
+        return check.providerRejected() ? RejectionOutcome.SAME_REJECTION
+                : RejectionOutcome.DIFFERENT_REJECTION;
+    }
+
+    private static ArmResolution resolveRejection(ArmResult arm, int requiredRechecks, boolean candidate) {
+        if (arm.evidence() == Evidence.MISSING || arm.evidence() == Evidence.UNMETERED
+                || arm.finalFailureClass() == null && arm.evidence() != Evidence.SCORED)
+            return new ArmResolution(true, false, Set.of(), false, 0, 0, RECHECK_UNRESOLVED);
+        if (arm.rechecks().size() != requiredRechecks)
+            return new ArmResolution(true, false, Set.of(), false, 0, 0, RECHECK_UNRESOLVED);
+        List<RejectionOutcome> outcomes = arm.rechecks().stream().map(RouteVerdictCalculator::rejectionOutcome).toList();
+        if (outcomes.stream().allMatch(outcome -> outcome == RejectionOutcome.SAME_REJECTION))
+            return new ArmResolution(!candidate, true, Set.of(), false, 0, 0);
+        if (outcomes.stream().allMatch(outcome -> outcome == RejectionOutcome.SUCCESS)) {
+            Recheck first = arm.rechecks().get(0);
+            Set<String> components = new LinkedHashSet<>(arm.finalFailureClass() == null
+                    ? arm.t3Components() : first.t3Components());
+            components.add(ISOLATED_FINAL_FAILURE);
+            return arm.finalFailureClass() == null
+                    ? new ArmResolution(false, false, Set.copyOf(components), arm.critical(),
+                        arm.criticalQuestions(), arm.unresolvedQuestions())
+                    : new ArmResolution(false, false, Set.copyOf(components), first.critical(),
+                        first.criticalQuestions(), first.unresolvedQuestions());
+        }
+        String cause = outcomes.contains(RejectionOutcome.OTHER) ? RECHECK_UNRESOLVED : RECHECK_MIXED;
+        return new ArmResolution(true, false, Set.of(), false, 0, 0, cause);
+    }
+
+    private static ArmResolution resolve(ArmResult arm, int requiredRechecks, boolean candidate,
+                                         boolean frbEnabled) {
+        if (frbEnabled && rejectionPairApplies(arm, candidate))
+            return resolveRejection(arm, requiredRechecks, candidate);
         if (arm.finalFailureClass() == null) return arm.evidence() == Evidence.SCORED
                 ? new ArmResolution(false, false, arm.t3Components(), arm.critical(),
                     arm.criticalQuestions(), arm.unresolvedQuestions())
@@ -590,7 +723,7 @@ final class RouteVerdictCalculator {
         }
         if (firstSuccess != null) {
             Set<String> components = new LinkedHashSet<>(firstSuccess.t3Components());
-            components.add("ISOLATED_FINAL_FAILURE");
+            components.add(ISOLATED_FINAL_FAILURE);
             return new ArmResolution(false, false, Set.copyOf(components), firstSuccess.critical(),
                     firstSuccess.criticalQuestions(), firstSuccess.unresolvedQuestions());
         }
