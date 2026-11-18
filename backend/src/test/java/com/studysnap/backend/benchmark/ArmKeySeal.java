@@ -1,6 +1,7 @@
 package com.studysnap.backend.benchmark;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,7 +23,20 @@ final class ArmKeySeal {
     }
     record PacketFile(String name, String sha256, long lines) {}
     record Seal(String armKeySha256, String armKeyFileName, long lineCount,
-                List<PacketFile> packetFiles, String sealedAtUtc) {
+                List<PacketFile> packetFiles, String sealedAtUtc,
+                @JsonInclude(JsonInclude.Include.NON_NULL) String placementCommitmentSha256,
+                @JsonInclude(JsonInclude.Include.NON_NULL) String placementSidecarSha256,
+                @JsonInclude(JsonInclude.Include.NON_NULL) String placementExportId) {
+        Seal {
+            int placementParts = (placementCommitmentSha256 == null ? 0 : 1)
+                    + (placementSidecarSha256 == null ? 0 : 1)
+                    + (placementExportId == null ? 0 : 1);
+            if (placementParts != 0 && placementParts != 3) throw new SealBroken("Incomplete placement seal");
+        }
+        Seal(String armKeySha256, String armKeyFileName, long lineCount,
+             List<PacketFile> packetFiles, String sealedAtUtc) {
+            this(armKeySha256, armKeyFileName, lineCount, packetFiles, sealedAtUtc, null, null, null);
+        }
         Set<String> workflowStems() {
             return packetFiles.stream().filter(packet -> packet.lines() > 0)
                     .map(packet -> packet.name().substring(0, packet.name().length() - 6))
@@ -30,10 +44,19 @@ final class ArmKeySeal {
         }
     }
     private static final Set<String> FIELDS = Set.of("armKeySha256", "armKeyFileName", "lineCount", "packetFiles", "sealedAtUtc");
+    private static final Set<String> PLACEMENT_FIELDS = Set.of("placementCommitmentSha256",
+            "placementSidecarSha256", "placementExportId");
     private static final Set<String> PACKET_FIELDS = Set.of("name", "sha256", "lines");
     private ArmKeySeal() {}
 
     static Seal seal(Path armKey, Path packetDirectory, Path sealFile, String sealedAtUtc) {
+        return sealBody(armKey, packetDirectory, sealFile, sealedAtUtc, null);
+    }
+    static Seal seal(Path armKey, Path packetDirectory, Path sealFile, String sealedAtUtc, Path sidecar) {
+        return sealBody(armKey, packetDirectory, sealFile, sealedAtUtc, sidecar);
+    }
+    private static Seal sealBody(Path armKey, Path packetDirectory, Path sealFile,
+                                 String sealedAtUtc, Path sidecar) {
         try {
             IntegritySupport.utc(sealedAtUtc);
             if (armKey == null || packetDirectory == null || sealFile == null
@@ -51,18 +74,34 @@ final class ArmKeySeal {
             }
             if (packets.stream().noneMatch(packet -> packet.lines() > 0))
                 throw new InvalidSeal("No nonempty packet file");
-            Seal result = new Seal(FreezeRecord.sha256(key), armKey.getFileName().toString(), keyLines,
-                    List.copyOf(packets), sealedAtUtc);
+            PlacementSidecar.Reveal placement = null;
+            if (sidecar != null) {
+                if (!sidecar.toRealPath().equals(PlacementSidecar.beside(armKey).toRealPath()))
+                    throw new SealBroken("Placement sidecar differs from arm key");
+                placement = PlacementSidecar.load(sidecar);
+            }
+            Seal result = placement == null
+                    ? new Seal(FreezeRecord.sha256(key), armKey.getFileName().toString(), keyLines,
+                            List.copyOf(packets), sealedAtUtc)
+                    : new Seal(FreezeRecord.sha256(key), armKey.getFileName().toString(), keyLines,
+                            List.copyOf(packets), sealedAtUtc, placement.commitment(),
+                            FreezeRecord.sha256(sidecar), placement.exportId());
             IntegritySupport.create(sealFile, IntegritySupport.JSON.writeValueAsBytes(result));
             return result;
         } catch (InvalidSeal exception) { throw exception; }
+        catch (InvalidPlacementSeal exception) { throw new SealBroken("Cannot verify placement sidecar"); }
+        catch (SealBroken exception) { throw exception; }
         catch (Exception exception) { throw new InvalidSeal("Cannot seal arm key", exception); }
     }
     static Seal load(Path sealFile) {
         try {
             IntegritySupport.detachedHash(sealFile);
             JsonNode node = IntegritySupport.JSON.readTree(Files.readAllBytes(sealFile));
-            IntegritySupport.fields(node, FIELDS);
+            Set<String> names = new java.util.HashSet<>();
+            if (node == null || !node.isObject()) throw new IOException("Invalid seal object");
+            node.fieldNames().forEachRemaining(names::add);
+            boolean placement = names.equals(unionFields());
+            if (!names.equals(FIELDS) && !placement) throw new IOException("Invalid seal fields");
             String keyHash = IntegritySupport.hash(node, "armKeySha256");
             String fileName = IntegritySupport.string(node, "armKeyFileName");
             if (!fileName.equals(Path.of(fileName).getFileName().toString()) || !node.path("lineCount").isIntegralNumber()
@@ -83,8 +122,19 @@ final class ArmKeySeal {
                 throw new IOException("Invalid packet list");
             String utc = IntegritySupport.string(node, "sealedAtUtc");
             IntegritySupport.utc(utc);
-            return new Seal(keyHash, fileName, node.path("lineCount").asLong(), List.copyOf(packets), utc);
-        } catch (Exception exception) { throw new SealBroken("Cannot verify seal", exception); }
+            return placement
+                    ? new Seal(keyHash, fileName, node.path("lineCount").asLong(), List.copyOf(packets), utc,
+                            IntegritySupport.hash(node, "placementCommitmentSha256"),
+                            IntegritySupport.hash(node, "placementSidecarSha256"),
+                            IntegritySupport.string(node, "placementExportId"))
+                    : new Seal(keyHash, fileName, node.path("lineCount").asLong(), List.copyOf(packets), utc);
+        } catch (InvalidPlacementSeal exception) { throw new SealBroken("Cannot verify seal"); }
+        catch (Exception exception) { throw new SealBroken("Cannot verify seal", exception); }
+    }
+    private static Set<String> unionFields() {
+        Set<String> result = new java.util.HashSet<>(FIELDS);
+        result.addAll(PLACEMENT_FIELDS);
+        return result;
     }
     static void verifyKeyBytes(Path armKey, Seal seal) {
         try {

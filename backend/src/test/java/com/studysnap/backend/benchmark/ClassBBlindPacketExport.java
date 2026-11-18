@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,12 +31,66 @@ final class ClassBBlindPacketExport {
             + "modelName|modelId|token|tokens|tokenCount|token_count|inputTokens|outputTokens|"
             + "input_tokens|output_tokens|reasoning_tokens|usage|costUsd)\\b)");
     private static final String NEWLINE = "\n";
+    private static final String RESERVE_EXPORT_PREFIX = "CLASS_B_RESERVE:";
     private static final String PRIVATE_DIRECTORY = "Private evaluation directory is unavailable to this exporter";
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
+    @FunctionalInterface private interface PlacementChoice { boolean firstInA(String group, String caseId); }
     private ClassBBlindPacketExport() {}
 
     static Export export(List<ClassBCaseManifest.Case> fixtures, List<Output> outputs,
                          Path packetDirectory, Path armKeyPath, long seed) {
+        return exportBody(fixtures, outputs, packetDirectory, armKeyPath, seed,
+                null, null, null, PlacementSidecar.FILE_WRITER, ClassBCaseManifest.Workflow::ordinal, null);
+    }
+
+    static Export export(List<ClassBCaseManifest.Case> fixtures, List<Output> outputs,
+                         Path packetDirectory, Path armKeyPath, String exportId,
+                         PlacementSecret secret, String expectedCommitment) {
+        return export(fixtures, outputs, packetDirectory, armKeyPath, exportId, secret,
+                expectedCommitment, null);
+    }
+
+    static Export export(List<ClassBCaseManifest.Case> fixtures, List<Output> outputs,
+                         Path packetDirectory, Path armKeyPath, String exportId,
+                         PlacementSecret secret, String expectedCommitment, String freezeSha256OrNull) {
+        return export(fixtures, outputs, packetDirectory, armKeyPath, exportId, secret,
+                expectedCommitment, freezeSha256OrNull, PlacementSidecar.FILE_WRITER);
+    }
+
+    static Export export(List<ClassBCaseManifest.Case> fixtures, List<Output> outputs,
+                         Path packetDirectory, Path armKeyPath, String exportId,
+                         PlacementSecret secret, String expectedCommitment, String freezeSha256OrNull,
+                         PlacementSidecar.Writer writer) {
+        if (secret == null || !IntegritySupport.digest(expectedCommitment)
+                || !secret.commitment().equals(expectedCommitment) || fixtures == null
+                || fixtures.isEmpty() || writer == null)
+            throw new InvalidPlacementSeal();
+        if ("CLASS_B_PRIMARY".equals(exportId)) {
+            if (fixtures.stream().anyMatch(fixture -> fixture == null || fixture.reserve()))
+                throw new InvalidPlacementSeal();
+        } else if (exportId != null && exportId.startsWith(RESERVE_EXPORT_PREFIX)) {
+            String workflow = exportId.substring(RESERVE_EXPORT_PREFIX.length());
+            if (fixtures.isEmpty() || fixtures.stream().anyMatch(fixture -> fixture == null
+                    || !fixture.reserve() || !fixture.workflow().name().equals(workflow)))
+                throw new InvalidPlacementSeal();
+        } else throw new InvalidPlacementSeal();
+        Path sidecar = PlacementSidecar.beside(armKeyPath);
+        if (Files.exists(sidecar, LinkOption.NOFOLLOW_LINKS)) throw new InvalidPlacementSeal();
+        PlacementSidecar.requireOutsidePackets(sidecar, packetDirectory);
+        return exportBody(fixtures, outputs, packetDirectory, armKeyPath, secret.seedLong(),
+                secret, exportId, freezeSha256OrNull, writer,
+                workflow -> workflow.name().hashCode(),
+                (group, caseId) -> PlacementPlan.firstArmInA(secret, exportId, group, caseId));
+    }
+
+    private static Export exportBody(List<ClassBCaseManifest.Case> fixtures, List<Output> outputs,
+                                     Path packetDirectory, Path armKeyPath, long seed,
+                                     PlacementSecret secret, String exportId, String freezeSha256OrNull,
+                                     PlacementSidecar.Writer writer,
+                                     java.util.function.ToIntFunction<ClassBCaseManifest.Workflow> groupKey,
+                                     PlacementChoice placement) {
+        boolean sealed = secret != null;
+        List<Path> created = new ArrayList<>();
         try {
             Path repo = StageRunner.findRepo(Path.of("").toAbsolutePath().normalize());
             guarded(packetDirectory, repo);
@@ -60,18 +116,30 @@ final class ClassBBlindPacketExport {
             List<ClassBScoreFiles.BlindItem> manifest = new ArrayList<>();
             List<ClassBScoreAggregator.Key> key = new ArrayList<>();
             Map<Path, String> packetBytes = new LinkedHashMap<>();
+            List<PlacementSidecar.Group> sealedGroups = new ArrayList<>();
             int serial = 0;
             for (Map.Entry<ClassBCaseManifest.Workflow, List<ClassBCaseManifest.Case>> group : grouped.entrySet()) {
                 List<ClassBCaseManifest.Case> cases = group.getValue();
+                if (sealed && cases.isEmpty()) continue;
                 cases.sort(java.util.Comparator.comparing(ClassBCaseManifest.Case::fixtureId));
-                Random random = new Random(seed ^ group.getKey().ordinal());
-                Collections.shuffle(cases, random);
+                Random random = new Random(seed ^ groupKey.applyAsInt(group.getKey()));
+                if (sealed) {
+                    List<String> ids = cases.stream().map(ClassBCaseManifest.Case::fixtureId).toList();
+                    sealedGroups.add(new PlacementSidecar.Group(group.getKey().name(), ids));
+                    Map<String, ClassBCaseManifest.Case> byId = new HashMap<>();
+                    cases.forEach(fixture -> byId.put(fixture.fixtureId(), fixture));
+                    List<ClassBCaseManifest.Case> ordered = PlacementPlan.orderWithHash(ids, seed,
+                            groupKey.applyAsInt(group.getKey())).stream().map(byId::get).toList();
+                    cases.clear();
+                    cases.addAll(ordered);
+                } else Collections.shuffle(cases, random);
                 List<String> lines = new ArrayList<>();
                 for (ClassBCaseManifest.Case fixture : cases) {
                     Map<ClassBScoreAggregator.Arm, String> arms = textByCase.get(fixture.fixtureId());
                     if (arms.size() != ClassBScoreAggregator.Arm.values().length)
                         throw new InvalidPacket("Unpaired class-B output");
-                    ClassBScoreAggregator.Arm first = random.nextBoolean()
+                    ClassBScoreAggregator.Arm first = (placement == null ? random.nextBoolean()
+                            : placement.firstInA(group.getKey().name(), fixture.fixtureId()))
                             ? ClassBScoreAggregator.Arm.BASELINE : ClassBScoreAggregator.Arm.CANDIDATE;
                     ClassBScoreAggregator.Arm second = first == ClassBScoreAggregator.Arm.BASELINE
                             ? ClassBScoreAggregator.Arm.CANDIDATE : ClassBScoreAggregator.Arm.BASELINE;
@@ -100,18 +168,69 @@ final class ClassBBlindPacketExport {
             }
             List<String> keyLines = new ArrayList<>();
             for (ClassBScoreAggregator.Key item : key) keyLines.add(JSON.writeValueAsString(item));
-            Files.createDirectories(packetDirectory);
-            Files.createDirectories(armKeyPath.getParent());
+            if (sealed) {
+                createTrackedDirectories(packetDirectory, created);
+                createTrackedDirectories(armKeyPath.getParent(), created);
+            } else {
+                Files.createDirectories(packetDirectory);
+                Files.createDirectories(armKeyPath.getParent());
+            }
+            if (sealed) {
+                List<Path> targets = new ArrayList<>(packetBytes.keySet());
+                targets.add(armKeyPath);
+                for (Path target : targets)
+                    if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) throw new InvalidPlacementSeal();
+            }
             for (Map.Entry<Path, String> packet : packetBytes.entrySet()) {
-                Files.writeString(packet.getKey(), packet.getValue());
+                if (sealed) {
+                    created.add(packet.getKey());
+                    Files.writeString(packet.getKey(), packet.getValue(), StandardOpenOption.CREATE_NEW);
+                } else Files.writeString(packet.getKey(), packet.getValue());
                 if (LEAK.matcher(Files.readString(packet.getKey())).find())
                     throw new InvalidPacket("Written packet contains private arm metadata");
             }
-            Files.writeString(armKeyPath, String.join(NEWLINE, keyLines) + (keyLines.isEmpty() ? "" : NEWLINE));
+            if (sealed) created.add(armKeyPath);
+            Files.writeString(armKeyPath, String.join(NEWLINE, keyLines) + (keyLines.isEmpty() ? "" : NEWLINE),
+                    sealed ? StandardOpenOption.CREATE_NEW : StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE, sealed ? StandardOpenOption.WRITE : StandardOpenOption.TRUNCATE_EXISTING);
+            if (sealed) {
+                Path sidecar = PlacementSidecar.beside(armKeyPath);
+                created.add(sidecar);
+                PlacementSidecar.write(sidecar, new PlacementSidecar.Reveal(PlacementSidecar.SCHEMA_VERSION,
+                        PlacementSidecar.CLASS_B, exportId, secret.commitment(), secret,
+                        System.getProperty("java.version"), "BASELINE", "CANDIDATE",
+                        sealedGroups.stream().sorted(java.util.Comparator.comparing(PlacementSidecar.Group::groupKey))
+                                .toList(), List.of(), freezeSha256OrNull), writer);
+            }
             return new Export(List.copyOf(manifest), List.copyOf(key));
         } catch (IOException | IllegalArgumentException ex) {
             if (ex instanceof InvalidPacket invalid) throw invalid;
+            if (sealed) { rollback(created); throw new InvalidPlacementSeal(); }
             throw new InvalidPacket("Cannot export class-B packet", ex);
+        } catch (RuntimeException exception) {
+            if (exception instanceof InvalidPacket invalid) {
+                if (sealed) rollback(created);
+                throw invalid;
+            }
+            if (sealed) { rollback(created); throw new InvalidPlacementSeal(); }
+            throw exception;
+        }
+    }
+
+    private static void rollback(List<Path> created) {
+        for (int i = created.size() - 1; i >= 0; i--) {
+            try { Files.deleteIfExists(created.get(i)); }
+            catch (IOException ignored) { /* Preserve the original failure. */ }
+        }
+    }
+    private static void createTrackedDirectories(Path path, List<Path> created) throws IOException {
+        List<Path> missing = new ArrayList<>();
+        for (Path current = path; current != null && !Files.exists(current, LinkOption.NOFOLLOW_LINKS);
+             current = current.getParent()) missing.add(current);
+        for (int i = missing.size() - 1; i >= 0; i--) {
+            Path directory = missing.get(i);
+            Files.createDirectory(directory);
+            created.add(directory);
         }
     }
 

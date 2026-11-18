@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -34,6 +36,7 @@ final class ClassABlindPacketExport {
     }
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
     private static final String NEWLINE = "\n";
+    @FunctionalInterface private interface PlacementChoice { boolean firstInA(String group, String caseId); }
     private ClassABlindPacketExport() {}
 
     static List<Output> load(Stage1Receipt receipt, Path deliveredPath) {
@@ -83,6 +86,51 @@ final class ClassABlindPacketExport {
     static Export export(List<ClassACaseManifest.Case> fixtures, List<Output> outputs,
                          String firstArm, String secondArm, Path packetDirectory,
                          Path armKeyPath, long seed) {
+        return exportBody(fixtures, outputs, firstArm, secondArm, packetDirectory, armKeyPath,
+                seed, null, null, null, PlacementSidecar.FILE_WRITER, String::hashCode, null);
+    }
+
+    static Export export(List<ClassACaseManifest.Case> fixtures, List<Output> outputs,
+                         String firstArm, String secondArm, Path packetDirectory,
+                         Path armKeyPath, String exportId, PlacementSecret secret, String expectedCommitment) {
+        return export(fixtures, outputs, firstArm, secondArm, packetDirectory, armKeyPath,
+                exportId, secret, expectedCommitment, null);
+    }
+
+    static Export export(List<ClassACaseManifest.Case> fixtures, List<Output> outputs,
+                         String firstArm, String secondArm, Path packetDirectory,
+                         Path armKeyPath, String exportId, PlacementSecret secret, String expectedCommitment,
+                         String freezeSha256OrNull) {
+        return export(fixtures, outputs, firstArm, secondArm, packetDirectory, armKeyPath,
+                exportId, secret, expectedCommitment, freezeSha256OrNull, PlacementSidecar.FILE_WRITER);
+    }
+
+    static Export export(List<ClassACaseManifest.Case> fixtures, List<Output> outputs,
+                         String firstArm, String secondArm, Path packetDirectory,
+                         Path armKeyPath, String exportId, PlacementSecret secret, String expectedCommitment,
+                         String freezeSha256OrNull, PlacementSidecar.Writer writer) {
+        if (secret == null || !IntegritySupport.digest(expectedCommitment)
+                || !secret.commitment().equals(expectedCommitment)
+                || exportId == null || !exportId.equals("CLASS_A:" + firstArm + "-" + secondArm)
+                || fixtures == null || fixtures.isEmpty()
+                || fixtures.stream().anyMatch(fixture -> fixture == null || fixture.reserve())
+                || writer == null) throw new InvalidPlacementSeal();
+        Path sidecar = PlacementSidecar.beside(armKeyPath);
+        if (Files.exists(sidecar, LinkOption.NOFOLLOW_LINKS)) throw new InvalidPlacementSeal();
+        PlacementSidecar.requireOutsidePackets(sidecar, packetDirectory);
+        return exportBody(fixtures, outputs, firstArm, secondArm, packetDirectory, armKeyPath,
+                secret.seedLong(), secret, exportId, freezeSha256OrNull, writer, String::hashCode,
+                (group, caseId) -> PlacementPlan.firstArmInA(secret, exportId, group, caseId));
+    }
+
+    private static Export exportBody(List<ClassACaseManifest.Case> fixtures, List<Output> outputs,
+                                     String firstArm, String secondArm, Path packetDirectory,
+                                     Path armKeyPath, long seed, PlacementSecret secret, String exportId,
+                                     String freezeSha256OrNull, PlacementSidecar.Writer writer,
+                                     java.util.function.ToIntFunction<String> groupKey,
+                                     PlacementChoice placement) {
+        List<Path> created = new ArrayList<>();
+        boolean sealed = secret != null;
         try {
             Path repo = StageRunner.findRepo(Path.of("").toAbsolutePath().normalize());
             ClassBBlindPacketExport.guarded(packetDirectory, repo);
@@ -125,20 +173,34 @@ final class ClassABlindPacketExport {
                     return reason != null;
                 });
             groups.values().removeIf(List::isEmpty);
+            List<PlacementSidecar.Group> sealedGroups = new ArrayList<>();
+            if (sealed) for (var group : groups.entrySet())
+                sealedGroups.add(new PlacementSidecar.Group(group.getKey(), group.getValue().stream()
+                        .map(ClassACaseManifest.Case::caseId).sorted().toList()));
             List<String> keys = new ArrayList<>();
             Map<Path, String> packets = new LinkedHashMap<>();
             int serial = 0;
             for (var group : groups.entrySet()) {
                 List<ClassACaseManifest.Case> cases = group.getValue();
                 cases.sort(Comparator.comparing(ClassACaseManifest.Case::caseId));
-                Random random = new Random(seed ^ group.getKey().hashCode());
-                Collections.shuffle(cases, random);
+                Random random = new Random(seed ^ groupKey.applyAsInt(group.getKey()));
+                if (sealed) {
+                    Map<String, ClassACaseManifest.Case> byId = new HashMap<>();
+                    cases.forEach(fixture -> byId.put(fixture.caseId(), fixture));
+                    List<ClassACaseManifest.Case> ordered = PlacementPlan.orderWithHash(cases.stream()
+                            .map(ClassACaseManifest.Case::caseId).toList(), seed,
+                            groupKey.applyAsInt(group.getKey())).stream()
+                            .map(byId::get).toList();
+                    cases.clear();
+                    cases.addAll(ordered);
+                } else Collections.shuffle(cases, random);
                 List<String> packetLines = new ArrayList<>();
                 for (ClassACaseManifest.Case fixture : cases) {
                     Map<String, JsonNode> arms = byCase.get(fixture.caseId());
                     if (arms.size() != 2 || !arms.containsKey(firstArm) || !arms.containsKey(secondArm))
                         throw new InvalidPacket("Unpaired class-A output");
-                    String first = random.nextBoolean() ? firstArm : secondArm;
+                    String first = (placement == null ? random.nextBoolean()
+                            : placement.firstInA(group.getKey(), fixture.caseId())) ? firstArm : secondArm;
                     String second = first.equals(firstArm) ? secondArm : firstArm;
                     List<Map<String, Object>> shown = new ArrayList<>();
                     for (String arm : List.of(first, second)) {
@@ -185,26 +247,82 @@ final class ClassABlindPacketExport {
                     throw new InvalidPacket("Packet would reveal arm, model or token metadata");
                 packets.put(packetDirectory.resolve(group.getKey() + ".jsonl"), body);
             }
-            Files.createDirectories(packetDirectory);
-            Files.createDirectories(armKeyPath.getParent());
+            if (sealed) {
+                createTrackedDirectories(packetDirectory, created);
+                createTrackedDirectories(armKeyPath.getParent(), created);
+            } else {
+                Files.createDirectories(packetDirectory);
+                Files.createDirectories(armKeyPath.getParent());
+            }
+            Path exclusionsPath = armKeyPath.resolveSibling(armKeyPath.getFileName() + ".exclusions.jsonl");
+            if (sealed) {
+                List<Path> targets = new ArrayList<>(packets.keySet());
+                targets.add(armKeyPath);
+                targets.add(exclusionsPath);
+                targets.add(IntegritySupport.detached(exclusionsPath));
+                for (Path target : targets)
+                    if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) throw new InvalidPlacementSeal();
+            }
             for (var packet : packets.entrySet()) {
-                Files.writeString(packet.getKey(), packet.getValue());
+                if (sealed) {
+                    created.add(packet.getKey());
+                    Files.writeString(packet.getKey(), packet.getValue(), StandardOpenOption.CREATE_NEW);
+                } else Files.writeString(packet.getKey(), packet.getValue());
                 if (ClassBBlindPacketExport.LEAK.matcher(Files.readString(packet.getKey())).find())
                     throw new InvalidPacket("Written packet leaks arm, model or token metadata");
             }
-            Files.writeString(armKeyPath, String.join(NEWLINE, keys) + NEWLINE);
-            Path exclusionsPath = armKeyPath.resolveSibling(armKeyPath.getFileName() + ".exclusions.jsonl");
+            if (sealed) created.add(armKeyPath);
+            Files.writeString(armKeyPath, String.join(NEWLINE, keys) + NEWLINE,
+                    sealed ? StandardOpenOption.CREATE_NEW : StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE, sealed ? StandardOpenOption.WRITE : StandardOpenOption.TRUNCATE_EXISTING);
             List<String> excludedLines = new ArrayList<>();
             for (var entry : excluded.entrySet())
                 excludedLines.add(JSON.writeValueAsString(Map.of("caseId", entry.getKey(), "reason", entry.getValue())));
-            Files.writeString(exclusionsPath, excludedLines.isEmpty() ? "" : String.join(NEWLINE, excludedLines) + NEWLINE);
+            if (sealed) created.add(exclusionsPath);
+            Files.writeString(exclusionsPath, excludedLines.isEmpty() ? "" : String.join(NEWLINE, excludedLines) + NEWLINE,
+                    sealed ? StandardOpenOption.CREATE_NEW : StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE, sealed ? StandardOpenOption.WRITE : StandardOpenOption.TRUNCATE_EXISTING);
             String exclusionsSha256 = FreezeRecord.sha256(exclusionsPath);
-            Files.writeString(IntegritySupport.detached(exclusionsPath), exclusionsSha256 + NEWLINE);
+            if (sealed) created.add(IntegritySupport.detached(exclusionsPath));
+            Files.writeString(IntegritySupport.detached(exclusionsPath), exclusionsSha256 + NEWLINE,
+                    sealed ? StandardOpenOption.CREATE_NEW : StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE, sealed ? StandardOpenOption.WRITE : StandardOpenOption.TRUNCATE_EXISTING);
+            if (sealed) {
+                Path sidecar = PlacementSidecar.beside(armKeyPath);
+                created.add(sidecar);
+                List<PlacementSidecar.Excluded> exclusions = excluded.entrySet().stream()
+                        .map(entry -> new PlacementSidecar.Excluded(entry.getKey(), entry.getValue())).toList();
+                PlacementSidecar.write(sidecar, new PlacementSidecar.Reveal(PlacementSidecar.SCHEMA_VERSION,
+                        PlacementSidecar.CLASS_A, exportId, secret.commitment(), secret,
+                        System.getProperty("java.version"), firstArm, secondArm,
+                        List.copyOf(sealedGroups), exclusions, freezeSha256OrNull), writer);
+            }
             return new Export(List.copyOf(packets.keySet()), armKeyPath, serial, exclusionsPath,
                     Collections.unmodifiableMap(new java.util.TreeMap<>(excluded)), exclusionsSha256);
         } catch (IOException | IllegalArgumentException exception) {
+            if (sealed) { rollback(created); throw new InvalidPlacementSeal(); }
             if (exception instanceof InvalidPacket invalid) throw invalid;
             throw new InvalidPacket("Cannot export class-A packet", exception);
+        } catch (RuntimeException exception) {
+            if (sealed) { rollback(created); throw new InvalidPlacementSeal(); }
+            throw exception;
+        }
+    }
+
+    private static void rollback(List<Path> created) {
+        for (int i = created.size() - 1; i >= 0; i--) {
+            try { Files.deleteIfExists(created.get(i)); }
+            catch (IOException ignored) { /* Preserve the original failure. */ }
+        }
+    }
+    private static void createTrackedDirectories(Path path, List<Path> created) throws IOException {
+        List<Path> missing = new ArrayList<>();
+        for (Path current = path; current != null && !Files.exists(current, LinkOption.NOFOLLOW_LINKS);
+             current = current.getParent()) missing.add(current);
+        for (int i = missing.size() - 1; i >= 0; i--) {
+            Path directory = missing.get(i);
+            Files.createDirectory(directory);
+            created.add(directory);
         }
     }
 

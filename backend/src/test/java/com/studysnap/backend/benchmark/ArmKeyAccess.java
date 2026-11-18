@@ -39,13 +39,19 @@ final class ArmKeyAccess {
     static final class OpenedKey {
         private final List<KeyRow> rows;
         private final Map<String, KeyRow> byId;
+        private final PlacementSidecar.Reveal placement;
         private OpenedKey(List<KeyRow> rows) {
+            this(rows, null);
+        }
+        private OpenedKey(List<KeyRow> rows, PlacementSidecar.Reveal placement) {
             this.rows = List.copyOf(rows);
             Map<String, KeyRow> index = new HashMap<>();
             rows.forEach(row -> index.put(row.itemId(), row));
             this.byId = Map.copyOf(index);
+            this.placement = placement;
         }
         List<KeyRow> rows() { return rows; }
+        PlacementSidecar.Reveal placement() { return placement; }
         String armOf(String itemId) { return require(itemId).arm(); }
         String workflowOf(String itemId) { return require(itemId).workflow(); }
         private KeyRow require(String itemId) {
@@ -110,8 +116,22 @@ final class ArmKeyAccess {
         }
         if (!present.containsAll(requiredKinds) || !primaryBoundAndCovered)
             throw new KeyLocked("Required locks or full primary coverage missing");
+        PlacementSidecar.Reveal placement = null;
+        if (seal.placementSidecarSha256() != null) {
+            try {
+                Path sidecar = PlacementSidecar.beside(armKey);
+                if (!FreezeRecord.sha256(sidecar).equals(seal.placementSidecarSha256()))
+                    throw new ArmKeySeal.SealBroken("Placement sidecar differs from seal");
+                placement = PlacementSidecar.load(sidecar);
+                if (!placement.commitment().equals(seal.placementCommitmentSha256())
+                        || !placement.exportId().equals(seal.placementExportId()))
+                    throw new ArmKeySeal.SealBroken("Placement declaration differs from seal");
+            } catch (Exception exception) {
+                throw new ArmKeySeal.SealBroken("Cannot verify placement sidecar");
+            }
+        }
         append(accessLog, openedAtUtc, purpose, requiredKinds, lockHashes, seal.armKeySha256());
-        return new OpenedKey(parseKey(armKey));
+        return new OpenedKey(parseKey(armKey), placement);
     }
 
     static List<AccessEntry> validateAccessLog(Path file) {
