@@ -448,7 +448,7 @@ class RouteVerdictCalculatorFrbTest {
                 .isInstanceOf(RouteVerdictCalculator.InvalidCaseSet.class);
     }
 
-    @Test void reserveIncompleteIsInconclusiveUnlessLowestCompletionRejects() throws Exception {
+    @Test void reserveIncompleteIsInconclusiveEvenWhenLowestCompletionRejects() throws Exception {
         FrozenGateParameters p = frb();
         var records = cases(p, CRITIQUE);
         set(records, ASK, 0, zero(), arm(1, 0));
@@ -462,9 +462,10 @@ class RouteVerdictCalculatorFrbTest {
         assertThat(first.verdict()).isEqualTo(RouteVerdictCalculator.Verdict.INCONCLUSIVE);
         var strong = Map.of(ASK, reserve(20, 1));
         var second = run(p, CRITIQUE, records, strong, draw);
-        assertThat(second.workflows().get(ASK).frb().reserveGate()).isEqualTo(Tri.FAIL);
-        assertThat(second.workflows().get(ASK).failedTiers()).contains(RouteVerdictCalculator.Tier.T2);
-        assertThat(second.verdict()).isEqualTo(RouteVerdictCalculator.Verdict.FAIL);
+        assertThat(second.workflows().get(ASK).frb().reserveGate()).isEqualTo(Tri.INCONCLUSIVE);
+        assertThat(second.workflows().get(ASK).failedTiers()).doesNotContain(RouteVerdictCalculator.Tier.T2);
+        assertThat(second.workflows().get(ASK).inconclusiveTiers()).contains(RouteVerdictCalculator.Tier.T2);
+        assertThat(second.verdict()).isEqualTo(RouteVerdictCalculator.Verdict.INCONCLUSIVE);
     }
 
     @Test void reserveDecisionAndSizeProtocolErrorsPropagate() throws Exception {
