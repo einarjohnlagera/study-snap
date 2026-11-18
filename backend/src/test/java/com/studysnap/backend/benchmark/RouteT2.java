@@ -5,7 +5,8 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** One route-level FRB decision, including the interim missing-evidence rule. */
+/** One route-level FRB decision, including R8 B: a receipt-gapped drawn reserve is
+ * INCONCLUSIVE-only. An independent primary FAIL survives through workflowGate(). */
 final class RouteT2 {
     private RouteT2() {}
 
@@ -118,11 +119,13 @@ final class RouteT2 {
                     throw new InvalidReserve("Reserve size differs from declaration");
                 List<Integer> padded = new ArrayList<>(reserveKnown);
                 for (int i = 0; i < workflow.reserveUnresolved().size(); i++) padded.add(0);
+                for (Tri.Unresolved range : workflow.reserveUnresolved()) {
+                    if (range == null || range.lowestDifference() < -1 || range.highestDifference() > 1)
+                        throw new InvalidInput("Invalid class-B reserve unresolved range");
+                }
                 ClassBReserve.workflow(known, workflow.primaryPairsOrNull(), true, padded,
                         input.declaredReserveSize(), level);
-                List<Integer> combined = new ArrayList<>(known);
-                combined.addAll(reserveKnown);
-                reserveGate = Tri.evaluate(combined, workflow.reserveUnresolved(), level);
+                reserveGate = Tri.INCONCLUSIVE;
             }
             gates.put(workflow.workflow(), new WorkflowDecision(primary, reserveGate));
         }

@@ -112,7 +112,8 @@ final class RouteVerdictCalculator {
                           int sharedT3, int candidateOnlyT2, int baselineOnlyT2,
                           int sharedT2, int candidateOnlyT1, int baselineOnlyT1,
                           int sharedT1, int d) {}
-    /** Exact pValue uses the candidate-favourable lower completion when evidence is unresolved. */
+    /** Exact pValue uses primary differences only, with candidate-favourable lower completion;
+     * it is informational when an R8 B drawn reserve has receipt gaps. */
     record FrbWorkflowReport(Tri workflowGate, ExactPairedTest.Result pValue,
                              boolean reserveDrawn, Tri reserveGate, int unresolvedCases,
                              @JsonInclude(JsonInclude.Include.NON_NULL) String reserveCause,
