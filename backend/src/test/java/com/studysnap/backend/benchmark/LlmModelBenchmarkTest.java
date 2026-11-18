@@ -125,7 +125,7 @@ class LlmModelBenchmarkTest {
     @Test void transportFailuresCountAsHttpErrorsAndStopRun() throws Exception {
         Path input = temp.resolve("notes.jsonl");
         Files.writeString(input, "{\"id\":\"note\",\"leg\":\"A\",\"noteText\":\"Cell respiration\",\"tags\":[]}\n".repeat(4));
-        ClientHttpRequestFactory factory = (uri, method) -> { throw new java.net.ConnectException("connection refused"); };
+        ClientHttpRequestFactory factory = (uri, method) -> { throw new java.net.ConnectException("SIMULATED transport failure from a test stub; no network call was made"); };
         LlmModelBenchmark.Config config = new LlmModelBenchmark.Config("test-model",input,temp,EnumSet.of(LlmModelBenchmark.Leg.A),20,new BigDecimal("8"),new BigDecimal("2"),new BigDecimal("2"),FAKE_KEY);
         LlmModelBenchmark.run(config,factory);
         assertThat(results()).hasSize(3);
