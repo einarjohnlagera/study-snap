@@ -84,6 +84,7 @@ final class RecheckRunner {
         if (ledger.stopped()) throw new StageCapLedger.SpendStop(ledger.stopReason());
         FreezeRecord.Arm frozenArm = verified.record().arms().get(original.arm());
         if (frozenArm == null || !frozenArm.model().equals(input.model())
+                || !original.model().equals(input.model())
                 || !original.freezeSha256().equals(verified.sha256())
                 || !original.head().equals(verified.head()))
             throw new InvalidRecheck("Original receipt differs from verified arm or freeze");
@@ -157,10 +158,16 @@ final class RecheckRunner {
                                         attempt.kind() == AttemptOutcome.Kind.UNMETERED)
                                         ? RouteVerdictCalculator.Evidence.UNMETERED
                                         : RouteVerdictCalculator.Evidence.SCORED;
+                        List<RecheckReceipt.RejectedCall> rejectedCalls = run.callsByCase()
+                                .getOrDefault(item.caseId(), List.of()).stream()
+                                .filter(call -> call.call().status() == 400 || call.call().status() == 422)
+                                .map(call -> new RecheckReceipt.RejectedCall(call.call().attempt(),
+                                        call.call().status(), call.call().errorCode(), call.call().errorType(),
+                                        call.modelRemovedDigest()))
+                                .sorted(RecheckReceipt.RejectedCall.ORDER).toList();
                         repeats.add(new RecheckReceipt.Repeat(recheckIndex, outcome.failureClass(), evidence,
                                 deviation, delivered.lineSha256().get(item.caseId()), delivered.fileSha256(),
-                                run.callsByCase().getOrDefault(item.caseId(), List.of()).stream()
-                                        .anyMatch(call -> call.call().status() == 400 || call.call().status() == 422)));
+                                !rejectedCalls.isEmpty(), rejectedCalls.isEmpty() ? null : rejectedCalls));
                     }
                 } finally {
                     if (!budget.closed()) budget.abandon();

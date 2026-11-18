@@ -80,6 +80,7 @@ final class ResultsPipeline {
     private static final String ROUTES_FIELD = "routes";
     private static final String RESERVE_RESULTS_FIELD = "reserveResults";
     private static final String MISSING_RECHECK_DIRECTORY = "Missing recheck output directory: ";
+    private static final String NOT_APPLICABLE = "NOT_APPLICABLE";
     private static final Set<String> CLASS_B_WORKFLOWS = java.util.Arrays.stream(ClassBCaseManifest.Workflow.values())
             .map(Enum::name).collect(java.util.stream.Collectors.toUnmodifiableSet());
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
@@ -719,6 +720,16 @@ final class ResultsPipeline {
             throw new InvalidInput("Recheck original failure differs: " + id);
         List<RouteVerdictCalculator.Recheck> result = new ArrayList<>();
         for (RecheckReceipt.Repeat repeat : item.repeats()) {
+            boolean frbRejection = adjudicated != null && RecheckPlan.isRejectionCase(original);
+            boolean deliveredAfterRejection = frbRejection && repeat.providerRejected()
+                    && repeat.finalFailureClass() == null;
+            String equivalence = null;
+            if (adjudicated != null) {
+                equivalence = frbRejection && repeat.providerRejected()
+                        ? RejectionEquivalence.decide(source.receipt(), original, source.rechecks(), repeat)
+                                .equivalence().name()
+                        : NOT_APPLICABLE;
+            }
             RouteVerdictCalculator.Evidence evidence = repeat.evidence();
             if (repeat.protocolDeviation() != null) evidence = RouteVerdictCalculator.Evidence.MISSING;
             if (RecheckPlan.isRejectionCase(original) && repeat.providerRejected()
@@ -733,7 +744,8 @@ final class ResultsPipeline {
                     || repeat.finalFailureClass() == null && line.state() != CaseArmOutcome.State.COMPLETE
                     || repeat.finalFailureClass() != null && line.state() == CaseArmOutcome.State.COMPLETE)
                 throw new InvalidInput("Recheck outcome differs from delivered evidence: " + path);
-            if (repeat.finalFailureClass() == null && evidence == RouteVerdictCalculator.Evidence.SCORED) {
+            if (!deliveredAfterRejection && repeat.finalFailureClass() == null
+                    && evidence == RouteVerdictCalculator.Evidence.SCORED) {
                 if (!validOutput(line, fixture, facts)) evidence = RouteVerdictCalculator.Evidence.UNSCORABLE;
             }
             if (adjudicated == null) {
@@ -749,8 +761,12 @@ final class ResultsPipeline {
                 int unresolved = counts == null ? fixture.requiredQuestions() : counts.unresolvedQuestions();
                 Set<String> quality = facts != null && facts.quality()
                         ? Set.of(mapping.component(QUALITY_KIND)) : Set.of();
-                result.add(new RouteVerdictCalculator.Recheck(evidence, quality, critical > 0,
-                        repeat.finalFailureClass(), critical, unresolved, repeat.providerRejected()));
+                result.add(new RouteVerdictCalculator.Recheck(evidence,
+                        deliveredAfterRejection ? Set.of() : quality,
+                        !deliveredAfterRejection && critical > 0, repeat.finalFailureClass(),
+                        deliveredAfterRejection ? 0 : critical,
+                        deliveredAfterRejection ? 0 : unresolved, repeat.providerRejected(), equivalence,
+                        deliveredAfterRejection));
             }
         }
         return List.copyOf(result);
@@ -1097,14 +1113,38 @@ final class ResultsPipeline {
                 if (!RecheckPlan.isRejectionCase(row)) continue;
                 RecheckReceipt.Case caseRechecks = arm.rechecks() == null ? null : arm.rechecks().cases().stream()
                         .filter(item -> item.caseId().equals(row.id())).findFirst().orElse(null);
-                List<Map<String, Object>> repeats = caseRechecks == null ? List.of() : caseRechecks.repeats()
-                        .stream().map(repeat -> Map.<String, Object>of("recheckIndex", repeat.recheckIndex(),
-                                "providerRejected", repeat.providerRejected())).toList();
+                List<Map<String, Object>> repeats = new ArrayList<>();
+                if (caseRechecks != null) for (RecheckReceipt.Repeat repeat : caseRechecks.repeats()) {
+                    RejectionEquivalence.Result equivalence = repeat.providerRejected()
+                            ? RejectionEquivalence.decide(arm.receipt(), row, arm.rechecks(), repeat) : null;
+                    List<RecheckReceipt.RejectedCall> rejected = repeat.rejectedCalls();
+                    Map<String, Object> detail = new LinkedHashMap<>();
+                    detail.put("recheckIndex", repeat.recheckIndex());
+                    detail.put("providerRejected", repeat.providerRejected());
+                    detail.put("statuses", rejected == null ? null : rejected.stream()
+                            .map(RecheckReceipt.RejectedCall::status).toList());
+                    detail.put("errorCodes", rejected == null ? null : rejected.stream()
+                            .map(RecheckReceipt.RejectedCall::errorCode).toList());
+                    detail.put("errorTypes", rejected == null ? null : rejected.stream()
+                            .map(RecheckReceipt.RejectedCall::errorType).toList());
+                    detail.put("equivalence", equivalence == null ? NOT_APPLICABLE
+                            : equivalence.equivalence().name());
+                    detail.put("equivalenceReason", equivalence == null ? null
+                            : equivalence.reason().name());
+                    detail.put("deliveredAfterRejection", repeat.providerRejected()
+                            && repeat.finalFailureClass() == null);
+                    repeats.add(detail);
+                }
                 boolean reproducedThenRetried = caseRechecks != null && caseRechecks.repeats().stream()
                         .anyMatch(repeat -> repeat.providerRejected() && repeat.finalFailureClass() == null);
+                boolean equivalentDelivery = caseRechecks != null && caseRechecks.repeats().stream()
+                        .anyMatch(repeat -> repeat.providerRejected() && repeat.finalFailureClass() == null
+                                && RejectionEquivalence.decide(arm.receipt(), row, arm.rechecks(), repeat)
+                                        .equivalence() == RejectionEquivalence.Equivalence.EQUIVALENT);
                 Map<String, Object> detail = new LinkedHashMap<>();
                 detail.put("repeats", repeats);
-                detail.put("reason", reproducedThenRetried ? "REJECTION_REPRODUCED_THEN_RETRIED" : null);
+                detail.put("reason", equivalentDelivery ? "REJECTION_REPRODUCED_WITH_DELIVERED_RECOVERY"
+                        : reproducedThenRetried ? "REJECTION_REPRODUCED_THEN_RETRIED" : null);
                 rejectionRechecks.computeIfAbsent(row.id(), ignored -> new java.util.TreeMap<>())
                         .put(arm.receipt().arm(), detail);
             }

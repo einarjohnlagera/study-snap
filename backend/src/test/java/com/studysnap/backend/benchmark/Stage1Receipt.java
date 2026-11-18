@@ -3,6 +3,7 @@ package com.studysnap.backend.benchmark;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -27,7 +28,13 @@ record Stage1Receipt(String head, String freezeSha256, String arm, String model,
         this(head, freezeSha256, arm, model, stage, startedAt, endedAt, ledgerRecordCount,
                 unreconciled, caseSetSha256, cases, triggers, null);
     }
-    record Signal(String outcome, int attempt, long latencyMs, int httpStatus, String groupId) {
+    record Signal(String outcome, int attempt, long latencyMs, int httpStatus, String groupId,
+                  @JsonInclude(JsonInclude.Include.NON_NULL) String errorCode,
+                  @JsonInclude(JsonInclude.Include.NON_NULL) String errorType,
+                  @JsonInclude(JsonInclude.Include.NON_NULL) String modelRemovedDigest) {
+        Signal(String outcome, int attempt, long latencyMs, int httpStatus, String groupId) {
+            this(outcome, attempt, latencyMs, httpStatus, groupId, null, null, null);
+        }
         Signal(String outcome, int attempt, long latencyMs, int httpStatus) {
             this(outcome, attempt, latencyMs, httpStatus, null);
         }
@@ -75,8 +82,12 @@ record Stage1Receipt(String head, String freezeSha256, String arm, String model,
                 AttemptOutcome attempt = outcome.attempts().get(index);
                 String signal = attempt.parseSchemaFailure() ? "SCHEMA_OR_PARSE"
                         : attempt.kind() == AttemptOutcome.Kind.OK ? "SUCCESS" : attempt.kind().name();
+                int status = call.call().status();
+                boolean rejected = status == 400 || status == 422;
                 signals.add(new Signal(signal, attempt.attempt(), call.call().latencyMs(),
-                        call.call().status(), attempt.generationId()));
+                        status, attempt.generationId(), rejected ? call.call().errorCode() : null,
+                        rejected ? call.call().errorType() : null,
+                        rejected ? call.modelRemovedDigest() : null));
                 if (attempt.attempt() == 1)
                     indexedHashes.add(new IndexedHash(attempt.generationId(), index, call.modelRemovedDigest()));
             }

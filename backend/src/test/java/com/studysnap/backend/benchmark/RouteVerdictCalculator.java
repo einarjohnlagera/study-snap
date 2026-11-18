@@ -16,7 +16,7 @@ import java.util.TreeSet;
 
 /** Sections 4 and 8 paired case, workflow, subgroup and route gate.
  * FRB alone uses the provider-rejection pair and harness-regression rules; legacy remains unchanged.
- * HTTP 400 and 422 share one rejection identity here. FRB leaves isolatedCriticalIncident false;
+ * FRB checks captured rejection identity before confirming T1. FRB leaves isolatedCriticalIncident false;
  * Brief 5f replaces that legacy classification.
  */
 final class RouteVerdictCalculator {
@@ -24,6 +24,12 @@ final class RouteVerdictCalculator {
     private static final String HARNESS_REGRESSION = "HARNESS_REGRESSION";
     private static final String RECHECK_MIXED = "RECHECK_MIXED";
     private static final String RECHECK_UNRESOLVED = "RECHECK_UNRESOLVED";
+    private static final String EQUIVALENT = "EQUIVALENT";
+    private static final String NOT_EQUIVALENT = "NOT_EQUIVALENT";
+    private static final String NOT_SHOWN = "NOT_SHOWN";
+    private static final String NOT_APPLICABLE = "NOT_APPLICABLE";
+    private static final String REJECTION_REPRODUCED_WITH_DELIVERED_RECOVERY =
+            "REJECTION_REPRODUCED_WITH_DELIVERED_RECOVERY";
     private static final String BASELINE = "baseline";
     private static final String CANDIDATE = "candidate";
     private static final String BASELINE_PREFIX = "baseline:";
@@ -69,18 +75,26 @@ final class RouteVerdictCalculator {
         }
     }
     record Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass,
-                   int criticalQuestions, int unresolvedQuestions, boolean providerRejected) {
+                   int criticalQuestions, int unresolvedQuestions, boolean providerRejected,
+                   String rejectionEquivalence, boolean deliveredAfterRejection) {
         Recheck {
             if (criticalQuestions < 0 || unresolvedQuestions < 0 || critical != (criticalQuestions > 0))
                 throw new InvalidCaseSet("Inconsistent recheck critical counts");
             t3Components = t3Components == null ? Set.of() : Set.copyOf(t3Components);
         }
         Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass) {
-            this(evidence, t3Components, critical, finalFailureClass, critical ? 1 : 0, 0, false);
+            this(evidence, t3Components, critical, finalFailureClass, critical ? 1 : 0, 0, false,
+                    null, false);
         }
         Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass,
                 int criticalQuestions, int unresolvedQuestions) {
-            this(evidence, t3Components, critical, finalFailureClass, criticalQuestions, unresolvedQuestions, false);
+            this(evidence, t3Components, critical, finalFailureClass, criticalQuestions, unresolvedQuestions,
+                    false, null, false);
+        }
+        Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass,
+                int criticalQuestions, int unresolvedQuestions, boolean providerRejected) {
+            this(evidence, t3Components, critical, finalFailureClass, criticalQuestions, unresolvedQuestions,
+                    providerRejected, null, false);
         }
     }
     record CaseRecord(String id, String workflow, String route, String subgroup,
@@ -776,18 +790,37 @@ final class RouteVerdictCalculator {
         }
     }
 
-    private enum RejectionOutcome { SAME_REJECTION, SUCCESS, DIFFERENT_REJECTION, TIMEOUT, OTHER }
+    private enum RejectionOutcome { SAME_REJECTION, SAME_REJECTION_DELIVERED, SUCCESS,
+        DIFFERENT_REJECTION, TIMEOUT, OTHER }
 
     private static boolean rejectionPairApplies(ArmResult arm, boolean candidate) {
         return arm.providerRejected() && (candidate || arm.finalFailureClass() != null);
     }
 
     private static RejectionOutcome rejectionOutcome(Recheck check) {
+        if (NOT_APPLICABLE.equals(check.rejectionEquivalence())) {
+            if (check.evidence() != Evidence.SCORED) return RejectionOutcome.OTHER;
+            if ("TIMEOUT".equals(check.finalFailureClass())) return RejectionOutcome.TIMEOUT;
+            if (check.finalFailureClass() == null) return RejectionOutcome.SUCCESS;
+            return check.providerRejected() ? RejectionOutcome.SAME_REJECTION
+                    : RejectionOutcome.DIFFERENT_REJECTION;
+        }
+        if (check.deliveredAfterRejection()) {
+            if (EQUIVALENT.equals(check.rejectionEquivalence()))
+                return RejectionOutcome.SAME_REJECTION_DELIVERED;
+            if (NOT_EQUIVALENT.equals(check.rejectionEquivalence()))
+                return RejectionOutcome.DIFFERENT_REJECTION;
+            return RejectionOutcome.OTHER;
+        }
         if (check.evidence() != Evidence.SCORED) return RejectionOutcome.OTHER;
         if ("TIMEOUT".equals(check.finalFailureClass())) return RejectionOutcome.TIMEOUT;
-        if (check.finalFailureClass() == null) return RejectionOutcome.SUCCESS;
-        return check.providerRejected() ? RejectionOutcome.SAME_REJECTION
-                : RejectionOutcome.DIFFERENT_REJECTION;
+        if (!check.providerRejected()) return check.finalFailureClass() == null
+                ? RejectionOutcome.SUCCESS : RejectionOutcome.DIFFERENT_REJECTION;
+        if (NOT_EQUIVALENT.equals(check.rejectionEquivalence())) return RejectionOutcome.DIFFERENT_REJECTION;
+        if (NOT_SHOWN.equals(check.rejectionEquivalence()) || check.finalFailureClass() == null)
+            return RejectionOutcome.OTHER;
+        return EQUIVALENT.equals(check.rejectionEquivalence()) || check.rejectionEquivalence() == null
+                ? RejectionOutcome.SAME_REJECTION : RejectionOutcome.OTHER;
     }
 
     private static ArmResolution resolveRejection(ArmResult arm, int requiredRechecks, boolean candidate) {
@@ -801,6 +834,11 @@ final class RouteVerdictCalculator {
         List<RejectionOutcome> outcomes = arm.rechecks().stream().map(RouteVerdictCalculator::rejectionOutcome).toList();
         if (outcomes.stream().allMatch(outcome -> outcome == RejectionOutcome.SAME_REJECTION))
             return new ArmResolution(!candidate, true, Set.of(), false, 0, 0);
+        if (outcomes.contains(RejectionOutcome.SAME_REJECTION_DELIVERED)
+                && outcomes.stream().allMatch(outcome -> outcome == RejectionOutcome.SAME_REJECTION
+                    || outcome == RejectionOutcome.SAME_REJECTION_DELIVERED))
+            return new ArmResolution(true, false, Set.of(), false, 0, 0,
+                    REJECTION_REPRODUCED_WITH_DELIVERED_RECOVERY);
         if (outcomes.stream().allMatch(outcome -> outcome == RejectionOutcome.SUCCESS)) {
             Recheck first = arm.rechecks().get(0);
             Set<String> components = new LinkedHashSet<>(arm.finalFailureClass() == null
