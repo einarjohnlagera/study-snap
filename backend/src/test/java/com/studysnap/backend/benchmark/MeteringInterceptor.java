@@ -25,7 +25,17 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
     record Call(String generationId, String leg, int attempt, long latencyMs, int status,
                 JsonNode usage, int outputItems, List<String> outputTypes, int outputTextItems, boolean topLevelOutputText,
                 long inputTokens, long outputTokens, long reasoningTokens,
-                BigDecimal conservativeUsd, BigDecimal nonAdditiveUsd, String errorMessage, boolean timeout) {}
+                BigDecimal conservativeUsd, BigDecimal nonAdditiveUsd, String errorMessage, boolean timeout,
+                String errorCode, String errorType) {
+        Call(String generationId, String leg, int attempt, long latencyMs, int status,
+             JsonNode usage, int outputItems, List<String> outputTypes, int outputTextItems,
+             boolean topLevelOutputText, long inputTokens, long outputTokens, long reasoningTokens,
+             BigDecimal conservativeUsd, BigDecimal nonAdditiveUsd, String errorMessage, boolean timeout) {
+            this(generationId, leg, attempt, latencyMs, status, usage, outputItems, outputTypes,
+                    outputTextItems, topLevelOutputText, inputTokens, outputTokens, reasoningTokens,
+                    conservativeUsd, nonAdditiveUsd, errorMessage, timeout, null, null);
+        }
+    }
 
     private final ObjectMapper mapper;
     private final Path rawDir;
@@ -131,7 +141,12 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
             for (JsonNode content : item.path("content"))
                 if ("output_text".equals(content.path("type").asText())) texts++;
         }
-        String error = json.path("error").path("message").asText("");
+        JsonNode errorObject = json.path("error");
+        String error = errorObject.path("message").asText("");
+        int status = response.getStatusCode().value();
+        boolean rejected = status == 400 || status == 422;
+        String errorCode = rejected && errorObject.isObject() ? safeErrorDetail(errorObject.path("code")) : null;
+        String errorType = rejected && errorObject.isObject() ? safeErrorDetail(errorObject.path("type")) : null;
         String safeId = generationId.replaceAll("[^A-Za-z0-9_-]", "_");
         byte[] rawBytes = bytes;
         if (!rawRedactions.isEmpty()) {
@@ -141,9 +156,10 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
             rawBytes = sanitized.getBytes(StandardCharsets.UTF_8);
         }
         Files.write(rawDir.resolve(safeId + "-" + thisAttempt + ".json"), rawBytes);
-        Call call = new Call(generationId, leg, thisAttempt, elapsed, response.getStatusCode().value(),
+        Call call = new Call(generationId, leg, thisAttempt, elapsed, status,
                 usage.isMissingNode() ? null : usage.deepCopy(), items.isArray() ? items.size() : 0,
-                List.copyOf(types), texts, json.path("output_text").isTextual(), input, output, reasoning, conservative, nonAdditive, error, false);
+                List.copyOf(types), texts, json.path("output_text").isTextual(), input, output, reasoning,
+                conservative, nonAdditive, error, false, errorCode, errorType);
         calls.add(call);
         System.out.printf("model=%s leg=%s generation=%s attempt=%d latencyMs=%d costUsd=%s runningConservativeUsd=%s%n",
                 model, leg, generationId, thisAttempt, elapsed, conservative, total);
@@ -160,5 +176,12 @@ final class MeteringInterceptor implements ClientHttpRequestInterceptor {
         return inPrice.multiply(BigDecimal.valueOf(input))
                 .add(outPrice.multiply(BigDecimal.valueOf(output)))
                 .divide(BigDecimal.valueOf(1_000_000), 9, RoundingMode.HALF_UP);
+    }
+
+    private static String safeErrorDetail(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return "";
+        String value = node.isTextual() ? node.textValue() : node.toString();
+        if (value.matches("[A-Za-z0-9_.:-]{0,64}")) return value;
+        return "sha256:" + ArmAssertingInterceptor.digest(value.getBytes(StandardCharsets.UTF_8));
     }
 }

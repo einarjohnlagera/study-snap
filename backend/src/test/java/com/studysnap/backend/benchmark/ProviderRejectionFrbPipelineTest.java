@@ -29,6 +29,8 @@ class ProviderRejectionFrbPipelineTest {
     private static final String FAILURE = "HTTP_ERROR";
     private static final String TOKEN = RecheckPlan.PROVIDER_REJECTION;
     private static final String R12_REASON = "REJECTION_REPRODUCED_THEN_RETRIED";
+    private static final String ERROR_CODE = "C";
+    private static final String ERROR_TYPE = "T";
     private enum RepeatKind { SAME, OTHER_FAILURE, SUCCESS, RETRIED_SUCCESS }
     private record Prepared(ResultsPipeline.FrbRunInput run, ResultsPipeline.FrbInput frb,
                             Path recheckRoot) {}
@@ -71,6 +73,8 @@ class ProviderRejectionFrbPipelineTest {
                 .put("failureClass", FAILURE);
         ObjectNode signal = (ObjectNode) row.path("llmCalls").get(0);
         signal.put("outcome", FAILURE).put("httpStatus", 400);
+        signal.put("errorCode", ERROR_CODE).put("errorType", ERROR_TYPE)
+                .put("modelRemovedDigest", row.path("attempt1BodyHashes").get(0).asText());
         List<String> lines = new ArrayList<>(Files.readAllLines(files.delivered()));
         JsonNode successful = null;
         for (int index = 0; index < lines.size(); index++) {
@@ -109,10 +113,16 @@ class ProviderRejectionFrbPipelineTest {
             Path output = root.resolve(CASE).resolve("recheck-" + index).resolve("delivered-outputs.jsonl");
             Files.createDirectories(output.getParent());
             Files.writeString(output, line + "\n");
-            repeats.add(new RecheckReceipt.Repeat(index, failure, RouteVerdictCalculator.Evidence.SCORED,
-                    null, FreezeRecord.sha256(line.getBytes(StandardCharsets.UTF_8)),
-                    FreezeRecord.sha256(output), kind == RepeatKind.SAME
-                            || kind == RepeatKind.RETRIED_SUCCESS));
+            String lineHash = FreezeRecord.sha256(line.getBytes(StandardCharsets.UTF_8));
+            String fileHash = FreezeRecord.sha256(output);
+            repeats.add(kind == RepeatKind.SAME
+                    ? new RecheckReceipt.Repeat(index, failure, RouteVerdictCalculator.Evidence.SCORED,
+                            null, lineHash, fileHash, true,
+                            List.of(new RecheckReceipt.RejectedCall(1, 400, ERROR_CODE, ERROR_TYPE,
+                                    receipt.cases().stream().filter(row -> CASE.equals(row.id()))
+                                            .findFirst().orElseThrow().attempt1BodyHashes().getFirst())))
+                    : new RecheckReceipt.Repeat(index, failure, RouteVerdictCalculator.Evidence.SCORED,
+                            null, lineHash, fileHash, kind == RepeatKind.RETRIED_SUCCESS));
         }
         Path checkFile = root.resolve("recheck-receipt.json");
         new RecheckReceipt(receipt.head(), receipt.freezeSha256(), ARM, receipt.model(), Set.of(TOKEN),
@@ -219,13 +229,13 @@ class ProviderRejectionFrbPipelineTest {
                 prepared.recheckRoot())).extracting(ClassABlindPacketExport.Output::caseId).doesNotContain(CASE);
     }
 
-    @Test void calculatorAloneWouldCallReproducedThenRetriedSuccess() throws Exception {
+    @Test void calculatorAloneFailsClosedOnUnevaluatedReproducedThenRetried() throws Exception {
         Method method = RouteVerdictCalculator.class.getDeclaredMethod("rejectionOutcome",
                 RouteVerdictCalculator.Recheck.class);
         method.setAccessible(true);
         RouteVerdictCalculator.Recheck repeated = new RouteVerdictCalculator.Recheck(
                 RouteVerdictCalculator.Evidence.SCORED, Set.of(), false, null, 0, 0, true);
-        assertThat(method.invoke(null, repeated).toString()).isEqualTo("SUCCESS");
+        assertThat(method.invoke(null, repeated).toString()).isEqualTo("OTHER");
     }
 
     @Test void usableOutputExcludesR12OnlyForRejectionOriginals() throws Exception {
