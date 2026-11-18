@@ -10,6 +10,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 /** Sections 4 and 8 paired case, workflow, subgroup and route gate.
  * FRB alone uses the provider-rejection pair and harness-regression rules; legacy remains unchanged.
@@ -37,7 +40,14 @@ final class RouteVerdictCalculator {
     }
     enum DispositionValue { NOT_A_DEFECT_ON_REVIEW, DEFECT_ACKNOWLEDGED, DEFECT_BLOCKS_ROUTE }
     enum DispositionReason { REVIEWED_NOT_DEFECT, ACKNOWLEDGED_FOR_MITIGATION, BLOCKING_CORRECTNESS }
-    record OwnerDisposition(String workflow, String caseId, DispositionValue value, DispositionReason reasonCode) {}
+    /** Post-lock dispositions apply only to candidate-only criticals; other concerns are safety findings. */
+    record OwnerDisposition(String workflow, String caseId, DispositionValue value,
+                            DispositionReason reasonCode, String rationale) {
+        OwnerDisposition(String workflow, String caseId, DispositionValue value,
+                         DispositionReason reasonCode) {
+            this(workflow, caseId, value, reasonCode, null);
+        }
+    }
     enum Verdict { PASS, FAIL, INCONCLUSIVE }
     enum Evidence { SCORED, MISSING, UNMETERED, UNSCORABLE }
     enum Tier { T1, T2, T3 }
@@ -122,7 +132,27 @@ final class RouteVerdictCalculator {
                           @JsonInclude(JsonInclude.Include.NON_NULL) FrbWorkflowReport frb,
                           @JsonInclude(JsonInclude.Include.NON_NULL) List<String> causes,
                           @JsonInclude(JsonInclude.Include.NON_NULL) Map<String, String> recheckOutcomesByCaseId,
-                          @JsonInclude(JsonInclude.Include.NON_NULL) Map<String, String> rejectionEvidenceByCaseId) {
+                          @JsonInclude(JsonInclude.Include.NON_NULL) Map<String, String> rejectionEvidenceByCaseId,
+                          @JsonInclude(JsonInclude.Include.NON_NULL) Map<String, SortedSet<String>> unresolvedCaseIdsByCause,
+                          @JsonInclude(JsonInclude.Include.NON_NULL) Set<String> ownerVetoCaseIds,
+                          @JsonInclude(JsonInclude.Include.NON_NULL) Map<DispositionValue, Set<String>> dispositionsByValue,
+                          @JsonInclude(JsonInclude.Include.NON_NULL) Boolean unresolvedCriticalIncident) {
+        WorkflowReport(Verdict verdict, Set<Tier> failedTiers, Set<Tier> inconclusiveTiers,
+                       int paired, int d, int candidateOnlyT3, int baselineOnlyT3, int sharedT3,
+                       int candidateOnlyT2, int baselineOnlyT2, int sharedT2,
+                       int candidateOnlyT1, int baselineOnlyT1, int sharedT1,
+                       int reserveCandidateOnly, boolean isolatedCriticalIncident, boolean protocolDeviation,
+                       Map<String, Integer> candidateComponents, Map<String, Integer> baselineComponents,
+                       Map<String, SubgroupReport> subgroups, String parameterSha256, int missingPairs,
+                       Set<String> undisposedCriticalCaseIds, FrbWorkflowReport frb, List<String> causes,
+                       Map<String, String> recheckOutcomesByCaseId, Map<String, String> rejectionEvidenceByCaseId) {
+            this(verdict, failedTiers, inconclusiveTiers, paired, d, candidateOnlyT3, baselineOnlyT3,
+                    sharedT3, candidateOnlyT2, baselineOnlyT2, sharedT2, candidateOnlyT1,
+                    baselineOnlyT1, sharedT1, reserveCandidateOnly, isolatedCriticalIncident,
+                    protocolDeviation, candidateComponents, baselineComponents, subgroups, parameterSha256,
+                    missingPairs, undisposedCriticalCaseIds, frb, causes, recheckOutcomesByCaseId,
+                    rejectionEvidenceByCaseId, null, null, null, null);
+        }
         WorkflowReport(Verdict verdict, Set<Tier> failedTiers, Set<Tier> inconclusiveTiers,
                        int paired, int d, int candidateOnlyT3, int baselineOnlyT3, int sharedT3,
                        int candidateOnlyT2, int baselineOnlyT2, int sharedT2,
@@ -232,6 +262,11 @@ final class RouteVerdictCalculator {
                     || disposition.caseId() == null || disposition.caseId().isBlank()
                     || disposition.value() == null || disposition.reasonCode() == null)
                 throw new InvalidOwnerDisposition("Invalid owner disposition");
+            if (parameters.frbEnabled && !((disposition.value() == DispositionValue.DEFECT_ACKNOWLEDGED
+                    && disposition.reasonCode() == DispositionReason.ACKNOWLEDGED_FOR_MITIGATION)
+                    || (disposition.value() == DispositionValue.DEFECT_BLOCKS_ROUTE
+                    && disposition.reasonCode() == DispositionReason.BLOCKING_CORRECTNESS)))
+                throw new InvalidOwnerDisposition("Invalid FRB owner disposition pairing");
             if (dispositionsByWorkflow.computeIfAbsent(disposition.workflow(), unused -> new HashMap<>())
                     .putIfAbsent(disposition.caseId(), disposition) != null)
                 throw new InvalidOwnerDisposition("Duplicate owner disposition");
@@ -327,15 +362,33 @@ final class RouteVerdictCalculator {
                 ExactPairedTest.test(lowest(input.knownPrimaryDifferences(), input.unresolved())),
                 input.reserveWasDrawn(), gate.reserveGate(),
                 input.unresolved().size() + (gate.reserveGate() == null ? 0 : input.reserveUnresolved().size()),
-                gate.cause(), reasons);
+                gate.cause(), input.classB() && input.reserveWasDrawn() ? reasons : null);
+        Map<String, SortedSet<String>> causeIds = new TreeMap<>();
+        if (old.unresolvedCaseIdsByCause() != null)
+            old.unresolvedCaseIdsByCause().forEach((cause, ids) -> causeIds.put(cause, new TreeSet<>(ids)));
+        if (reasons != null) reasons.forEach((id, details) -> {
+            for (String armReason : details.split(",")) {
+                String cause = armReason.substring(armReason.indexOf(':') + 1);
+                causeIds.computeIfAbsent(cause, ignored -> new TreeSet<>()).add(id);
+            }
+        });
+        Set<String> causes = new TreeSet<>();
+        if (old.causes() != null) causes.addAll(old.causes());
+        causeIds.keySet().stream().filter(cause -> !"SUITE_NOT_EXECUTED".equals(cause))
+                .forEach(causes::add);
+        if (gate.cause() != null) causes.add(gate.cause());
+        if (gate.reserveGate() == Tri.INCONCLUSIVE && gate.primaryGate() != Tri.INCONCLUSIVE)
+            causes.add("RESERVE_EVIDENCE_UNRESOLVED");
         return new WorkflowReport(verdict, Set.copyOf(failed), Set.copyOf(unresolved), old.paired(), old.d(),
                 old.candidateOnlyT3(), old.baselineOnlyT3(), old.sharedT3(),
                 old.candidateOnlyT2(), old.baselineOnlyT2(), old.sharedT2(),
                 old.candidateOnlyT1(), old.baselineOnlyT1(), old.sharedT1(), old.reserveCandidateOnly(),
                 old.isolatedCriticalIncident(), old.protocolDeviation(), old.candidateComponents(),
                 old.baselineComponents(), old.subgroups(), old.parameterSha256(), old.missingPairs(),
-                old.undisposedCriticalCaseIds(), frb, old.causes(), old.recheckOutcomesByCaseId(),
-                old.rejectionEvidenceByCaseId());
+                old.undisposedCriticalCaseIds(), frb, causes.isEmpty() ? null : List.copyOf(causes),
+                old.recheckOutcomesByCaseId(), old.rejectionEvidenceByCaseId(),
+                causeIds.isEmpty() ? null : Collections.unmodifiableMap(causeIds),
+                old.ownerVetoCaseIds(), old.dispositionsByValue(), old.unresolvedCriticalIncident());
     }
 
     private static void validateFrozen(FrozenGateParameters parameters, String route,
@@ -403,13 +456,16 @@ final class RouteVerdictCalculator {
                 if (classB) pairs.add(new ClassBReserve.PairCritical(
                         candidate.criticalQuestions, baseline.criticalQuestions));
             } else {
-                if (classB && Boolean.TRUE.equals(decisions.get(name))) {
-                    String baselineReason = unresolvedReason(item == null ? null : item.baseline(), baseline);
-                    String candidateReason = unresolvedReason(item == null ? null : item.candidate(), candidate);
-                    String reason = baselineReason == null ? "candidate:" + candidateReason
-                            : candidateReason == null ? BASELINE_PREFIX + baselineReason
-                            : BASELINE_PREFIX + baselineReason + ",candidate:" + candidateReason;
-                    reasons.put(id, reason);
+                if (item == null) reasons.put(id, "MISSING_RUN_DATA");
+                else {
+                    String baselineReason = unresolvedReason(item.baseline(), baseline);
+                    String candidateReason = unresolvedReason(item.candidate(), candidate);
+                    if (baselineReason != null || candidateReason != null) {
+                        String reason = baselineReason == null ? "candidate:" + candidateReason
+                                : candidateReason == null ? BASELINE_PREFIX + baselineReason
+                                : BASELINE_PREFIX + baselineReason + ",candidate:" + candidateReason;
+                        reasons.put(id, reason);
+                    }
                 }
                 int baselineLow = baselineUsable ? baseline.criticalQuestions : 0;
                 int baselineHigh = baselineUsable
@@ -431,7 +487,7 @@ final class RouteVerdictCalculator {
         boolean drawn = classB && decisions.get(name);
         if (classB && drawn && (reserve == null || reserve.size() != p.reserveSize))
             throw new InvalidReserve("Reserve size differs from declaration");
-        if (drawn && !ranges.isEmpty()) {
+        if (!reasons.isEmpty()) {
             Map<String, String> ordered = new LinkedHashMap<>();
             reasons.entrySet().stream().sorted(Map.Entry.comparingByKey())
                     .forEach(entry -> ordered.put(entry.getKey(), entry.getValue()));
@@ -477,6 +533,14 @@ final class RouteVerdictCalculator {
         boolean incomplete = cases.size() != frozen.size() || suitePassed == null;
         if (incomplete) unresolved.add(Tier.T1);
         Set<String> causes = new LinkedHashSet<>();
+        Map<String, SortedSet<String>> causeIds = new TreeMap<>();
+        if (p.frbEnabled) {
+            if (suitePassed == null) causeIds.put("SUITE_NOT_EXECUTED", new TreeSet<>());
+            Set<String> present = new HashSet<>();
+            cases.forEach(item -> present.add(item.id()));
+            for (String id : frozen) if (!present.contains(id))
+                causeIds.computeIfAbsent("MISSING_RUN_DATA", ignored -> new TreeSet<>()).add(id);
+        }
         if (Boolean.FALSE.equals(suitePassed)) {
             if (p.frbEnabled) {
                 incomplete = true;
@@ -615,8 +679,14 @@ final class RouteVerdictCalculator {
         for (String caseId : dispositions.keySet())
             if (!candidateOnlyCriticalIds.contains(caseId))
                 throw new InvalidOwnerDisposition("Disposition is not for a candidate-only critical case");
-        if (dispositions.values().stream().anyMatch(item -> item.value() == DispositionValue.DEFECT_BLOCKS_ROUTE))
-            failures.add(Tier.T2);
+        Set<String> vetoIds = new TreeSet<>();
+        dispositions.forEach((id, item) -> {
+            if (item.value() == DispositionValue.DEFECT_BLOCKS_ROUTE) vetoIds.add(id);
+        });
+        if (!vetoIds.isEmpty()) {
+            if (p.frbEnabled) causes.add("OWNER_VETO");
+            else failures.add(Tier.T2);
+        }
         Set<String> undisposed = new LinkedHashSet<>(candidateOnlyCriticalIds);
         undisposed.removeAll(dispositions.keySet());
         if (!undisposed.isEmpty()) {
@@ -629,6 +699,16 @@ final class RouteVerdictCalculator {
             if (group.paired != p.workflows.get(name).subgroups().get(entry.getKey())) {
                 incomplete = true;
                 unresolved.add(Tier.T1);
+                if (p.frbEnabled) {
+                    SortedSet<String> ids = causeIds.computeIfAbsent("SUBGROUP_SHORTFALL",
+                            ignored -> new TreeSet<>());
+                    for (CaseRecord record : cases)
+                        if (entry.getKey().equals(record.subgroup())) ids.add(record.id());
+                    Set<String> present = new HashSet<>();
+                    cases.forEach(record -> present.add(record.id()));
+                    for (String id : frozen) if (!present.contains(id)) ids.add(id);
+                    if (ids.isEmpty()) ids.addAll(frozen);
+                }
             }
             subgroupReports.put(entry.getKey(), new SubgroupReport(group.paired,
                     group.candidateT3, group.baselineT3, group.sharedT3,
@@ -637,8 +717,21 @@ final class RouteVerdictCalculator {
         }
         Verdict verdict = !failures.isEmpty() ? Verdict.FAIL
                 : incomplete ? Verdict.INCONCLUSIVE : Verdict.PASS;
-        List<String> orderedCauses = List.of(HARNESS_REGRESSION, RECHECK_MIXED, RECHECK_UNRESOLVED)
-                .stream().filter(causes::contains).toList();
+        List<String> orderedCauses = p.frbEnabled ? causes.stream().sorted().toList()
+                : List.of(HARNESS_REGRESSION, RECHECK_MIXED, RECHECK_UNRESOLVED)
+                    .stream().filter(causes::contains).toList();
+        Map<DispositionValue, Set<String>> byValue = null;
+        if (p.frbEnabled && !dispositions.isEmpty()) {
+            Map<DispositionValue, Set<String>> values = new LinkedHashMap<>();
+            for (DispositionValue value : DispositionValue.values()) {
+                Set<String> ids = new TreeSet<>();
+                dispositions.forEach((id, disposition) -> {
+                    if (disposition.value() == value) ids.add(id);
+                });
+                if (!ids.isEmpty()) values.put(value, Collections.unmodifiableSet(ids));
+            }
+            byValue = Collections.unmodifiableMap(values);
+        }
         return new WorkflowReport(verdict, Set.copyOf(failures), Set.copyOf(unresolved), cases.size(), d,
                 candidateT3, baselineT3, sharedT3, candidateT2, baselineT2, sharedT2,
                 candidateT1, baselineT1, sharedT1,
@@ -647,7 +740,10 @@ final class RouteVerdictCalculator {
                 Collections.unmodifiableMap(subgroupReports), p.sha256, frozen.size() - included,
                 Collections.unmodifiableSet(new LinkedHashSet<>(undisposed)), null,
                 orderedCauses.isEmpty() ? null : orderedCauses,
-                orderedByCaseId(recheckOutcomes), orderedByCaseId(rejectionEvidence));
+                orderedByCaseId(recheckOutcomes), orderedByCaseId(rejectionEvidence),
+                p.frbEnabled && !causeIds.isEmpty() ? Collections.unmodifiableMap(causeIds) : null,
+                p.frbEnabled && !vetoIds.isEmpty() ? Collections.unmodifiableSet(vetoIds) : null,
+                byValue, p.frbEnabled && (!vetoIds.isEmpty() || !undisposed.isEmpty()) ? true : null);
     }
 
     private static Map<String, String> orderedByCaseId(Map<String, String> entries) {
@@ -699,7 +795,9 @@ final class RouteVerdictCalculator {
                 || arm.finalFailureClass() == null && arm.evidence() != Evidence.SCORED)
             return new ArmResolution(true, false, Set.of(), false, 0, 0, RECHECK_UNRESOLVED);
         if (arm.rechecks().size() != requiredRechecks)
-            return new ArmResolution(true, false, Set.of(), false, 0, 0, RECHECK_UNRESOLVED);
+            return new ArmResolution(true, false, Set.of(), false, 0, 0,
+                    arm.finalFailureClass() == null && arm.rechecks().isEmpty()
+                            ? "DELIVERED_WITH_PROVIDER_REJECTION_UNRECHECKED" : RECHECK_UNRESOLVED);
         List<RejectionOutcome> outcomes = arm.rechecks().stream().map(RouteVerdictCalculator::rejectionOutcome).toList();
         if (outcomes.stream().allMatch(outcome -> outcome == RejectionOutcome.SAME_REJECTION))
             return new ArmResolution(!candidate, true, Set.of(), false, 0, 0);

@@ -34,6 +34,7 @@ final class SolRule {
     static boolean justified(FrozenGateParameters parameters, Comparison comparison) {
         RouteVerdictCalculator.RouteReport luna = comparison.luna();
         RouteVerdictCalculator.RouteReport sol = comparison.sol();
+        if (parameters.frbEnabled && (hasOwnerVeto(luna) || hasOwnerVeto(sol))) return false;
         if (!luna.undisposedCriticalCaseIds().isEmpty()
                 || !sol.undisposedCriticalCaseIds().isEmpty()
                 || luna.verdict() != RouteVerdictCalculator.Verdict.FAIL
@@ -80,5 +81,10 @@ final class SolRule {
                 && (!comparison.solT1Failures().isEmpty()
                 || comparison.lunaT1Failures().isEmpty())) return false;
         return true;
+    }
+
+    private static boolean hasOwnerVeto(RouteVerdictCalculator.RouteReport report) {
+        return report.workflows().values().stream().anyMatch(workflow ->
+                workflow.ownerVetoCaseIds() != null && !workflow.ownerVetoCaseIds().isEmpty());
     }
 }

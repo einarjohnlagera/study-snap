@@ -27,6 +27,7 @@ class T1MixedOutcomesTest {
     private static final String ISOLATED = "ISOLATED_FINAL_FAILURE";
     private static final String MIXED = "RECHECK_MIXED";
     private static final String UNRESOLVED = "RECHECK_UNRESOLVED";
+    private static final String DELIVERED_UNRECHECKED = "DELIVERED_WITH_PROVIDER_REJECTION_UNRECHECKED";
     private static final String HARNESS = "HARNESS_REGRESSION";
     private static final String FRB_RESOURCE =
             "src/test/java/com/studysnap/backend/benchmark/frozen-route-gates-frb.json";
@@ -228,7 +229,7 @@ class T1MixedOutcomesTest {
             var note = workflow(report);
             assertThat(report.verdict()).isEqualTo(RouteVerdictCalculator.Verdict.INCONCLUSIVE);
             assertThat(note.failedTiers()).doesNotContain(RouteVerdictCalculator.Tier.T1);
-            assertThat(note.causes()).containsExactly(UNRESOLVED);
+            assertThat(note.causes()).containsExactly(failed ? UNRESOLVED : DELIVERED_UNRECHECKED);
             assertThat(note.rejectionEvidenceByCaseId()).containsEntry(NOTE + ZERO_SUFFIX,
                     CANDIDATE_PREFIX + (failed ? "REJECTED_FINAL_FAILURE" : "REJECTED_THEN_RETRY_SUCCEEDED"));
             assertThat(note.frb().workflowGate()).isEqualTo(Tri.INCONCLUSIVE);
@@ -357,7 +358,7 @@ class T1MixedOutcomesTest {
                 frozen(p, CRITIQUE), records, Map.of(ASK, reserve), suites,
                 List.of(disposition), decisions, Map.of());
         assertThat(retriedWithoutRechecks.workflows().get(ASK).frb().unresolvedReasonsByCaseId())
-                .containsEntry(ASK + ZERO_SUFFIX, CANDIDATE_PREFIX + UNRESOLVED);
+                .containsEntry(ASK + ZERO_SUFFIX, CANDIDATE_PREFIX + DELIVERED_UNRECHECKED);
     }
 
     @Test void failingSuiteIsHarnessRegressionButOtherTierCanStillFail() throws Exception {
