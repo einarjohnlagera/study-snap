@@ -531,7 +531,8 @@ class RouteVerdictCalculatorFrbTest {
         var blocked = run(p, INTERACTIVE, records, Map.of(), decisions(p, INTERACTIVE), Map.of(),
                 List.of(disposition(NOTE, NOTE + "-0",
                         RouteVerdictCalculator.DispositionValue.DEFECT_BLOCKS_ROUTE)));
-        assertThat(blocked.workflows().get(NOTE).failedTiers()).contains(RouteVerdictCalculator.Tier.T2);
+        assertThat(blocked.workflows().get(NOTE).failedTiers()).doesNotContain(RouteVerdictCalculator.Tier.T2);
+        assertThat(blocked.workflows().get(NOTE).ownerVetoCaseIds()).contains(NOTE + "-0");
         var undisposed = run(p, INTERACTIVE, records, Map.of(), decisions(p, INTERACTIVE),
                 Map.of(), List.of());
         assertThat(undisposed.workflows().get(NOTE).undisposedCriticalCaseIds()).contains(NOTE + "-0");

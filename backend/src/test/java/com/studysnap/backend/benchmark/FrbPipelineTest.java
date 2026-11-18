@@ -436,10 +436,10 @@ class FrbPipelineTest {
         List<RouteVerdictCalculator.OwnerDisposition> rows = new ArrayList<>();
         for (String id : primaryBIds) rows.add(new RouteVerdictCalculator.OwnerDisposition(TIP, id,
                 RouteVerdictCalculator.DispositionValue.DEFECT_ACKNOWLEDGED,
-                RouteVerdictCalculator.DispositionReason.ACKNOWLEDGED_FOR_MITIGATION));
+                RouteVerdictCalculator.DispositionReason.ACKNOWLEDGED_FOR_MITIGATION, "Accepted mitigation"));
         for (int i = 0; i < reserveCritical; i++) rows.add(new RouteVerdictCalculator.OwnerDisposition(TIP,
                 "reserve-" + i, RouteVerdictCalculator.DispositionValue.DEFECT_ACKNOWLEDGED,
-                RouteVerdictCalculator.DispositionReason.ACKNOWLEDGED_FOR_MITIGATION));
+                RouteVerdictCalculator.DispositionReason.ACKNOWLEDGED_FOR_MITIGATION, "Accepted mitigation"));
         return write(temp.resolve("dispositions.json"), JSON.writeValueAsBytes(rows));
     }
 
@@ -592,7 +592,7 @@ class FrbPipelineTest {
         assertThat(unresolved).isNotNull();
         assertThat(unresolved.path("candidateEvidence").asText()).isEqualTo("UNSCORABLE");
         assertThat(JSON.readTree(result.report().toFile()).path("deadlineClassification")
-                .path(ROUTE).asText()).isEqualTo("DEADLINE FALLBACK, NOT BENCHMARK PASS");
+                .path(ROUTE).asText()).isEqualTo("RETURN_TO_OWNER");
     }
 
     @Test void drawnReserveWithPrimaryReceiptGapReportsCauseAndR7Fallback() throws Exception {
@@ -609,7 +609,7 @@ class FrbPipelineTest {
         assertThat(report.path("routes").path(ROUTE).path("workflows").path(TIP).path("frb")
                 .path("unresolvedReasonsByCaseId").path("tip").asText()).contains("UNMETERED");
         assertThat(report.path("deadlineClassification").path(ROUTE).asText())
-                .isEqualTo("DEADLINE FALLBACK, NOT BENCHMARK PASS");
+                .isEqualTo("RETURN_TO_OWNER");
     }
 
     @Test void independentlyRejectingPrimaryGateSurvivesReceiptGapWithDrawnReserve() throws Exception {

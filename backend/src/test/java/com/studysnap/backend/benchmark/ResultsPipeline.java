@@ -49,7 +49,13 @@ final class ResultsPipeline {
                          Path findingsDirectory) {}
     record ProvenanceLogs(List<PrimaryExport> primaries, Map<String, ReserveExport> reserves) {}
     record FrbInput(FrbEvidenceBundle bundle, Path reserveRecordFile,
-                    ReserveVerification verification, ProvenanceLogs provenance) {}
+                    ReserveVerification verification, ProvenanceLogs provenance,
+                    Map<String, FrbClassificationInput> routeClassifications) {
+        FrbInput(FrbEvidenceBundle bundle, Path reserveRecordFile,
+                 ReserveVerification verification, ProvenanceLogs provenance) {
+            this(bundle, reserveRecordFile, verification, provenance, null);
+        }
+    }
     record Result(Map<String, RouteVerdictCalculator.RouteReport> routes, Path report, Path triggerRecord,
                   Map<String, Set<String>> triggers,
                   Map<String, List<RouteVerdictCalculator.CaseRecord>> caseRecords) {}
@@ -123,7 +129,7 @@ final class ResultsPipeline {
             Instant headTime = input.synthetic() ? input.headCommitTime() : committedHeadTime(input.repoRoot());
             Map<String, CompatibilitySuiteEvidence.State> suites = CompatibilitySuiteEvidence.read(
                     input.compatibilityReports(), freeze.compatibilitySuites(), headTime);
-            List<RouteVerdictCalculator.OwnerDisposition> dispositions = dispositions(input.ownerDispositions());
+            List<RouteVerdictCalculator.OwnerDisposition> dispositions = dispositions(input.ownerDispositions(), false);
             Map<String, List<RouteVerdictCalculator.CaseRecord>> records = new LinkedHashMap<>();
             Map<String, Set<String>> ids = new LinkedHashMap<>();
             Map<String, Object> costs = new LinkedHashMap<>();
@@ -264,7 +270,7 @@ final class ResultsPipeline {
             Instant headTime = run.synthetic() ? run.headCommitTime() : committedHeadTime(run.repoRoot());
             Map<String, CompatibilitySuiteEvidence.State> suites = CompatibilitySuiteEvidence.read(
                     run.compatibilityReports(), freeze.compatibilitySuites(), headTime);
-            List<RouteVerdictCalculator.OwnerDisposition> dispositions = dispositions(run.ownerDispositions());
+            List<RouteVerdictCalculator.OwnerDisposition> dispositions = dispositions(run.ownerDispositions(), true);
             Map<String, List<RouteVerdictCalculator.CaseRecord>> records = new LinkedHashMap<>();
             Map<String, Set<String>> ids = new LinkedHashMap<>();
             Map<String, Object> costs = new LinkedHashMap<>();
@@ -336,12 +342,21 @@ final class ResultsPipeline {
                         dispositions.stream().filter(d -> route.getValue().workflows().contains(d.workflow())).toList(),
                         frb.bundle().reserveDrawnByWorkflow(), frb.bundle().requestedQuestionsByCaseId());
                 routeReports.put(route.getKey(), verdict);
-                DeadlineRule.Classification classification = DeadlineRule.classify(verdict);
-                deadline.put(route.getKey(), classification == DeadlineRule.Classification.LUNA_FALLBACK_ELIGIBLE
-                        ? "DEADLINE FALLBACK, NOT BENCHMARK PASS" : classification.name());
             }
+            Set<String> pendingRoutes = new HashSet<>();
+            for (var fact : adjudicated.byCaseArm().entrySet()) {
+                if (fact.getValue().pendingQuestions() <= 0) continue;
+                String id = fact.getKey().split("\u0000", 2)[0];
+                FrozenCase caseFact = frozen.containsKey(id) ? frozen.get(id) : frozenReserve.get(id);
+                if (caseFact != null) pendingRoutes.add(parameters.workflows.get(caseFact.workflow()).route());
+            }
+            Map<String, FrbClassification> classifications = classifyFrbRoutes(routeReports,
+                    frb.routeClassifications(), pendingRoutes);
+            classifications.forEach((route, classification) -> deadline.put(route,
+                    renderFrbClassification(classification)));
             writeFrbReport(run, frb, provenance, freezeHash, parameters, mapping, mini, paid, target,
-                    scores, suites, costs, dispositions, reserveByRoute, routeReports, deadline, excludedEvidence);
+                    scores, suites, costs, dispositions, reserveByRoute, routeReports, deadline,
+                    classifications, excludedEvidence);
             Map<String, List<RouteVerdictCalculator.CaseRecord>> immutableRecords = new LinkedHashMap<>();
             records.forEach((route, cases) -> immutableRecords.put(route, List.copyOf(cases)));
             return new Result(Map.copyOf(routeReports), run.report(), null, Map.of(), Map.copyOf(immutableRecords));
@@ -741,10 +756,55 @@ final class ResultsPipeline {
         return List.copyOf(result);
     }
 
-    private static List<RouteVerdictCalculator.OwnerDisposition> dispositions(Path file) throws IOException {
+    static List<RouteVerdictCalculator.OwnerDisposition> dispositions(Path file,
+                                                                       boolean frb) throws IOException {
         if (file == null || !Files.exists(file)) return List.of();
         DeliveredOutputs.guard(file);
-        return JSON.readValue(file.toFile(), new TypeReference<>() {});
+        List<RouteVerdictCalculator.OwnerDisposition> rows = JSON.readValue(file.toFile(), new TypeReference<>() {});
+        if (frb) for (var row : rows) {
+            if (row == null) throw new RouteVerdictCalculator.InvalidOwnerDisposition(
+                    "Null FRB owner disposition");
+            if (row.value() == RouteVerdictCalculator.DispositionValue.DEFECT_ACKNOWLEDGED
+                    && (row.rationale() == null || row.rationale().isBlank()))
+                throw new RouteVerdictCalculator.InvalidOwnerDisposition(
+                        "FRB acknowledged disposition requires a rationale");
+        }
+        return rows;
+    }
+
+    /** Validate per-route owner facts independently of synthetic freeze handling. */
+    static Map<String, FrbClassification> classifyFrbRoutes(
+            Map<String, RouteVerdictCalculator.RouteReport> routes,
+            Map<String, FrbClassificationInput> inputs, Set<String> pendingRoutes) {
+        if (inputs != null && !routes.keySet().containsAll(inputs.keySet()))
+            throw new InvalidInput("FRB classification input names an unknown route");
+        Map<String, FrbClassification> classified = new java.util.TreeMap<>();
+        routes.forEach((route, report) -> {
+            FrbClassification result = DeadlineRule.classifyFrb(report,
+                    inputs == null ? null : inputs.get(route));
+            if (pendingRoutes != null && pendingRoutes.contains(route)) {
+                java.util.SortedSet<String> causes = new java.util.TreeSet<>(result.causes());
+                causes.add("PENDING_REVIEW_ITEMS");
+                result = new FrbClassification(DeadlineRule.Classification.RETURN_TO_OWNER,
+                        java.util.Collections.unmodifiableSortedSet(causes), result.flags(), true);
+            }
+            classified.put(route, result);
+        });
+        return java.util.Collections.unmodifiableMap(classified);
+    }
+
+    static String renderFrbClassification(FrbClassification result) {
+        if (result.classification() == DeadlineRule.Classification.LUNA_FALLBACK_ELIGIBLE)
+            return "DEADLINE FALLBACK, NOT BENCHMARK PASS";
+        String value = result.classification().name();
+        if (result.classification() == DeadlineRule.Classification.BENCHMARK_PASS) {
+            long findings = result.causes().stream()
+                    .filter(cause -> cause.startsWith("DISPOSITIONED_CANDIDATE_CRITICAL:")).count();
+            if (findings > 0) value += " with " + findings + " dispositioned findings";
+            if (result.blocksProductionSwitch())
+                value += " (production switch blocked: " + String.join(", ", result.flags()) + ")";
+        }
+        return value;
     }
 
     private static Map<String, Map<String, List<RouteVerdictCalculator.ReserveCase>>> loadReserves(
@@ -958,6 +1018,7 @@ final class ResultsPipeline {
             Map<String, Object> costs, List<RouteVerdictCalculator.OwnerDisposition> dispositions,
             Map<String, Map<String, List<RouteVerdictCalculator.ReserveCase>>> reserves,
             Map<String, RouteVerdictCalculator.RouteReport> routes, Map<String, Object> deadline,
+            Map<String, FrbClassification> classifications,
             Map<String, String> excludedEvidence) throws IOException {
         Map<String, Object> report = new LinkedHashMap<>();
         report.put(FREEZE_SHA_FIELD, freezeHash);
@@ -1000,6 +1061,26 @@ final class ResultsPipeline {
         report.put(ROUTES_FIELD, routes);
         report.put(RESERVE_RESULTS_FIELD, reserves);
         report.put("deadlineClassification", deadline);
+        report.put("classification", classifications);
+        Map<String, Map<RouteVerdictCalculator.DispositionValue, Set<String>>> dispositionsByRoute =
+                new java.util.TreeMap<>();
+        routes.forEach((route, value) -> {
+            Map<RouteVerdictCalculator.DispositionValue, Set<String>> byValue = new LinkedHashMap<>();
+            value.workflows().values().forEach(workflow -> {
+                if (workflow.dispositionsByValue() != null)
+                    workflow.dispositionsByValue().forEach((kind, ids) ->
+                            byValue.computeIfAbsent(kind, ignored -> new java.util.TreeSet<>()).addAll(ids));
+            });
+            dispositionsByRoute.put(route, byValue);
+        });
+        report.put("dispositionsByValue", dispositionsByRoute.values().stream().allMatch(Map::isEmpty)
+                ? null : dispositionsByRoute);
+        Map<String, Map<String, String>> heads = new java.util.TreeMap<>();
+        if (frb.routeClassifications() != null) frb.routeClassifications().forEach((route, input) -> {
+            if (input != null && input.ledgerHeadHashes() != null)
+                heads.put(route, new java.util.TreeMap<>(input.ledgerHeadHashes()));
+        });
+        report.put("ledgerHeadHashes", heads.isEmpty() ? null : heads);
         Map<String, Integer> margins = new LinkedHashMap<>();
         parameters.routes.forEach((name, route) -> margins.put(name, route.margin()));
         report.put("routeMargins", margins);
@@ -1035,6 +1116,7 @@ final class ResultsPipeline {
         JSON.writeValue(run.report().toFile(), report);
     }
 
+    /** Sol recommends a separate investigation outcome; it never changes Luna's classification or approves a switch. */
     static boolean compareSol(Path lunaReport, Path solReport, Path ownerFile,
                               Path parametersFile, Path output) {
         try {
@@ -1092,6 +1174,7 @@ final class ResultsPipeline {
                 Map<String, Object> decision = new LinkedHashMap<>();
                 decision.put("route", owner.route());
                 decision.put("solJustified", justified);
+                decision.put("solRecommendation", justified ? "JUSTIFIED" : "NOT_JUSTIFIED");
                 decision.put("solVersusLunaD", pairedD);
                 decision.put(PARAMETER_SHA_FIELD, parameters.sha256);
                 decision.put("lunaReportSha256", owner.lunaReportSha256());
@@ -1106,7 +1189,7 @@ final class ResultsPipeline {
                 decision.put("threeFewerOk", improvement == null ? null : improvement.threeFewerOk());
                 decision.put("lunaCriticalTotal", lunaLow.values().stream().mapToLong(Integer::longValue).sum());
                 decision.put("solCriticalTotal", solHigh.values().stream().mapToLong(Integer::longValue).sum());
-                decision.put("selectionNote", "Sol selection is a recommendation, not an approval; Sol can look better "
+                decision.put("selectionNote", "Sol recommendation never changes the Luna classification and is not an approval or PASS. Sol can look better "
                         + "than it is after Luna failed because of regression to the mean.");
                 JSON.writeValue(output.toFile(), decision);
             } else {
