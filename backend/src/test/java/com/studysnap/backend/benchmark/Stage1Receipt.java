@@ -44,7 +44,24 @@ record Stage1Receipt(String head, String freezeSha256, String arm, String model,
                    CaseArmOutcome.State state, boolean firstAttemptClean, boolean finalSuccess,
                    String failureClass, BigDecimal conservativeUsd, BigDecimal billedUsd,
                    List<Signal> llmCalls, List<String> attempt1BodyHashes,
-                   String deliveredOutputSha256) {
+                   String deliveredOutputSha256,
+                   @JsonInclude(JsonInclude.Include.NON_NULL) Integer deliveredQuestionCount) {
+        static final class InvalidDeliveryCount extends RuntimeException {
+            InvalidDeliveryCount(String message) { super(message); }
+        }
+        CaseRow {
+            if (deliveredQuestionCount != null && (deliveredQuestionCount < 0
+                    || state != CaseArmOutcome.State.FAILED || !"SHORT_DELIVERY".equals(failureClass)))
+                throw new InvalidDeliveryCount("Count requires a failed short delivery");
+        }
+        CaseRow(String id, String workflow, String manifestRowSha256,
+                CaseArmOutcome.State state, boolean firstAttemptClean, boolean finalSuccess,
+                String failureClass, BigDecimal conservativeUsd, BigDecimal billedUsd,
+                List<Signal> llmCalls, List<String> attempt1BodyHashes, String deliveredOutputSha256) {
+            this(id, workflow, manifestRowSha256, state, firstAttemptClean, finalSuccess,
+                    failureClass, conservativeUsd, billedUsd, llmCalls, attempt1BodyHashes,
+                    deliveredOutputSha256, null);
+        }
         CaseRow(String id, String workflow, String manifestRowSha256,
                 CaseArmOutcome.State state, boolean firstAttemptClean, boolean finalSuccess,
                 String failureClass, BigDecimal conservativeUsd, BigDecimal billedUsd,
@@ -99,7 +116,7 @@ record Stage1Receipt(String head, String freezeSha256, String arm, String model,
                     rowHashes.get(outcome.caseArmId()), outcome.state(), outcome.firstAttemptClean(),
                     outcome.finalSuccess(), outcome.failureClass(), outcome.conservativeUsd(),
                     outcome.billedUsd(), List.copyOf(signals), bodyHashes,
-                    delivered.lineSha256().get(outcome.caseArmId())));
+                    delivered.lineSha256().get(outcome.caseArmId()), outcome.deliveredQuestionCount()));
         }
         return new Stage1Receipt(freeze.head(), freeze.sha256(), arm, model, stage, started,
                 Instant.now(), run.ledger().recordCount(), run.ledger().unreconciled(),

@@ -41,7 +41,9 @@ record FrbEvidenceBundle(AdjudicatedLoaded evidence,
         Map<String, AdjudicatedFacts> facts = new LinkedHashMap<>(classA.byCaseArm());
         Map<String, Integer> widths = new LinkedHashMap<>(classA.requestedQuestionsByCaseId());
         Set<String> excluded = new LinkedHashSet<>(classA.excludedCaseIds());
+        Map<String, String> excludedReasons = new LinkedHashMap<>(classA.excludedReasons());
         add(classBPrimary, facts, widths, excluded);
+        excludedReasons.putAll(classBPrimary.excludedReasons());
         Set<String> seenWorkflows = new HashSet<>();
         for (ReservePart part : classBReserveParts) {
             if (part == null || part.workflow() == null || part.workflow().isBlank()
@@ -51,13 +53,14 @@ record FrbEvidenceBundle(AdjudicatedLoaded evidence,
                 throw new InvalidEvidence("Undrawn or duplicate class-B reserve: " + part.workflow());
             requireClassBPart(part.facts(), part.frozenReserveCaseIds());
             add(part.facts(), facts, widths, excluded);
+            excludedReasons.putAll(part.facts().excludedReasons());
         }
         Set<String> awaiting = new LinkedHashSet<>();
         decisions.forEach((workflow, drawn) -> {
             if (drawn == null) throw new InvalidEvidence("Null reserve decision: " + workflow);
             if (drawn && !seenWorkflows.contains(workflow)) awaiting.add(workflow);
         });
-        return new FrbEvidenceBundle(new AdjudicatedLoaded(facts, excluded, widths), widths,
+        return new FrbEvidenceBundle(new AdjudicatedLoaded(facts, excluded, widths, excludedReasons), widths,
                 decisions, awaiting);
     }
 

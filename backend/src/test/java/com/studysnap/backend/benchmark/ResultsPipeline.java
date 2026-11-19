@@ -79,7 +79,13 @@ final class ResultsPipeline {
     private record ArmEvidence(Stage1Receipt receipt, Map<String, Stage1Receipt.CaseRow> rows,
                                Map<String, DeliveredOutputs.Line> outputs, RecheckReceipt rechecks,
                                Path recheckDirectory) {}
+    record ShortDeliveryFinding(String caseId, String workflow, String role,
+                                Stage1Receipt.CaseRow row, boolean rechecked, int requestedQuestions,
+                                String unresolvedCause) {}
     private static final String SUCCESS_OUTCOME = "SUCCESS";
+    private static final String SHORT_DELIVERY_CLASS = "SHORT_DELIVERY";
+    private static final String BASELINE_ROLE = "BASELINE";
+    private static final String CANDIDATE_ROLE = "CANDIDATE";
     private static final String BASELINE_MINI_ARM = "BASELINE_MINI";
     private static final String BASELINE_41_ARM = "BASELINE_41";
     private static final String WORKFLOW_FIELD = "workflow";
@@ -291,6 +297,7 @@ final class ResultsPipeline {
             Map<String, Set<String>> ids = new LinkedHashMap<>();
             Map<String, Object> costs = new LinkedHashMap<>();
             Map<String, String> excludedEvidence = new LinkedHashMap<>();
+            List<ShortDeliveryFinding> shortDeliveries = new ArrayList<>();
             for (var item : frozen.entrySet()) {
                 String id = item.getKey();
                 FrozenCase fixture = item.getValue();
@@ -309,12 +316,20 @@ final class ResultsPipeline {
                         freeze.costForecastUsdPerDeliveredCase().get(workflow), adjudicated);
                 RouteVerdictCalculator.ArmResult c = arm(id, fixture, target, scores, mapping,
                         freeze.costForecastUsdPerDeliveredCase().get(workflow), adjudicated);
-                boolean recheckedFailure = hasEligibleFailureWithRechecks(id, baseline, freeze)
-                        || hasEligibleFailureWithRechecks(id, target, freeze);
-                if (scores.excluded().contains(id) && !recheckedFailure) {
+                boolean baselineRechecked = hasEligibleFailureWithRechecks(id, baseline, freeze);
+                boolean candidateRechecked = hasEligibleFailureWithRechecks(id, target, freeze);
+                boolean recheckedFailure = baselineRechecked || candidateRechecked;
+                boolean excluded = scores.excluded().contains(id);
+                List<ShortDeliveryFinding> findings = shortDeliveryFindings(id, workflow, baselineRow,
+                        candidateRow, baselineRechecked, candidateRechecked, excluded,
+                        adjudicated.excludedReasons().get(id), fixture.requiredQuestions(), run.synthetic());
+                shortDeliveries.addAll(findings);
+                if (excluded && !recheckedFailure) {
                     b = unresolved(fixture.requiredQuestions());
                     c = unresolved(fixture.requiredQuestions());
-                    excludedEvidence.put(id, "MISSING");
+                    excludedEvidence.put(id, findings.isEmpty() ? "MISSING" : findings.stream()
+                            .map(ShortDeliveryFinding::unresolvedCause).distinct()
+                            .collect(java.util.stream.Collectors.joining(",")));
                 }
                 // The legacy recovered-exclusion replacement is intentionally absent here: D4
                 // forbids turning an unresolved arm into a scored arm with zero counts.
@@ -325,6 +340,22 @@ final class ResultsPipeline {
                     c = new RouteVerdictCalculator.ArmResult(c.evidence(), c.t3Components(), c.critical(),
                             c.finalFailureClass(), c.rechecks(), baselineSuccess, c.unusable(),
                             c.criticalQuestions(), c.unresolvedQuestions());
+                }
+                if (excluded && !recheckedFailure && !findings.isEmpty()) {
+                    String baselineCause = findings.stream().filter(f -> BASELINE_ROLE.equals(f.role()))
+                            .map(ShortDeliveryFinding::unresolvedCause).findFirst()
+                            .orElse(findings.getFirst().unresolvedCause());
+                    String candidateCause = findings.stream().filter(f -> CANDIDATE_ROLE.equals(f.role()))
+                            .map(ShortDeliveryFinding::unresolvedCause).findFirst()
+                            .orElse(findings.getFirst().unresolvedCause());
+                    b = withUnresolvedCause(b, baselineCause);
+                    c = withUnresolvedCause(c, candidateCause);
+                } else {
+                    for (ShortDeliveryFinding finding : findings) {
+                        if (finding.rechecked()) continue;
+                        if (BASELINE_ROLE.equals(finding.role())) b = withUnresolvedCause(b, finding.unresolvedCause());
+                        else c = withUnresolvedCause(c, finding.unresolvedCause());
+                    }
                 }
                 records.computeIfAbsent(route, ignored -> new ArrayList<>()).add(
                         new RouteVerdictCalculator.CaseRecord(id, workflow, route, fixture.subgroup(),
@@ -370,9 +401,32 @@ final class ResultsPipeline {
                     frb.routeClassifications(), pendingRoutes);
             classifications.forEach((route, classification) -> deadline.put(route,
                     renderFrbClassification(classification)));
+            Map<String, RouteVerdictCalculator.CaseRecord> recordsById = new HashMap<>();
+            records.values().forEach(routeCases -> routeCases.forEach(record -> recordsById.put(record.id(), record)));
+            List<Map<String, Object>> shortDeliveryReport = new ArrayList<>();
+            for (ShortDeliveryFinding finding : shortDeliveries) {
+                Map<String, Object> detail = new LinkedHashMap<>();
+                detail.put("caseId", finding.caseId());
+                detail.put("workflow", finding.workflow());
+                detail.put("failureClass", finding.row().failureClass());
+                detail.put("armRole", finding.role());
+                detail.put("requestedQuestionCount", finding.requestedQuestions());
+                detail.put("deliveredQuestionCount", finding.row().deliveredQuestionCount() == null
+                        ? "UNAVAILABLE" : finding.row().deliveredQuestionCount());
+                detail.put("treatment", finding.rechecked() ? "RECHECKED" : "UNRECHECKED");
+                detail.put("productionOutcome", "ACCEPTED_PARTIAL_DELIVERY");
+                if (finding.rechecked()) {
+                    RouteVerdictCalculator.CaseRecord record = recordsById.get(finding.caseId());
+                    RouteVerdictCalculator.ArmResult armResult = BASELINE_ROLE.equals(finding.role())
+                            ? record.baseline() : record.candidate();
+                    detail.put("recoveryOutcome", RouteVerdictCalculator.recheckTreatment(armResult,
+                            parameters.t1RecheckCount, CANDIDATE_ROLE.equals(finding.role()), true));
+                }
+                shortDeliveryReport.add(detail);
+            }
             writeFrbReport(run, frb, provenance, freezeHash, parameters, mapping, mini, paid, target,
                     scores, suites, costs, dispositions, reserveByRoute, routeReports, deadline,
-                    classifications, excludedEvidence);
+                    classifications, excludedEvidence, shortDeliveryReport);
             Map<String, List<RouteVerdictCalculator.CaseRecord>> immutableRecords = new LinkedHashMap<>();
             records.forEach((route, cases) -> immutableRecords.put(route, List.copyOf(cases)));
             return new Result(Map.copyOf(routeReports), run.report(), null, Map.of(), Map.copyOf(immutableRecords));
@@ -606,6 +660,48 @@ final class ResultsPipeline {
     private static RouteVerdictCalculator.ArmResult unresolved(int width) {
         return new RouteVerdictCalculator.ArmResult(RouteVerdictCalculator.Evidence.MISSING,
                 Set.of(), false, null, List.of(), false, false, 0, width);
+    }
+
+    private static RouteVerdictCalculator.ArmResult withUnresolvedCause(
+            RouteVerdictCalculator.ArmResult arm, String cause) {
+        return new RouteVerdictCalculator.ArmResult(arm.evidence(), arm.t3Components(), arm.critical(),
+                arm.finalFailureClass(), arm.rechecks(), arm.providerRejected(), arm.unusable(),
+                arm.criticalQuestions(), arm.unresolvedQuestions(), cause);
+    }
+
+    /** Receipt-side class-A attribution only. A stopped row is inconclusive, while legacy short
+     * receipts have no count; recheck receipts do not preserve a delivered count. An older harness
+     * cannot read the additive receipt property, and exporter-only short exclusions remain
+     * unattributed. The frozen width is the request. No production minimum is available here. */
+    static List<ShortDeliveryFinding> shortDeliveryFindings(String id, String workflow,
+            Stage1Receipt.CaseRow baseline, Stage1Receipt.CaseRow candidate,
+            boolean baselineRechecked, boolean candidateRechecked, boolean excluded,
+            String exclusionReason, int requestedQuestions, boolean synthetic) {
+        boolean baselineShort = isShortDelivery(baseline);
+        boolean candidateShort = isShortDelivery(candidate);
+        if (excluded && SHORT_DELIVERY_CLASS.equals(exclusionReason)
+                && !baselineShort && !candidateShort && !synthetic)
+            throw new InvalidInput("Unattributable short-delivery exclusion: " + id);
+        List<ShortDeliveryFinding> findings = new ArrayList<>();
+        if (baselineShort) findings.add(shortFinding(id, workflow, BASELINE_ROLE, baseline,
+                baselineRechecked, requestedQuestions));
+        if (candidateShort) findings.add(shortFinding(id, workflow, CANDIDATE_ROLE, candidate,
+                candidateRechecked, requestedQuestions));
+        return List.copyOf(findings);
+    }
+
+    private static boolean isShortDelivery(Stage1Receipt.CaseRow row) {
+        return row != null && row.state() == CaseArmOutcome.State.FAILED
+                && SHORT_DELIVERY_CLASS.equals(row.failureClass());
+    }
+
+    private static ShortDeliveryFinding shortFinding(String id, String workflow, String role,
+            Stage1Receipt.CaseRow row, boolean rechecked, int requestedQuestions) {
+        if (requestedQuestions <= 0 || row.deliveredQuestionCount() != null
+                && row.deliveredQuestionCount() >= requestedQuestions)
+            throw new InvalidInput("Short delivery lacks a valid frozen request: " + id + "/" + role);
+        return new ShortDeliveryFinding(id, workflow, role, row, rechecked, requestedQuestions,
+                rechecked ? null : "SHORT_DELIVERY_" + role);
     }
 
     private static void checkFrbWidth(String id, FrozenCase fixture, String arm,
@@ -1050,7 +1146,7 @@ final class ResultsPipeline {
             Map<String, Map<String, List<RouteVerdictCalculator.ReserveCase>>> reserves,
             Map<String, RouteVerdictCalculator.RouteReport> routes, Map<String, Object> deadline,
             Map<String, FrbClassification> classifications,
-            Map<String, String> excludedEvidence) throws IOException {
+            Map<String, String> excludedEvidence, List<Map<String, Object>> shortDeliveryReport) throws IOException {
         Map<String, Object> report = new LinkedHashMap<>();
         report.put(FREEZE_SHA_FIELD, freezeHash);
         report.put(PARAMETER_SHA_FIELD, parameters.sha256);
@@ -1089,6 +1185,16 @@ final class ResultsPipeline {
         report.put("ownerDispositionCount", dispositions.size());
         report.put("excludedFixtureIdsInconclusive", scores.excluded());
         report.put("excludedFixtureEvidence", excludedEvidence);
+        if (!shortDeliveryReport.isEmpty()) {
+            report.put("shortDelivery", shortDeliveryReport);
+            report.put("shortDeliveryInterpretation", "SHORT_DELIVERY records a partial list returned by "
+                    + "production; any other failure class is a failed operation. Only class-A adapter "
+                    + "structural short failures preserve a count; legacy receipts and recheck receipts may "
+                    + "not. A ledger-stopped case is INCONCLUSIVE, not a completed short delivery. Older "
+                    + "harness versions cannot read a receipt containing the new count. Exporter-only short "
+                    + "exclusions remain unattributed. The harness has no production minimum; the owner "
+                    + "judges the count against the requested width.");
+        }
         report.put(ROUTES_FIELD, routes);
         report.put(RESERVE_RESULTS_FIELD, reserves);
         report.put("deadlineClassification", deadline);

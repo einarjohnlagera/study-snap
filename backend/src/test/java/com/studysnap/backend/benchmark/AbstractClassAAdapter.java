@@ -10,6 +10,7 @@ import org.springframework.web.client.RestClient;
 /** Production caller bridge and signal receipt for preregistration sections 3 and 7. */
 abstract class AbstractClassAAdapter implements StageRunner.CaseCall {
     private static final String NON_QUIESCENT = "INCONCLUSIVE_NON_QUIESCENT_BATCH";
+    private static final String SHORT_DELIVERY = "SHORT_DELIVERY";
     protected final ClassACaseManifest.Case item;
     private List<QuizItem> deliveredQuestions = List.of();
     private List<ProductionCallSignals.Signal> signals = List.of();
@@ -63,7 +64,8 @@ abstract class AbstractClassAAdapter implements StageRunner.CaseCall {
             if (result.failureClass() == null) {
                 String structural = structuralFailure(deliveredQuestions, item.requestedQuestionCount());
                 if (structural != null)
-                    return production.result(generationId(), false, structural, receipts);
+                    return production.result(generationId(), false, structural, receipts,
+                            SHORT_DELIVERY.equals(structural) ? deliveredQuestions.size() : null);
             }
             return result;
         }
@@ -74,7 +76,7 @@ abstract class AbstractClassAAdapter implements StageRunner.CaseCall {
     static String structuralFailure(List<QuizItem> delivered, int requested) {
         if (QuizDeduplicationUtils.uniqueQuestions(delivered, java.util.Set.of()).size() != delivered.size())
             return "DUPLICATE_DELIVERY";
-        return delivered.size() < requested ? "SHORT_DELIVERY" : null;
+        return delivered.size() < requested ? SHORT_DELIVERY : null;
     }
 
     protected boolean requestCountsMatch(List<ArmAssertingInterceptor.CallReceipt> receipts,
