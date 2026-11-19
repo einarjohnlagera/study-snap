@@ -1,8 +1,10 @@
 package com.studysnap.backend.benchmark;
 
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -14,6 +16,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.HashSet;
 
 /** Section 10 detached, exact-byte freeze declaration for the section 5 arm table. */
 record FreezeRecord(String gitCommit, String preregistrationSha256, String parametersSha256,
@@ -21,7 +24,22 @@ record FreezeRecord(String gitCommit, String preregistrationSha256, String param
                     Map<String, Arm> arms, Map<String, String> baselineModelsByRoute,
                     LocalDate ownerApprovalDate, Set<String> recheckEligibleFailureClasses,
                     String evidenceMappingSha256, Map<String, String> compatibilitySuites,
-                    Map<String, BigDecimal> costForecastUsdPerDeliveredCase) {
+                    Map<String, BigDecimal> costForecastUsdPerDeliveredCase,
+                    @JsonInclude(JsonInclude.Include.NON_NULL) Map<String, String> placementCommitments) {
+    private static final Set<String> LEGACY_FIELDS = Set.of("gitCommit", "preregistrationSha256",
+            "parametersSha256", "manifests", "prompts", "arms", "baselineModelsByRoute",
+            "ownerApprovalDate", "recheckEligibleFailureClasses", "evidenceMappingSha256",
+            "compatibilitySuites", "costForecastUsdPerDeliveredCase");
+    FreezeRecord(String gitCommit, String preregistrationSha256, String parametersSha256,
+                 Map<String, String> manifests, Map<String, String> prompts,
+                 Map<String, Arm> arms, Map<String, String> baselineModelsByRoute,
+                 LocalDate ownerApprovalDate, Set<String> recheckEligibleFailureClasses,
+                 String evidenceMappingSha256, Map<String, String> compatibilitySuites,
+                 Map<String, BigDecimal> costForecastUsdPerDeliveredCase) {
+        this(gitCommit, preregistrationSha256, parametersSha256, manifests, prompts, arms,
+                baselineModelsByRoute, ownerApprovalDate, recheckEligibleFailureClasses,
+                evidenceMappingSha256, compatibilitySuites, costForecastUsdPerDeliveredCase, null);
+    }
     record Arm(String model, List<String> workflows) {}
     FreezeRecord(String gitCommit, String preregistrationSha256, String parametersSha256,
                  Map<String, String> manifests, Map<String, String> prompts,
@@ -50,7 +68,7 @@ record FreezeRecord(String gitCommit, String preregistrationSha256, String param
             String actual = sha256(bytes);
             String declared = Files.readString(file.resolveSibling(file.getFileName() + ".sha256")).trim();
             if (!actual.equals(declared)) throw new InvalidFreeze("Freeze record SHA-256 mismatch: " + declared + " != " + actual);
-            FreezeRecord record = JSON.readValue(bytes, FreezeRecord.class);
+            FreezeRecord record = bindExact(bytes);
             if (record.gitCommit() == null || !record.gitCommit().matches("[0-9a-f]{40}")
                     || !digest(record.preregistrationSha256()) || !digest(record.parametersSha256())
                     || record.manifests() == null || record.manifests().isEmpty()
@@ -86,9 +104,36 @@ record FreezeRecord(String gitCommit, String preregistrationSha256, String param
             if (!record.costForecastUsdPerDeliveredCase().keySet().containsAll(frozenWorkflows)
                     || !record.compatibilitySuites().values().containsAll(frozenWorkflows))
                 throw new InvalidFreeze("Missing frozen cost forecast or compatibility suite");
+            if (record.placementCommitments() != null) {
+                Set<String> distinct = new HashSet<>();
+                for (var entry : record.placementCommitments().entrySet()) {
+                    String id = entry.getKey();
+                    String value = entry.getValue();
+                    if (id == null || !id.matches("CLASS_A:[A-Za-z0-9_]+-[A-Za-z0-9_]+|CLASS_B_PRIMARY|CLASS_B_RESERVE:[A-Z][A-Z0-9_]*")
+                            || !digest(value) || !distinct.add(value))
+                        throw new InvalidFreeze("Invalid placement commitment");
+                }
+            }
             return record;
         } catch (IOException exception) {
             throw new InvalidFreeze("Missing or malformed freeze record: " + file, exception);
+        }
+    }
+
+    private static FreezeRecord bindExact(byte[] bytes) {
+        try {
+            JsonNode tree = JSON.readTree(bytes);
+            if (!tree.isObject()) throw new InvalidFreeze("Malformed freeze record");
+            Set<String> fields = new HashSet<>();
+            tree.fieldNames().forEachRemaining(fields::add);
+            Set<String> anchoredFields = new HashSet<>(LEGACY_FIELDS);
+            anchoredFields.add("placementCommitments");
+            if (!fields.equals(LEGACY_FIELDS) && !fields.equals(anchoredFields))
+                throw new InvalidFreeze("Unexpected freeze record fields");
+            return JSON.copy().disable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
+                    .treeToValue(tree, FreezeRecord.class);
+        } catch (IOException exception) {
+            throw new InvalidFreeze("Malformed freeze record");
         }
     }
 

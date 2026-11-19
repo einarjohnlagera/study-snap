@@ -41,6 +41,7 @@ final class FrbProvenance {
                 || frb.provenance().primaries() == null || frb.provenance().primaries().isEmpty()
                 || frb.provenance().reserves() == null || run.reserves() == null)
             throw invalid("Missing FRB provenance input");
+        verifyPlacement(run, frb.provenance());
         ResultsPipeline.ReserveVerification check = frb.verification();
         ResultsPipeline.ProvenanceLogs logs = frb.provenance();
         if (check.packetDirectory() == null || check.sealFile() == null || check.scoresFile() == null
@@ -172,6 +173,36 @@ final class FrbProvenance {
         }
         for (ArmKeyAccess.AccessEntry entry : primaryEntries) verifyLogLocks(entry, locks.keySet());
         return new Verified(record, minimum, Map.copyOf(hashes));
+    }
+
+    static void verifyPlacement(ResultsPipeline.FrbRunInput run,
+                                        ResultsPipeline.ProvenanceLogs logs) {
+        if (logs.reserves() == null) throw invalid("Missing FRB provenance input");
+        List<Path> paths = new ArrayList<>();
+        for (ResultsPipeline.PrimaryExport export : logs.primaries()) {
+            if (export == null || export.sealFile() == null) throw invalid("Incomplete primary export");
+            paths.add(export.sealFile());
+        }
+        for (ResultsPipeline.ReserveExport export : logs.reserves().values()) {
+            if (export == null || export.sealFile() == null) throw invalid("Incomplete reserve export");
+            paths.add(export.sealFile());
+        }
+        FreezeRecord freeze = null;
+        Set<String> exportIds = new HashSet<>();
+        for (Path path : paths) {
+            ArmKeySeal.Seal seal = ArmKeySeal.load(path);
+            if (seal.placementExportId() == null) {
+                if (!run.synthetic()) throw invalid("Placement seed not sealed");
+                continue;
+            }
+            if (freeze == null) freeze = FreezeRecord.load(run.freeze());
+            if (!exportIds.add(seal.placementExportId()))
+                throw invalid("Duplicate placement export id");
+            String expected = freeze.placementCommitments() == null ? null
+                    : freeze.placementCommitments().get(seal.placementExportId());
+            if (!Objects.equals(expected, seal.placementCommitmentSha256()))
+                throw invalid("Placement commitment differs from freeze");
+        }
     }
 
     private static LockRecord addLock(String label, Path file, Path directory,

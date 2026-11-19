@@ -92,6 +92,30 @@ final class ClassABlindPacketExport {
 
     static Export export(List<ClassACaseManifest.Case> fixtures, List<Output> outputs,
                          String firstArm, String secondArm, Path packetDirectory,
+                         Path armKeyPath, List<Path> deliveredPaths, Path freezeFile,
+                         List<Stage1Receipt> receipts, String exportId, PlacementSecret secret) {
+        PlacementFreezeAnchor.Binding placement = PlacementFreezeAnchor.require(freezeFile, receipts, exportId);
+        if (deliveredPaths == null || deliveredPaths.size() != receipts.size() || outputs == null
+                || secret == null || !secret.commitment().equals(placement.commitment())
+                || !exportId.equals("CLASS_A:" + firstArm + "-" + secondArm)
+                || armKeyPath == null || packetDirectory == null
+                || Files.exists(PlacementSidecar.beside(armKeyPath), LinkOption.NOFOLLOW_LINKS))
+            throw new InvalidPlacementSeal();
+        try {
+            List<Output> verified = new ArrayList<>();
+            for (int index = 0; index < receipts.size(); index++)
+                verified.addAll(load(receipts.get(index), deliveredPaths.get(index)));
+            if (verified.size() != outputs.size() || !new HashSet<>(verified).equals(new HashSet<>(outputs)))
+                throw new InvalidPlacementSeal();
+            return export(fixtures, verified, firstArm, secondArm, packetDirectory, armKeyPath,
+                    exportId, secret, placement.commitment(), placement.freezeSha256());
+        } catch (RuntimeException exception) {
+            throw new InvalidPlacementSeal();
+        }
+    }
+
+    static Export export(List<ClassACaseManifest.Case> fixtures, List<Output> outputs,
+                         String firstArm, String secondArm, Path packetDirectory,
                          Path armKeyPath, String exportId, PlacementSecret secret, String expectedCommitment) {
         return export(fixtures, outputs, firstArm, secondArm, packetDirectory, armKeyPath,
                 exportId, secret, expectedCommitment, null);
