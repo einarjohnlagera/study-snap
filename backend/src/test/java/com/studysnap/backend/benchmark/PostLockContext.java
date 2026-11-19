@@ -87,6 +87,18 @@ record PostLockContext(Path lockFile, Path findingsDirectory, Path packetDirecto
         if (route == null || !verified.parameters().routes.containsKey(route))
             throw new PostLockStoreIndex.InvalidStore("Unknown route: " + route);
     }
+    Set<String> requiredClassBWorkflows(Verified verified, String route) {
+        routeName(verified, route);
+        if (!verified.parameters().frbEnabled)
+            throw new PostLockStoreIndex.InvalidStore("FRB review parameters unavailable");
+        Set<String> result = new java.util.TreeSet<>(verified.parameters().frbClassBWorkflows);
+        result.retainAll(verified.parameters().routes.get(route).workflows());
+        if (result.isEmpty()) throw new PostLockStoreIndex.InvalidStore("Route has no class-B review workflows");
+        for (String workflow : result)
+            if (!route.equals(route(verified, workflow)))
+                throw new PostLockStoreIndex.InvalidStore("Class-B review route differs");
+        return Set.copyOf(result);
+    }
     static void id(String id) {
         if (!PostLockStoreIndex.validId(id) || java.util.Arrays.stream(id.split("[-_]"))
                 .anyMatch(token -> Set.of("candidate", "baseline", "luna", "sol", "arm").contains(token)))
