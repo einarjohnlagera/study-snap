@@ -60,7 +60,8 @@ final class RouteVerdictCalculator {
 
     record ArmResult(Evidence evidence, Set<String> t3Components, boolean critical,
                      String finalFailureClass, List<Recheck> rechecks, boolean providerRejected,
-                     boolean unusable, int criticalQuestions, int unresolvedQuestions) {
+                     boolean unusable, int criticalQuestions, int unresolvedQuestions,
+                     String unresolvedCause) {
         ArmResult {
             if (criticalQuestions < 0 || unresolvedQuestions < 0 || critical != (criticalQuestions > 0))
                 throw new InvalidCaseSet("Inconsistent arm critical counts");
@@ -71,7 +72,13 @@ final class RouteVerdictCalculator {
                   String finalFailureClass, List<Recheck> rechecks, boolean providerRejected,
                   boolean unusable) {
             this(evidence, t3Components, critical, finalFailureClass, rechecks,
-                    providerRejected, unusable, critical ? 1 : 0, 0);
+                    providerRejected, unusable, critical ? 1 : 0, 0, null);
+        }
+        ArmResult(Evidence evidence, Set<String> t3Components, boolean critical,
+                  String finalFailureClass, List<Recheck> rechecks, boolean providerRejected,
+                  boolean unusable, int criticalQuestions, int unresolvedQuestions) {
+            this(evidence, t3Components, critical, finalFailureClass, rechecks,
+                    providerRejected, unusable, criticalQuestions, unresolvedQuestions, null);
         }
     }
     record Recheck(Evidence evidence, Set<String> t3Components, boolean critical, String finalFailureClass,
@@ -516,6 +523,7 @@ final class RouteVerdictCalculator {
         if (resolution != null && !resolution.incomplete && !resolution.confirmedT1
                 && resolution.unresolvedQuestions == 0) return null;
         if (resolution != null && resolution.cause != null) return resolution.cause;
+        if (arm != null && arm.unresolvedCause() != null) return arm.unresolvedCause();
         if (arm == null || arm.evidence() == Evidence.MISSING) return "MISSING";
         if (arm.evidence() == Evidence.UNMETERED) return "UNMETERED";
         if (resolution.confirmedT1) return "CONFIRMED_T1";
@@ -853,6 +861,17 @@ final class RouteVerdictCalculator {
         }
         String cause = outcomes.contains(RejectionOutcome.OTHER) ? RECHECK_UNRESOLVED : RECHECK_MIXED;
         return new ArmResolution(true, false, Set.of(), false, 0, 0, cause);
+    }
+
+    /** Reports the calculator's applied recheck treatment. A provider-rejection resolution cause
+     * takes precedence over an arm's optional short-delivery cause; stopped cases are not counted. */
+    static String recheckTreatment(ArmResult arm, int requiredRechecks, boolean candidate,
+                                   boolean frbEnabled) {
+        ArmResolution resolution = resolve(arm, requiredRechecks, candidate, frbEnabled);
+        if (resolution.confirmedT1) return "REPRODUCED";
+        if (!resolution.incomplete && resolution.components.contains(ISOLATED_FINAL_FAILURE))
+            return "RECOVERED";
+        return "UNRESOLVED";
     }
 
     private static ArmResolution resolve(ArmResult arm, int requiredRechecks, boolean candidate,

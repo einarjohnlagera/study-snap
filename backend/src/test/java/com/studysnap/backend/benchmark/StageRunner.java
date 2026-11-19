@@ -38,7 +38,14 @@ final class StageRunner {
     record AttemptRef(String generationId, int attempt) {}
     record CallResult(boolean delivered, Set<AttemptRef> parseSchemaFailures, String failureClass,
                       List<String> callGroupIds, Set<Integer> parseFailureCallIndices,
-                      List<AttemptOutcome.Kind> signalKinds, List<Integer> signalAttempts) {
+                      List<AttemptOutcome.Kind> signalKinds, List<Integer> signalAttempts,
+                      Integer deliveredQuestionCount) {
+        CallResult(boolean delivered, Set<AttemptRef> parseSchemaFailures, String failureClass,
+                   List<String> callGroupIds, Set<Integer> parseFailureCallIndices,
+                   List<AttemptOutcome.Kind> signalKinds, List<Integer> signalAttempts) {
+            this(delivered, parseSchemaFailures, failureClass, callGroupIds, parseFailureCallIndices,
+                    signalKinds, signalAttempts, null);
+        }
         CallResult(boolean delivered, Set<AttemptRef> parseSchemaFailures, String failureClass) {
             this(delivered, parseSchemaFailures, failureClass, List.of(), Set.of(), List.of(), List.of());
         }
@@ -228,7 +235,8 @@ final class StageRunner {
                 stoppedBeforeCompletion = true;
             String failureClass = result != null ? result.failureClass() : failure;
             outcomes.add(CaseArmOutcome.classify(item.id(), attempts,
-                    result != null && result.delivered(), stoppedBeforeCompletion, failureClass));
+                    result != null && result.delivered(), stoppedBeforeCompletion, failureClass,
+                    result == null ? null : result.deliveredQuestionCount()));
             if (result != null && result.delivered() && !stoppedBeforeCompletion
                     && item.deliveredContent() != null)
                 deliveredByCase.put(item.id(), item.deliveredContent());

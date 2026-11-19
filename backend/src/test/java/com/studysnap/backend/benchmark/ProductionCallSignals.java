@@ -51,6 +51,11 @@ final class ProductionCallSignals implements AutoCloseable {
 
     StageRunner.CallResult result(String caseId, boolean delivered, String failureClass,
             List<ArmAssertingInterceptor.CallReceipt> receipts) {
+        return result(caseId, delivered, failureClass, receipts, null);
+    }
+
+    StageRunner.CallResult result(String caseId, boolean delivered, String failureClass,
+            List<ArmAssertingInterceptor.CallReceipt> receipts, Integer deliveredQuestionCount) {
         List<Signal> signals = signals();
         if (signals.size() != receipts.size()) return mismatch();
         Map<String, Queue<Signal>> tagged = new HashMap<>();
@@ -95,7 +100,8 @@ final class ProductionCallSignals implements AutoCloseable {
         if (!sequential.isEmpty() || tagged.values().stream().anyMatch(queue -> !queue.isEmpty()))
             return mismatch();
         return new StageRunner.CallResult(delivered, Set.of(), failureClass,
-                List.copyOf(groupIds), Set.copyOf(parseFailures), List.copyOf(kinds), List.copyOf(attempts));
+                List.copyOf(groupIds), Set.copyOf(parseFailures), List.copyOf(kinds), List.copyOf(attempts),
+                deliveredQuestionCount);
     }
 
     private static StageRunner.CallResult mismatch() {

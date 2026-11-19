@@ -38,7 +38,8 @@ final class AdjudicatedConverter {
                 || frozenClassACaseIds == null)
             throw new InvalidEvidence("Opened key, blind evidence and frozen scope required");
         Map<String, Integer> widths = requestedWidths(requestedQuestionsByCaseId, frozenClassACaseIds);
-        Set<String> excluded = exclusions(exclusionsFileOrNull, expectedExclusionsSha256OrNull);
+        Map<String, String> excludedReasons = exclusions(exclusionsFileOrNull, expectedExclusionsSha256OrNull);
+        Set<String> excluded = excludedReasons.keySet();
         if (statuses.values().stream().anyMatch(java.util.Objects::isNull))
             throw new InvalidEvidence("Null final question status");
         LockReadiness.check(statuses, Set.of());
@@ -90,7 +91,7 @@ final class AdjudicatedConverter {
                 throw new InvalidEvidence("Arm is shorter than requested: " + identity);
             result.put(identity, facts.freeze());
         });
-        return new AdjudicatedLoaded(result, excluded, widths);
+        return new AdjudicatedLoaded(result, excluded, widths, excludedReasons);
     }
 
     static Map<String, Integer> requestedWidths(Map<String, Integer> byCaseId,
@@ -126,14 +127,14 @@ final class AdjudicatedConverter {
         return placement;
     }
 
-    private static Set<String> exclusions(Path exclusionsFileOrNull, String expectedHash) {
+    private static Map<String, String> exclusions(Path exclusionsFileOrNull, String expectedHash) {
         if ((exclusionsFileOrNull == null) != (expectedHash == null))
             throw new InvalidEvidence("Exclusions file and expected SHA-256 must be supplied together");
-        if (exclusionsFileOrNull == null) return Set.of();
+        if (exclusionsFileOrNull == null) return Map.of();
         try {
             if (!expectedHash.equals(FreezeRecord.sha256(exclusionsFileOrNull)))
                 throw new InvalidEvidence("Exclusions SHA-256 differs from expected hash");
-            Set<String> result = new LinkedHashSet<>();
+            Map<String, String> result = new LinkedHashMap<>();
             for (String line : Files.readAllLines(exclusionsFileOrNull)) {
                 if (line.isBlank()) throw new InvalidEvidence("Blank exclusion row");
                 JsonNode row = JSON.readTree(line);
@@ -143,10 +144,10 @@ final class AdjudicatedConverter {
                 if (!fields.equals(EXCLUSION_FIELDS)) throw new InvalidEvidence("Invalid exclusion fields");
                 String caseId = requiredText(row, CASE_ID);
                 String reason = requiredText(row, REASON);
-                if (!EXCLUSION_REASONS.contains(reason) || !result.add(caseId))
+                if (!EXCLUSION_REASONS.contains(reason) || result.putIfAbsent(caseId, reason) != null)
                     throw new InvalidEvidence("Unknown reason or duplicate excluded case: " + caseId);
             }
-            return Set.copyOf(result);
+            return Map.copyOf(result);
         } catch (IOException exception) {
             throw new InvalidEvidence("Cannot read exclusions: " + exception.getMessage());
         }

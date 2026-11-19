@@ -318,6 +318,18 @@ class AdjudicatedConverterTest {
         assertThatThrownBy(() -> convertWithWidths(fixture, missing)).isInstanceOf(InvalidEvidence.class);
     }
 
+    @Test void exclusionReasonsAreCarriedExactlyFromTheFileToTheLoadedFacts() throws Exception {
+        Fixture fixture = fixture(temp, ClassACaseManifest.Workflow.NOTE_ADAPTIVE, MINI, 3, 2,
+                Set.of(CASE_1), Set.of(CASE_2));
+        Map<String, String> expected = new HashMap<>();
+        for (String line : Files.readAllLines(fixture.export().exclusions())) {
+            var row = IntegritySupport.JSON.readTree(line);
+            expected.put(row.get("caseId").asText(), row.get("reason").asText());
+        }
+        assertThat(expected.values()).containsExactlyInAnyOrder("MISSING_ARM_OUTPUT", "SHORT_DELIVERY");
+        assertThat(fixture.convert().excludedReasons()).isEqualTo(expected);
+    }
+
     @Test void rejectsMalformedExclusionsAndKeyedExcludedCase() throws Exception {
         Fixture fixture = fixture(temp, 1, 1);
         Path file = fixture.export().exclusions();
