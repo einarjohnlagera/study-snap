@@ -170,6 +170,7 @@ final class FrbProvenance {
                     throw invalid("Reserve PRIMARY lock must precede reserve key opening: " + workflow);
                 verifyLogLocks(entry, locks.keySet());
             }
+            verifyReserveR28(workflow, export, seal, run.synthetic(), hashes, label);
         }
         for (ArmKeyAccess.AccessEntry entry : primaryEntries) verifyLogLocks(entry, locks.keySet());
         return new Verified(record, minimum, Map.copyOf(hashes));
@@ -231,6 +232,51 @@ final class FrbProvenance {
                 && Objects.equals(lock.armKeySha256(), seal.armKeySha256())
                 && lock.packetFiles().equals(seal.packetFiles().stream()
                         .map(item -> new LockRecord.PacketDigest(item.name(), item.sha256())).toList());
+    }
+
+    /**
+     * Rechecks final human coverage of the sealed reserve manifest, not scoring quality. Byte binding
+     * of the score file relies on {@code addLock} having verified both locks against
+     * {@code export.findingsDirectory()}. A synthetic run with all three R28 inputs absent skips this
+     * check, including an export built with the six-argument constructor. The caller must supply the
+     * same scorer registry used at lock time; another registry is detected only if validation fails.
+     * No operator entry point currently assembles these inputs.
+     */
+    static void verifyReserveR28(String workflow, ResultsPipeline.ReserveExport export,
+            ArmKeySeal.Seal seal, boolean synthetic, Map<String, String> hashes, String label) {
+        boolean packets = export.reservePacketDirectory() != null;
+        boolean scores = export.scoresFile() != null;
+        boolean scorers = export.scorers() != null;
+        if (!packets && !scores && !scorers && synthetic) return;
+        if (!packets || !scores || !scorers)
+            throw invalid("Incomplete reserve R28 inputs: " + workflow);
+        try {
+            ArmKeySeal.verifyPackets(export.reservePacketDirectory(), seal);
+            Path directory = export.findingsDirectory().toAbsolutePath().normalize();
+            Path scoreFile = export.scoresFile().toAbsolutePath().normalize();
+            if (!directory.equals(scoreFile.getParent()))
+                throw new LockRecord.LockBroken("Reserve scores outside findings directory");
+            String scoreName = scoreFile.getFileName().toString();
+            LockRecord primary = LockRecord.load(export.lockForPrimaryOpening());
+            LockRecord reserve = LockRecord.load(export.lockForReserveOpening());
+            if (primary.findings().stream().noneMatch(item -> item.name().equals(scoreName))
+                    || reserve.findings().stream().noneMatch(item -> item.name().equals(scoreName)))
+                throw new LockRecord.LockBroken("Reserve scores absent from lock findings");
+        } catch (ArmKeySeal.SealBroken | LockRecord.LockBroken exception) {
+            throw new ResultsPipeline.InvalidInput(
+                    "Reserve R28 evidence not bound to the reserve locks: " + workflow, exception);
+        }
+        try {
+            List<ClassBScoreFiles.BlindItem> manifest =
+                    ReserveDecisionRecord.manifestFromPackets(export.reservePacketDirectory());
+            ClassBScoreFiles.Validated validated =
+                    ClassBScoreFiles.validate(export.scoresFile(), manifest, export.scorers());
+            ReserveLockReadiness.check(validated, manifest);
+            hashes.put(label + ".scores", FreezeRecord.sha256(export.scoresFile()));
+        } catch (InvalidEvidence | ClassBScoreFiles.InvalidScore
+                | InvalidReserveRecord | IOException exception) {
+            throw new ResultsPipeline.InvalidInput("Reserve R28 evidence incomplete: " + workflow, exception);
+        }
     }
 
     private static void verifyLogLocks(ArmKeyAccess.AccessEntry entry, Set<String> supplied) {

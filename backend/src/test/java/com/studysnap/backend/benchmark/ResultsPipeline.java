@@ -44,9 +44,24 @@ final class ResultsPipeline {
                                Set<String> workflowNames, Path primaryLockFile) {}
     record PrimaryExport(Path accessLog, Path sealFile, Path lockFile, Path findingsDirectory,
                          Path exclusionsFileOrNull, String expectedExclusionsSha256OrNull) {}
+    /**
+     * @param reservePacketDirectory sealed reserve packets; absent with the other R28 inputs only
+     *                               permits a synthetic run to skip the provenance readiness check
+     * @param scoresFile locked reserve scores; their human coverage is checked, not scoring quality
+     * @param scorers the same registry used at lock time must be supplied by the caller; a different
+     *                registry is detected only when score validation fails. No operator bundle
+     *                assembler currently populates these inputs.
+     */
     record ReserveExport(String workflow, Path reserveKeyAccessLog, Path sealFile,
                          Path lockForPrimaryOpening, Path lockForReserveOpening,
-                         Path findingsDirectory) {}
+                         Path findingsDirectory, Path reservePacketDirectory, Path scoresFile,
+                         Map<String, ClassBScoreFiles.ScorerKind> scorers) {
+        ReserveExport(String workflow, Path reserveKeyAccessLog, Path sealFile,
+                Path lockForPrimaryOpening, Path lockForReserveOpening, Path findingsDirectory) {
+            this(workflow, reserveKeyAccessLog, sealFile, lockForPrimaryOpening,
+                    lockForReserveOpening, findingsDirectory, null, null, null);
+        }
+    }
     record ProvenanceLogs(List<PrimaryExport> primaries, Map<String, ReserveExport> reserves) {}
     record FrbInput(FrbEvidenceBundle bundle, Path reserveRecordFile,
                     ReserveVerification verification, ProvenanceLogs provenance,
