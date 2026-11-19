@@ -159,6 +159,11 @@ final class FrbReserveStatus {
         if (first != null && second != null && (!first.workflows().equals(second.workflows())
                 || !first.findings().equals(second.findings())))
             throw invalid("Two reserve locks differ in workflows or findings: " + name);
+        List<ClassBScoreFiles.BlindItem> manifest =
+                ReserveDecisionRecord.manifestFromPackets(artifacts.packetDirectory());
+        ClassBScoreFiles.Validated validated = ClassBScoreFiles.validate(artifacts.scoresFile(),
+                manifest, artifacts.scorers());
+        ReserveLockReadiness.check(validated, manifest);
         return first != null && second != null;
     }
 
