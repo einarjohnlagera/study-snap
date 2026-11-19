@@ -1,5 +1,6 @@
 package com.studysnap.backend.benchmark;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -109,6 +110,30 @@ final class PlacementAudit {
                 mismatches == 0 ? "VERIFIED" : "MISMATCH",
                 mismatches == 0 ? "Sealed placement reproduced" : "Placement mismatch count=" + mismatches,
                 base.limitation(), "CALLER_SUPPLIED");
+    }
+    static Report run(Path packets, Path seal, String candidateArm,
+                      ArmKeyAccess.OpenedKey opened, Rational alpha,
+                      String exportId, Map<String, Set<String>> frozen, Path freezeFile) {
+        FreezeRecord freeze = FreezeRecord.load(freezeFile);
+        String commitment = freeze.placementCommitments() == null ? null
+                : freeze.placementCommitments().get(exportId);
+        Report result = run(packets, seal, candidateArm, opened, alpha, commitment, exportId, frozen);
+        String check = result.seedCheck();
+        String reason = result.seedReason();
+        if (commitment != null) {
+            try {
+                PlacementSidecar.Reveal placement = opened.placement();
+                if (placement == null || placement.freezeSha256() == null
+                        || !placement.freezeSha256().equals(FreezeRecord.sha256(freezeFile))) {
+                    check = "MISMATCH";
+                    reason = "Placement mismatch count=1";
+                }
+            } catch (IOException exception) {
+                throw new InvalidPlacementSeal();
+            }
+        }
+        return new Report(result.workflows(), result.overall(), result.reserveWorkflows(),
+                result.reserveOverall(), check, reason, result.limitation(), "FREEZE");
     }
     private static Map<String, Row> rows(Map<String, List<BlindAuditSupport.Pair>> groups, Rational alpha) {
         Map<String, Row> result = new TreeMap<>();

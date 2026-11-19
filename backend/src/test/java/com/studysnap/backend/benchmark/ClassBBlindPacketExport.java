@@ -43,6 +43,49 @@ final class ClassBBlindPacketExport {
                 null, null, null, PlacementSidecar.FILE_WRITER, ClassBCaseManifest.Workflow::ordinal, null);
     }
 
+    /** Test-fixture labels: receipt arms literally named BASELINE and CANDIDATE. */
+    static Export export(List<ClassBCaseManifest.Case> fixtures, List<Output> outputs,
+                         Path packetDirectory, Path armKeyPath, List<Path> deliveredPaths,
+                         Path freezeFile, List<Stage1Receipt> receipts, String exportId,
+                         PlacementSecret secret) {
+        return export(fixtures, outputs, packetDirectory, armKeyPath, deliveredPaths, freezeFile,
+                receipts, exportId, secret, Map.of("BASELINE", ClassBScoreAggregator.Arm.BASELINE,
+                        "CANDIDATE", ClassBScoreAggregator.Arm.CANDIDATE));
+    }
+
+    /** Real runs: {@code armLabels} maps each receipt's frozen arm name to BASELINE or CANDIDATE. */
+    static Export export(List<ClassBCaseManifest.Case> fixtures, List<Output> outputs,
+                         Path packetDirectory, Path armKeyPath, List<Path> deliveredPaths,
+                         Path freezeFile, List<Stage1Receipt> receipts, String exportId,
+                         PlacementSecret secret, Map<String, ClassBScoreAggregator.Arm> armLabels) {
+        PlacementFreezeAnchor.Binding placement = PlacementFreezeAnchor.require(freezeFile, receipts, exportId);
+        if (deliveredPaths == null || deliveredPaths.size() != receipts.size() || outputs == null
+                || secret == null || !secret.commitment().equals(placement.commitment())
+                || armKeyPath == null || packetDirectory == null
+                || Files.exists(PlacementSidecar.beside(armKeyPath), LinkOption.NOFOLLOW_LINKS))
+            throw new InvalidPlacementSeal();
+        try {
+            List<Output> verified = new ArrayList<>();
+            for (int index = 0; index < receipts.size(); index++) {
+                Stage1Receipt receipt = receipts.get(index);
+                for (DeliveredOutputs.Line line : DeliveredOutputs.read(deliveredPaths.get(index), receipt)) {
+                    if (line.state() != CaseArmOutcome.State.COMPLETE || line.content() == null
+                            || !line.content().isTextual())
+                        throw new InvalidPlacementSeal();
+                    ClassBScoreAggregator.Arm arm = armLabels == null ? null : armLabels.get(line.arm());
+                    if (arm == null) throw new InvalidPlacementSeal();
+                    verified.add(new Output(line.caseId(), arm, line.content().textValue()));
+                }
+            }
+            if (verified.size() != outputs.size() || !new java.util.HashSet<>(verified)
+                    .equals(new java.util.HashSet<>(outputs))) throw new InvalidPlacementSeal();
+            return export(fixtures, verified, packetDirectory, armKeyPath, exportId, secret,
+                    placement.commitment(), placement.freezeSha256());
+        } catch (RuntimeException exception) {
+            throw new InvalidPlacementSeal();
+        }
+    }
+
     static Export export(List<ClassBCaseManifest.Case> fixtures, List<Output> outputs,
                          Path packetDirectory, Path armKeyPath, String exportId,
                          PlacementSecret secret, String expectedCommitment) {
