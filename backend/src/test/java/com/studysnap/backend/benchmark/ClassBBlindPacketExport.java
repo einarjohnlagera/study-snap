@@ -58,6 +58,38 @@ final class ClassBBlindPacketExport {
                          Path packetDirectory, Path armKeyPath, List<Path> deliveredPaths,
                          Path freezeFile, List<Stage1Receipt> receipts, String exportId,
                          PlacementSecret secret, Map<String, ClassBScoreAggregator.Arm> armLabels) {
+        if (exportId == null || exportId.startsWith(RESERVE_EXPORT_PREFIX))
+            throw new InvalidPlacementSeal();
+        return anchored(fixtures, outputs, packetDirectory, armKeyPath, deliveredPaths, freezeFile,
+                receipts, exportId, secret, armLabels);
+    }
+
+    static Export export(List<ClassBCaseManifest.Case> fixtures, List<Output> outputs,
+                         Path packetDirectory, Path armKeyPath, List<Path> deliveredPaths,
+                         Path freezeFile, List<Stage1Receipt> receipts, String exportId,
+                         PlacementSecret secret, Map<String, ClassBScoreAggregator.Arm> armLabels,
+                         Path reserveDecisionRecordFile) {
+        if ("CLASS_B_PRIMARY".equals(exportId)) {
+            if (reserveDecisionRecordFile != null) throw new InvalidPlacementSeal();
+        } else if (exportId != null && exportId.startsWith(RESERVE_EXPORT_PREFIX)) {
+            if (reserveDecisionRecordFile == null) throw new InvalidPlacementSeal();
+            try {
+                ReserveDecisionRecord record = ReserveDecisionRecord.load(reserveDecisionRecordFile);
+                Boolean drawn = record.reserveDrawnByWorkflow().get(
+                        exportId.substring(RESERVE_EXPORT_PREFIX.length()));
+                if (!Boolean.TRUE.equals(drawn)) throw new InvalidPlacementSeal();
+            } catch (Exception exception) {
+                throw new InvalidPlacementSeal();
+            }
+        } else throw new InvalidPlacementSeal();
+        return anchored(fixtures, outputs, packetDirectory, armKeyPath, deliveredPaths, freezeFile,
+                receipts, exportId, secret, armLabels);
+    }
+
+    private static Export anchored(List<ClassBCaseManifest.Case> fixtures, List<Output> outputs,
+                                   Path packetDirectory, Path armKeyPath, List<Path> deliveredPaths,
+                                   Path freezeFile, List<Stage1Receipt> receipts, String exportId,
+                                   PlacementSecret secret, Map<String, ClassBScoreAggregator.Arm> armLabels) {
         PlacementFreezeAnchor.Binding placement = PlacementFreezeAnchor.require(freezeFile, receipts, exportId);
         if (deliveredPaths == null || deliveredPaths.size() != receipts.size() || outputs == null
                 || secret == null || !secret.commitment().equals(placement.commitment())
