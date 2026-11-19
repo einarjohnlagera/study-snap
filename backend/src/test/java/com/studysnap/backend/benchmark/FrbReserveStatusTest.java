@@ -104,7 +104,8 @@ class FrbReserveStatusTest {
         ArmKeySeal.Seal seal = ArmKeySeal.seal(root.resolve("arm-key.jsonl"), root.resolve("packets"),
                 sealFile, RESERVE_SEALED);
         Path scores = root.resolve("findings/scores.jsonl");
-        if (score) writeScores(scores, List.of(export.manifest().getFirst()), Set.of(), human ? HUMAN : MODEL);
+        if (score) writeScores(scores, human && (firstLock || secondLock) ? export.manifest()
+                : List.of(export.manifest().getFirst()), Set.of(), human ? HUMAN : MODEL);
         Path first = root.resolve("reserve-lock.json");
         Path second = root.resolve("primary-lock.json");
         if (firstLock) LockRecord.create(first, LockRecord.Kind.RESERVE, Set.of(workflow), List.of(scores),
@@ -443,5 +444,48 @@ class FrbReserveStatusTest {
                 .isInstanceOf(ResultsPipeline.InvalidInput.class);
         assertThat(Files.exists(scoresOut)).isFalse();
         assertThat(Files.exists(sealOut)).isFalse();
+    }
+
+    @Test void permissiveLockOverHalfScoredReserveIsAProtocolError() throws Exception {
+        Fixture fixture = fixture();
+        var artifacts = reserve(TIP, true, false, false, true);
+        ArmKeySeal.Seal seal = ArmKeySeal.load(artifacts.sealFile());
+        LockRecord.create(artifacts.lockForPrimaryOpening(), LockRecord.Kind.RESERVE, Set.of(TIP),
+                List.of(artifacts.scoresFile()), seal, artifacts.sealFile(), files -> {}, RESERVE_LOCKED);
+        var input = with(fixture, Map.of(TIP, artifacts));
+        Path out = temp.resolve("half-scored-locked.json");
+        assertThatThrownBy(() -> FrbReserveStatus.write(input, out))
+                .isInstanceOf(ResultsPipeline.InvalidInput.class).hasCauseInstanceOf(InvalidEvidence.class)
+                .hasMessageContaining("unscored");
+        assertThat(Files.exists(out)).isFalse();
+        assertThat(Files.exists(temp.resolve("reserve-" + TIP + "/access.jsonl"))).isFalse();
+    }
+
+    @Test void permissiveLockOverPendingReserveIsAProtocolError() throws Exception {
+        Fixture fixture = fixture();
+        var artifacts = reserve(TIP, true, false, false, true);
+        String reviewer = "HUMAN_REVIEWER";
+        List<ClassBScoreFiles.BlindItem> manifest = ReserveDecisionRecord.manifestFromPackets(
+                artifacts.packetDirectory());
+        writeScores(artifacts.scoresFile(), manifest, Set.of(), HUMAN);
+        ObjectNode disagreement = (ObjectNode) IntegritySupport.JSON.readTree(
+                Files.readAllLines(artifacts.scoresFile()).getFirst());
+        disagreement.put("scorerId", reviewer).put("round", 2)
+                .put("grounded", false).put("reasonCode", "UNGROUNDED");
+        Files.writeString(artifacts.scoresFile(), Files.readString(artifacts.scoresFile()) + disagreement + "\n");
+        Map<String, ClassBScoreFiles.ScorerKind> scorers = Map.of(HUMAN, ClassBScoreFiles.ScorerKind.HUMAN,
+                reviewer, ClassBScoreFiles.ScorerKind.HUMAN);
+        artifacts = new FrbReserveStatus.ReserveArtifacts(artifacts.packetDirectory(), artifacts.sealFile(),
+                artifacts.scoresFile(), scorers, artifacts.lockForPrimaryOpening(),
+                artifacts.lockForReserveOpening(), artifacts.findingsDirectory());
+        ArmKeySeal.Seal seal = ArmKeySeal.load(artifacts.sealFile());
+        LockRecord.create(artifacts.lockForPrimaryOpening(), LockRecord.Kind.RESERVE, Set.of(TIP),
+                List.of(artifacts.scoresFile()), seal, artifacts.sealFile(), files -> {}, RESERVE_LOCKED);
+        var input = with(fixture, Map.of(TIP, artifacts));
+        Path out = temp.resolve("pending-locked.json");
+        assertThatThrownBy(() -> FrbReserveStatus.write(input, out))
+                .isInstanceOf(ResultsPipeline.InvalidInput.class).hasCauseInstanceOf(InvalidEvidence.class)
+                .hasMessageContaining("pending");
+        assertThat(Files.exists(out)).isFalse();
     }
 }
