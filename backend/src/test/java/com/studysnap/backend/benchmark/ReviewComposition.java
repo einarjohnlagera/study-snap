@@ -17,6 +17,9 @@ import java.util.TreeSet;
  * Exact token lock-hash equality proves one token for each provenance lock and no other lock.
  * A key-defect completion in one class-A primary may satisfy a case from another primary covering
  * the same workflow; every primary still has its open findings, disputes and concerns checked.
+ * Every token must list every extra listed by any token, and each extra needs a covering completion.
+ * Which absolute-quality subjects are required remains an owner or Product UX definition (X1);
+ * this enforces listed subjects, not subjects nobody lists.
  * Provenance verification reads files; the report is otherwise trusted as runFrb output. External
  * heads are only as external as the operator's independent note of each append to every store.
  */
@@ -147,7 +150,11 @@ final class ReviewComposition {
             Set<FindingsLedger.ReviewSubject> derived = KeyDefectSubjects.derive(frb.bundle(),
                     workflowByCaseId, classA, parameters.frbClassBWorkflows);
             Set<FindingsLedger.ReviewSubject> routeDerived = routeScoped(derived, declaration);
-            Set<FindingsLedger.ReviewSubject> required = requiredSubjects(parameters, declaration, routeDerived);
+            Set<FindingsLedger.ReviewSubject> allExtras = new HashSet<>();
+            byLock.values().forEach(token -> allExtras.addAll(token.extras()));
+            Set<FindingsLedger.ReviewSubject> required = new HashSet<>(
+                    requiredSubjects(parameters, declaration, routeDerived));
+            required.addAll(allExtras);
 
             Map<String, String> heads = new TreeMap<>();
             Map<String, Set<FindingsLedger.ReviewSubject>> extras = new TreeMap<>();
@@ -155,6 +162,7 @@ final class ReviewComposition {
                 FindingsLedger.ReviewCheck token = entry.getValue();
                 if (!token.openSafetyFindingIds().isEmpty() || !token.openDisputeIds().isEmpty()
                         || !token.openConcernIds().isEmpty() || !token.extras().containsAll(routeDerived)
+                        || !token.extras().containsAll(allExtras)
                         || token.heads() == null || !token.heads().keySet().equals(Set.copyOf(HEAD_STORES)))
                     throw new InvalidComposition("Lock has open records, omitted extras or incomplete heads");
                 for (String store : HEAD_STORES) {
