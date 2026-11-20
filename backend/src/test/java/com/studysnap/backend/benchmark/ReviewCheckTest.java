@@ -250,11 +250,11 @@ class ReviewCheckTest {
         constructor.setAccessible(true);
         Object[] components = {original.route(), original.coveredWorkflows(), original.missing(),
                 original.extras(), original.openSafetyFindingIds(), original.openDisputeIds(),
-                original.openConcernIds(), original.heads(), original.lockSha256()};
+                original.openConcernIds(), original.heads(), original.lockSha256(), original.parametersSha256()};
         Object[] alternatives = {CRITIQUE, Set.of("STUDY_TIP"), Set.of("other_missing"),
                 Set.of(new FindingsLedger.ReviewSubject(ReviewRecord.Kind.KEY_DEFECT, NOTE, "defect")),
                 Set.of("finding_1"), Set.of("dispute_1"), Set.of("concern_1"),
-                Map.of("safety", "0:" + DIGEST), "0".repeat(64)};
+                Map.of("safety", "0:" + DIGEST), "0".repeat(64), "1".repeat(64)};
         for (int index = 0; index < components.length; index++) {
             Object[] changedComponents = components.clone();
             changedComponents[index] = alternatives[index];

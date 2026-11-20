@@ -53,11 +53,12 @@ final class FindingsLedger {
         private final Set<String> openConcernIds;
         private final Map<String, String> heads;
         private final String lockSha256;
+        private final String parametersSha256;
 
         private ReviewCheck(String route, Set<String> coveredWorkflows, Set<String> missing,
                             Set<ReviewSubject> extras, Set<String> openSafetyFindingIds,
                             Set<String> openDisputeIds, Set<String> openConcernIds,
-                            Map<String, String> heads, String lockSha256) {
+                            Map<String, String> heads, String lockSha256, String parametersSha256) {
             this.route = route;
             this.coveredWorkflows = immutableSorted(coveredWorkflows);
             this.missing = immutableSorted(missing);
@@ -71,6 +72,7 @@ final class FindingsLedger {
             this.openConcernIds = immutableSorted(openConcernIds);
             this.heads = Map.copyOf(heads);
             this.lockSha256 = lockSha256;
+            this.parametersSha256 = parametersSha256;
         }
         private static Set<String> immutableSorted(Set<String> values) {
             return Collections.unmodifiableSortedSet(new TreeSet<>(values));
@@ -84,17 +86,19 @@ final class FindingsLedger {
         Set<String> openConcernIds() { return openConcernIds; }
         Map<String, String> heads() { return heads; }
         String lockSha256() { return lockSha256; }
+        String parametersSha256() { return parametersSha256; }
         @Override public boolean equals(Object other) {
             if (!(other instanceof ReviewCheck that)) return false;
             return Objects.equals(route, that.route)
                     && coveredWorkflows.equals(that.coveredWorkflows) && missing.equals(that.missing)
                     && extras.equals(that.extras) && openSafetyFindingIds.equals(that.openSafetyFindingIds)
                     && openDisputeIds.equals(that.openDisputeIds) && openConcernIds.equals(that.openConcernIds)
-                    && heads.equals(that.heads) && Objects.equals(lockSha256, that.lockSha256);
+                    && heads.equals(that.heads) && Objects.equals(lockSha256, that.lockSha256)
+                    && Objects.equals(parametersSha256, that.parametersSha256);
         }
         @Override public int hashCode() {
             return Objects.hash(route, coveredWorkflows, missing, extras, openSafetyFindingIds,
-                    openDisputeIds, openConcernIds, heads, lockSha256);
+                    openDisputeIds, openConcernIds, heads, lockSha256, parametersSha256);
         }
     }
     private final SafetyFindingStore safety;
@@ -217,7 +221,7 @@ final class FindingsLedger {
                 throw new InvalidLedger("Ledger head changed during review check");
             return new ReviewCheck(route, coverage, missing, extras, findings, openDisputes, concerns,
                     Map.of("safety", format(safetyHead), "disputes", format(disputeHead),
-                            "reviews", format(reviewHead)), verified.lockSha256());
+                            "reviews", format(reviewHead)), verified.lockSha256(), verified.parameters().sha256);
         } catch (InvalidLedger exception) { throw exception; }
         catch (Exception exception) { throw new InvalidLedger("Cannot check ledger", exception); }
     }

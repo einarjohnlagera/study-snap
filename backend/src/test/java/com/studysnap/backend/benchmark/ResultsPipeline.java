@@ -553,6 +553,18 @@ final class ResultsPipeline {
                 throw new InvalidInput("Drawn reserve lacks bundle facts: " + item.getKey());
     }
 
+    /** Case workflow identities from the same pinned manifests used by FRB bundle verification. */
+    static Map<String, String> workflowByCaseId(FrbRunInput run) throws IOException {
+        FreezeRecord freeze = FreezeRecord.load(run.freeze());
+        Map<String, String> result = new LinkedHashMap<>();
+        loadCases(run.manifests(), freeze).forEach((id, row) -> result.put(id, row.workflow()));
+        loadReserveCases(run.manifests(), freeze).forEach((id, row) -> {
+            if (result.putIfAbsent(id, row.workflow()) != null)
+                throw new InvalidInput("Duplicate frozen case across primary and reserve: " + id);
+        });
+        return Map.copyOf(result);
+    }
+
     private static Map<String, FrozenCase> loadReserveCases(Map<String, Path> manifests,
                                                             FreezeRecord freeze) throws IOException {
         Map<String, FrozenCase> result = new LinkedHashMap<>();
