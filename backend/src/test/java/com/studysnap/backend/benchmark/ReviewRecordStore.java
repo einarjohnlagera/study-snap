@@ -17,7 +17,8 @@ final class ReviewRecordStore {
         InvalidStore(String message, Throwable cause) { super(message, cause); }
     }
     private static final Set<String> FIELDS = Set.of("reviewId", "recordedAtUtc", "lockSha256",
-            "kind", "workflow", "subjectId", "outcome", "signer", "signerRole", "evidenceSha256", "supersedes");
+            "kind", "workflow", "subjectId", "outcome", "signer", "signerRole", "evidenceSha256",
+            "supersedes", "resolutionCode");
     private final PostLockRecordStore core;
     ReviewRecordStore(Path dir, PostLockContext context) { core = new PostLockRecordStore(dir, context); }
     static ReviewRecordStore init(Path dir, PostLockContext context, String utc) {
@@ -100,6 +101,8 @@ final class ReviewRecordStore {
                 && (review.kind() != ReviewRecord.Kind.ABSOLUTE_QUALITY
                 || review.outcome() != ReviewRecord.Outcome.BLOCKING_CONCERN))
             throw new PostLockStoreIndex.InvalidStore("Product UX review role invalid");
+        if ((review.supersedes() == null) != (review.resolutionCode() == null))
+            throw new PostLockStoreIndex.InvalidStore("Resolution code must match supersession");
         if (review.supersedes() != null) {
             PostLockContext.id(review.supersedes());
             if (review.signerRole() != ReviewRecord.SignerRole.OWNER

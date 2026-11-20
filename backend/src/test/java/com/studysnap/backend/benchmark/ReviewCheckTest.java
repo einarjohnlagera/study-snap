@@ -48,7 +48,8 @@ class ReviewCheckTest {
             reviews.create(new ReviewRecord(id, supersedes == null ? CREATED : "2026-11-16T00:05:00Z",
                     hash(), ReviewRecord.Kind.KEY_DEFECT,
                     NOTE, "defect", outcome, "owner", ReviewRecord.SignerRole.OWNER,
-                    supersedes == null ? DIGEST : "b".repeat(64), supersedes));
+                    supersedes == null ? DIGEST : "b".repeat(64), supersedes,
+                    supersedes == null ? null : ReviewRecord.ResolutionCode.FIXED));
         }
     }
     /** Static package-visible factory reusable by the next brief's tests. */

@@ -83,7 +83,7 @@ class ReviewLedgerTest {
         f.reviews().create(new ReviewRecord("quality_3_resolution", "2026-11-16T00:05:00Z",
                 IntegritySupport.detachedHash(f.lock()), ReviewRecord.Kind.ABSOLUTE_QUALITY,
                 STUDY_TIP, SUBJECT, ReviewRecord.Outcome.COMPLETE, "owner",
-                ReviewRecord.SignerRole.OWNER, "b".repeat(64), "quality_2"));
+                ReviewRecord.SignerRole.OWNER, "b".repeat(64), "quality_2", ReviewRecord.ResolutionCode.FIXED));
         assertThat(ledger.missingRequiredReviews(INTERACTIVE, required)).isEmpty();
         add(f, "quality_4", ReviewRecord.Kind.ABSOLUTE_QUALITY, STUDY_TIP, SUBJECT,
                 ReviewRecord.Outcome.BLOCKING_CONCERN, ReviewRecord.SignerRole.PRODUCT_UX);
@@ -106,7 +106,7 @@ class ReviewLedgerTest {
         f.reviews().create(new ReviewRecord("tip_4", "2026-11-16T00:05:00Z",
                 IntegritySupport.detachedHash(f.lock()), ReviewRecord.Kind.CLASS_B_WORKFLOW,
                 STUDY_TIP, STUDY_TIP, ReviewRecord.Outcome.COMPLETE, "owner",
-                ReviewRecord.SignerRole.OWNER, "b".repeat(64), "tip_2"));
+                ReviewRecord.SignerRole.OWNER, "b".repeat(64), "tip_2", ReviewRecord.ResolutionCode.FIXED));
         assertThat(ledger.missingRequiredReviews(INTERACTIVE, Set.of())).isEmpty();
     }
     @Test void extrasRequireExactOwnerCompleteAndRejectOtherKindsOrRoutes() throws Exception {
