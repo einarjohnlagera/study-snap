@@ -2,8 +2,11 @@ package com.studysnap.backend.benchmark;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -17,7 +20,82 @@ import java.util.TreeSet;
  */
 final class FindingsLedger {
     static final class InvalidLedger extends RuntimeException {
+        InvalidLedger(String message) { super(message); }
         InvalidLedger(String message, Throwable cause) { super(message, cause); }
+    }
+    record ExternalHead(int seq, String sha256) {
+        ExternalHead {
+            if (seq < 0 || !IntegritySupport.digest(sha256))
+                throw new InvalidLedger("Invalid externally noted head");
+        }
+    }
+    record ExternalHeads(ExternalHead safety, ExternalHead disputes, ExternalHead reviews) {
+        ExternalHeads {
+            if (safety == null || disputes == null || reviews == null)
+                throw new InvalidLedger("All externally noted heads are required");
+        }
+    }
+    /**
+     * Evidence from this ledger's one verified lock only. A clean token cannot establish that
+     * another lock's ledger has no route-affecting record. Reserve exports have separate seals,
+     * locks and ledgers. Mixed routes need more than one lock; only CRITIQUE can be fully covered
+     * here. Every append to any of the three stores requires a new external note. That note is
+     * only as external as the operator's recording: a caller can pass headHashes() straight back.
+     * Reflection can bypass this same-JVM constructor boundary.
+     */
+    static final class ReviewCheck {
+        private final String route;
+        private final Set<String> coveredWorkflows;
+        private final Set<String> missing;
+        private final Set<ReviewSubject> extras;
+        private final Set<String> openSafetyFindingIds;
+        private final Set<String> openDisputeIds;
+        private final Set<String> openConcernIds;
+        private final Map<String, String> heads;
+        private final String lockSha256;
+
+        private ReviewCheck(String route, Set<String> coveredWorkflows, Set<String> missing,
+                            Set<ReviewSubject> extras, Set<String> openSafetyFindingIds,
+                            Set<String> openDisputeIds, Set<String> openConcernIds,
+                            Map<String, String> heads, String lockSha256) {
+            this.route = route;
+            this.coveredWorkflows = immutableSorted(coveredWorkflows);
+            this.missing = immutableSorted(missing);
+            TreeSet<ReviewSubject> sortedExtras = new TreeSet<>(Comparator
+                    .comparing((ReviewSubject subject) -> subject.kind().name())
+                    .thenComparing(ReviewSubject::workflow).thenComparing(ReviewSubject::subjectId));
+            sortedExtras.addAll(extras);
+            this.extras = Collections.unmodifiableSortedSet(sortedExtras);
+            this.openSafetyFindingIds = immutableSorted(openSafetyFindingIds);
+            this.openDisputeIds = immutableSorted(openDisputeIds);
+            this.openConcernIds = immutableSorted(openConcernIds);
+            this.heads = Map.copyOf(heads);
+            this.lockSha256 = lockSha256;
+        }
+        private static Set<String> immutableSorted(Set<String> values) {
+            return Collections.unmodifiableSortedSet(new TreeSet<>(values));
+        }
+        String route() { return route; }
+        Set<String> coveredWorkflows() { return coveredWorkflows; }
+        Set<String> missing() { return missing; }
+        Set<ReviewSubject> extras() { return extras; }
+        Set<String> openSafetyFindingIds() { return openSafetyFindingIds; }
+        Set<String> openDisputeIds() { return openDisputeIds; }
+        Set<String> openConcernIds() { return openConcernIds; }
+        Map<String, String> heads() { return heads; }
+        String lockSha256() { return lockSha256; }
+        @Override public boolean equals(Object other) {
+            if (!(other instanceof ReviewCheck that)) return false;
+            return Objects.equals(route, that.route)
+                    && coveredWorkflows.equals(that.coveredWorkflows) && missing.equals(that.missing)
+                    && extras.equals(that.extras) && openSafetyFindingIds.equals(that.openSafetyFindingIds)
+                    && openDisputeIds.equals(that.openDisputeIds) && openConcernIds.equals(that.openConcernIds)
+                    && heads.equals(that.heads) && Objects.equals(lockSha256, that.lockSha256);
+        }
+        @Override public int hashCode() {
+            return Objects.hash(route, coveredWorkflows, missing, extras, openSafetyFindingIds,
+                    openDisputeIds, openConcernIds, heads, lockSha256);
+        }
     }
     private final SafetyFindingStore safety;
     private final EvidenceDisputeStore disputes;
@@ -111,6 +189,56 @@ final class FindingsLedger {
             if (reviews != null) heads.put("reviews", format(reviews.headSha256()));
             return Map.copyOf(heads);
         } catch (Exception exception) { throw new InvalidLedger("Cannot query ledger heads", exception); }
+    }
+    ReviewCheck checkLedger(String route, Set<ReviewSubject> extras, ExternalHeads noted) {
+        try {
+            if (reviews == null || noted == null)
+                throw new InvalidLedger("Review store and external notes are required");
+            PostLockContext.Verified verified = context.verify();
+            context.routeName(verified, route);
+            PostLockStoreIndex.Head safetyHead = checkedHead(safety.headSha256(), noted.safety());
+            safety.verifyPrefix(noted.safety().seq(), noted.safety().sha256());
+            PostLockStoreIndex.Head disputeHead = checkedHead(disputes.headSha256(), noted.disputes());
+            disputes.verifyPrefix(noted.disputes().seq(), noted.disputes().sha256());
+            PostLockStoreIndex.Head reviewHead = checkedHead(reviews.headSha256(), noted.reviews());
+            reviews.verifyPrefix(noted.reviews().seq(), noted.reviews().sha256());
+            Set<String> coverage = new TreeSet<>(verified.lock().workflows());
+            coverage.retainAll(verified.parameters().routes.get(route).workflows());
+            Set<String> findings = new TreeSet<>();
+            openSafetyFindings(route).forEach(value -> findings.add(value.findingId()));
+            Set<String> openDisputes = new TreeSet<>();
+            openDisputes(route).forEach(value -> openDisputes.add(value.disputeId()));
+            Set<String> concerns = new TreeSet<>();
+            Set<String> openIds = Set.copyOf(reviews.openConcerns());
+            for (ReviewRecord review : reviews.records())
+                if (openIds.contains(review.reviewId()) && route.equals(context.route(verified, review.workflow())))
+                    concerns.add(review.reviewId());
+            Set<String> missing = missingRequiredReviews(route, extras);
+            if (!safetyHead.equals(safety.headSha256()) || !disputeHead.equals(disputes.headSha256())
+                    || !reviewHead.equals(reviews.headSha256()))
+                throw new InvalidLedger("Ledger head changed during review check");
+            return new ReviewCheck(route, coverage, missing, extras, findings, openDisputes, concerns,
+                    Map.of("safety", format(safetyHead), "disputes", format(disputeHead),
+                            "reviews", format(reviewHead)), verified.lockSha256());
+        } catch (InvalidLedger exception) { throw exception; }
+        catch (Exception exception) { throw new InvalidLedger("Cannot check ledger", exception); }
+    }
+    private static PostLockStoreIndex.Head checkedHead(PostLockStoreIndex.Head current, ExternalHead noted) {
+        if (noted == null || current.seq() != noted.seq() || !current.sha256().equals(noted.sha256()))
+            throw new InvalidLedger("Externally noted head is not current");
+        return current;
+    }
+    /** Binds a trusted runFrb report to this ledger's verified frozen route declaration. */
+    void requireReport(String route, RouteVerdictCalculator.RouteReport report) {
+        try {
+            PostLockContext.Verified verified = context.verify();
+            context.routeName(verified, route);
+            if (report == null || report.workflows() == null
+                    || !report.workflows().keySet().equals(Set.copyOf(verified.parameters().routes.get(route).workflows()))
+                    || !verified.parameters().sha256.equals(report.parameterSha256()))
+                throw new InvalidLedger("Report does not match frozen route parameters");
+        } catch (InvalidLedger exception) { throw exception; }
+        catch (Exception exception) { throw new InvalidLedger("Cannot bind report", exception); }
     }
     void verifyReviewPrefix(int seq, String sha) {
         try {
