@@ -32,7 +32,8 @@ class ReviewSupersessionTest {
                                 ReviewRecord.Outcome outcome, ReviewRecord.SignerRole role,
                                 String digest, String supersedes) throws Exception {
         return new ReviewRecord(id, time, IntegritySupport.detachedHash(f.lock()), kind,
-                workflow, subject, outcome, "owner", role, digest, supersedes);
+                workflow, subject, outcome, "owner", role, digest, supersedes,
+                supersedes == null ? null : ReviewRecord.ResolutionCode.FIXED);
     }
     private ReviewRecord concern(ReviewRecordStoreTest.Fixture f) throws Exception {
         return record(f, CONCERN, T1, ReviewRecord.Kind.KEY_DEFECT, TIP, "item_1",
@@ -131,7 +132,7 @@ class ReviewSupersessionTest {
         ReviewRecord duplicate = new ReviewRecord(validSecond.reviewId(), validSecond.recordedAtUtc(),
                 validSecond.lockSha256(), validSecond.kind(), validSecond.workflow(), validSecond.subjectId(),
                 validSecond.outcome(), validSecond.signer(), validSecond.signerRole(),
-                validSecond.evidenceSha256(), CONCERN);
+                validSecond.evidenceSha256(), CONCERN, ReviewRecord.ResolutionCode.FIXED);
         refusedCreate(store, duplicate);
         assertThat(store.create(validSecond)).isEqualTo(validSecond);
     }
@@ -139,7 +140,8 @@ class ReviewSupersessionTest {
                                      String subject, ReviewRecord.Outcome outcome,
                                      ReviewRecord.SignerRole role, String digest, String supersedes) {
         return new ReviewRecord(r.reviewId(), r.recordedAtUtc(), r.lockSha256(), kind,
-                workflow, subject, outcome, r.signer(), role, digest, supersedes);
+                workflow, subject, outcome, r.signer(), role, digest, supersedes,
+                supersedes == null ? null : ReviewRecord.ResolutionCode.FIXED);
     }
 
     @Test void everySemanticRuleIsRecheckedOnRead() throws Exception {
@@ -234,8 +236,8 @@ class ReviewSupersessionTest {
         store.create(record(f, "unnamed_1", T2, ReviewRecord.Kind.KEY_DEFECT, TIP, "item_1",
                 ReviewRecord.Outcome.COMPLETE, ReviewRecord.SignerRole.OWNER, B, null));
         assertThat(ledger.missingRequiredReviews(ROUTE, extras)).containsExactly(MISSING_DEFECT);
-        assertThat(ledger.blocksBenchmarkPass(ROUTE)).isFalse();
-        assertThat(ledger.blocksProductionSwitch(ROUTE)).isFalse();
+        assertThat(ledger.blocksBenchmarkPass(ROUTE)).isTrue();
+        assertThat(ledger.blocksProductionSwitch(ROUTE)).isTrue();
         store.create(clearing(f));
         assertThat(ledger.missingRequiredReviews(ROUTE, extras)).isEmpty();
         assertThat(store.openConcerns()).isEmpty();

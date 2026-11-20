@@ -136,13 +136,15 @@ final class FindingsLedger {
         boolean findingOpen = !openSafetyFindings(route).isEmpty();
         boolean disputeOpen = !openDisputes(route).isEmpty();
         boolean reviewMissing = reviews != null && !missingRequiredReviews(route, Set.of()).isEmpty();
-        return findingOpen || disputeOpen || reviewMissing;
+        boolean concernOpen = reviews != null && !openConcernIds(context.verify(), route).isEmpty();
+        return findingOpen || disputeOpen || reviewMissing || concernOpen;
     }
     boolean blocksBenchmarkPass(String route) {
         boolean findingOpen = !openSafetyFindings(route).isEmpty();
         boolean disputeOpen = !openDisputes(route).isEmpty();
         boolean reviewMissing = reviews != null && !missingRequiredReviews(route, Set.of()).isEmpty();
-        return findingOpen || disputeOpen || reviewMissing;
+        boolean concernOpen = reviews != null && !openConcernIds(context.verify(), route).isEmpty();
+        return findingOpen || disputeOpen || reviewMissing || concernOpen;
     }
     /** Null means no review store was supplied, never that reviews are satisfied. */
     Set<String> missingRequiredReviews(String route, Set<ReviewSubject> extraRequired) {
@@ -208,11 +210,7 @@ final class FindingsLedger {
             openSafetyFindings(route).forEach(value -> findings.add(value.findingId()));
             Set<String> openDisputes = new TreeSet<>();
             openDisputes(route).forEach(value -> openDisputes.add(value.disputeId()));
-            Set<String> concerns = new TreeSet<>();
-            Set<String> openIds = Set.copyOf(reviews.openConcerns());
-            for (ReviewRecord review : reviews.records())
-                if (openIds.contains(review.reviewId()) && route.equals(context.route(verified, review.workflow())))
-                    concerns.add(review.reviewId());
+            Set<String> concerns = openConcernIds(verified, route);
             Set<String> missing = missingRequiredReviews(route, extras);
             if (!safetyHead.equals(safety.headSha256()) || !disputeHead.equals(disputes.headSha256())
                     || !reviewHead.equals(reviews.headSha256()))
@@ -222,6 +220,16 @@ final class FindingsLedger {
                             "reviews", format(reviewHead)), verified.lockSha256());
         } catch (InvalidLedger exception) { throw exception; }
         catch (Exception exception) { throw new InvalidLedger("Cannot check ledger", exception); }
+    }
+    private Set<String> openConcernIds(PostLockContext.Verified verified, String route) {
+        try {
+            Set<String> concerns = new TreeSet<>();
+            Set<String> openIds = Set.copyOf(reviews.openConcerns());
+            for (ReviewRecord review : reviews.records())
+                if (openIds.contains(review.reviewId()) && route.equals(context.route(verified, review.workflow())))
+                    concerns.add(review.reviewId());
+            return concerns;
+        } catch (Exception exception) { throw new InvalidLedger("Cannot query open review concerns", exception); }
     }
     private static PostLockStoreIndex.Head checkedHead(PostLockStoreIndex.Head current, ExternalHead noted) {
         if (noted == null || current.seq() != noted.seq() || !current.sha256().equals(noted.sha256()))
