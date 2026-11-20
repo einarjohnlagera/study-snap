@@ -8,4 +8,14 @@ record FrbClassificationInput(Set<String> openSafetyFindingIds, Set<String> open
         Set<String> missingRequiredReviews, Set<String> costFlags,
         Set<String> establishedOperationalCaseIds, boolean ledgerFailure, boolean solRecommended,
         Set<String> ownerVetoFindingIds, Map<String, String> expansionOutcomeByWorkflow,
-        Map<String, String> ledgerHeadHashes) {}
+        Map<String, String> ledgerHeadHashes, ReviewComposition.ComposedReviewCheck reviewCheck) {
+    FrbClassificationInput(Set<String> openSafetyFindingIds, Set<String> openDisputeIds,
+            Set<String> missingRequiredReviews, Set<String> costFlags,
+            Set<String> establishedOperationalCaseIds, boolean ledgerFailure, boolean solRecommended,
+            Set<String> ownerVetoFindingIds, Map<String, String> expansionOutcomeByWorkflow,
+            Map<String, String> ledgerHeadHashes) {
+        this(openSafetyFindingIds, openDisputeIds, missingRequiredReviews, costFlags,
+                establishedOperationalCaseIds, ledgerFailure, solRecommended, ownerVetoFindingIds,
+                expansionOutcomeByWorkflow, ledgerHeadHashes, null);
+    }
+}

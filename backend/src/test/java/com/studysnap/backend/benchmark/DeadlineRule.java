@@ -43,6 +43,8 @@ final class DeadlineRule {
             if (input.costFlags() == null) flags.add("COST_REVIEW_UNDETERMINED");
             else flags.addAll(input.costFlags());
             if (input.solRecommended()) flags.add("SOL_RECOMMENDED");
+            if (input.reviewCheck() != null && input.reviewCheck().workloadEstimate().exceedsLimit())
+                causes.add("KEY_DEFECT_REVIEW_WORKLOAD_EXCEEDS_LIMIT");
         }
         if (report.failedTiers().contains(RouteVerdictCalculator.Tier.T1)) causes.add("T1");
         if (report.failedTiers().contains(RouteVerdictCalculator.Tier.T2)) causes.add("T2");
@@ -105,7 +107,13 @@ final class DeadlineRule {
                     row.dispositionsByValue().values().forEach(ids -> ids.forEach(
                             id -> causes.add("DISPOSITIONED_CANDIDATE_CRITICAL:" + id)));
             });
-            flags.add("REVIEWS_NOT_MACHINE_CHECKED");
+            boolean dispositioned = causes.stream().anyMatch(
+                    cause -> cause.startsWith("DISPOSITIONED_CANDIDATE_CRITICAL:"));
+            if (input == null || input.reviewCheck() == null || report.workflows().isEmpty()
+                    || !report.workflows().keySet().equals(input.reviewCheck().coveredWorkflows())
+                    || !report.parameterSha256().equals(input.reviewCheck().parametersSha256())
+                    || !input.ledgerHeadHashes().equals(input.reviewCheck().heads()) || dispositioned)
+                flags.add("REVIEWS_NOT_MACHINE_CHECKED");
         } else {
             causes.add("UNATTRIBUTED_INCONCLUSIVE");
             classification = Classification.RETURN_TO_OWNER;
