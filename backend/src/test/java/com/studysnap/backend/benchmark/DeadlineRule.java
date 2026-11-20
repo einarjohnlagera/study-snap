@@ -1,9 +1,29 @@
 package com.studysnap.backend.benchmark;
 
+import java.util.Collection;
+import java.util.Objects;
+import java.util.SortedSet;
+import java.util.TreeSet;
+
 /** Section 9 deadline fallback classification, distinct from benchmark PASS. */
 final class DeadlineRule {
     private DeadlineRule() {}
     enum Classification { LUNA_FALLBACK_ELIGIBLE, RETURN_TO_OWNER, BENCHMARK_PASS }
+
+    /** A disposition is uncovered unless its id is a required class-A KEY_DEFECT subject; class-B dispositions keep the flag. */
+    static SortedSet<String> uncoveredDispositionIds(Collection<String> causes,
+            ReviewComposition.ComposedReviewCheck check) {
+        Objects.requireNonNull(causes);
+        String prefix = "DISPOSITIONED_CANDIDATE_CRITICAL:";
+        SortedSet<String> uncovered = new TreeSet<>();
+        for (String cause : causes) {
+            if (!cause.startsWith(prefix)) continue;
+            String id = cause.substring(prefix.length());
+            if (check == null || check.requiredKeyDefectSubjects().stream()
+                    .noneMatch(subject -> subject.subjectId().equals(id))) uncovered.add(id);
+        }
+        return uncovered;
+    }
 
     static Classification classify(RouteVerdictCalculator.RouteReport report) {
         if (!report.undisposedCriticalCaseIds().isEmpty()
@@ -59,6 +79,10 @@ final class DeadlineRule {
                 causes.add(row.frb().reserveCause());
             if (!row.undisposedCriticalCaseIds().isEmpty()) causes.add("UNDISPOSED_CANDIDATE_CRITICAL");
             if (row.ownerVetoCaseIds() != null && !row.ownerVetoCaseIds().isEmpty()) causes.add("OWNER_VETO");
+            if (row.dispositionsByValue() != null && row.dispositionsByValue().get(
+                    RouteVerdictCalculator.DispositionValue.DEFECT_BLOCKS_ROUTE) != null
+                    && !row.dispositionsByValue().get(
+                    RouteVerdictCalculator.DispositionValue.DEFECT_BLOCKS_ROUTE).isEmpty()) causes.add("OWNER_VETO");
             if (row.unresolvedCaseIdsByCause() != null)
                 row.unresolvedCaseIdsByCause().forEach((cause, ids) -> {
                     causes.add(cause);
@@ -107,12 +131,11 @@ final class DeadlineRule {
                     row.dispositionsByValue().values().forEach(ids -> ids.forEach(
                             id -> causes.add("DISPOSITIONED_CANDIDATE_CRITICAL:" + id)));
             });
-            boolean dispositioned = causes.stream().anyMatch(
-                    cause -> cause.startsWith("DISPOSITIONED_CANDIDATE_CRITICAL:"));
             if (input == null || input.reviewCheck() == null || report.workflows().isEmpty()
                     || !report.workflows().keySet().equals(input.reviewCheck().coveredWorkflows())
                     || !report.parameterSha256().equals(input.reviewCheck().parametersSha256())
-                    || !input.ledgerHeadHashes().equals(input.reviewCheck().heads()) || dispositioned)
+                    || !input.ledgerHeadHashes().equals(input.reviewCheck().heads())
+                    || !uncoveredDispositionIds(causes, input.reviewCheck()).isEmpty())
                 flags.add("REVIEWS_NOT_MACHINE_CHECKED");
         } else {
             causes.add("UNATTRIBUTED_INCONCLUSIVE");

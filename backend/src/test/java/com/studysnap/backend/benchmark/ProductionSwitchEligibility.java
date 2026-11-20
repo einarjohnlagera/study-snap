@@ -20,8 +20,8 @@ import java.util.TreeSet;
  * The workload estimate is
  * run-wide, so an exceeded limit blocks every route; real-data flagless PASS remains unreachable
  * until the owner resolves T-A through T-D (route-scoped estimation for T-D is separate work).
- * Any dispositioned candidate critical also retains the review flag pending Product UX W1.
- * This is stricter than F1 A: even a completed KEY_DEFECT review cannot clear that flag here.
+ * A disposition retains the review flag unless its id has a required class-A KEY_DEFECT subject
+ * in the composed check; class-B dispositions keep the flag.
  * The two permanent reasons prevent a switch until ledger-backed cost evidence and validated
  * producers or owner attestations for the other assertions are implemented.
  */
@@ -77,8 +77,8 @@ final class ProductionSwitchEligibility {
             if (classification.classification() != DeadlineRule.Classification.BENCHMARK_PASS
                     || classification.blocksProductionSwitch()
                     || classification.flags().contains("REVIEWS_NOT_MACHINE_CHECKED")
-                    || classification.causes().stream().anyMatch(
-                            cause -> cause.startsWith("DISPOSITIONED_CANDIDATE_CRITICAL:")))
+                    || !DeadlineRule.uncoveredDispositionIds(
+                            classification.causes(), input.reviewCheck()).isEmpty())
                 reasons.add(CLASSIFICATION_BLOCKS_SWITCH);
 
             List<FindingsLedger.ReviewCheck> freshTokens = new ArrayList<>();
