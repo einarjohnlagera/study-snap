@@ -78,6 +78,12 @@ class ReviewLedgerTest {
                 .containsExactly("ABSOLUTE_QUALITY:STUDY_TIP:quality_1");
         add(f, "quality_3", ReviewRecord.Kind.ABSOLUTE_QUALITY, STUDY_TIP, SUBJECT,
                 ReviewRecord.Outcome.COMPLETE, ReviewRecord.SignerRole.OWNER);
+        assertThat(ledger.missingRequiredReviews(INTERACTIVE, required))
+                .containsExactly("ABSOLUTE_QUALITY:STUDY_TIP:quality_1");
+        f.reviews().create(new ReviewRecord("quality_3_resolution", "2026-11-16T00:05:00Z",
+                IntegritySupport.detachedHash(f.lock()), ReviewRecord.Kind.ABSOLUTE_QUALITY,
+                STUDY_TIP, SUBJECT, ReviewRecord.Outcome.COMPLETE, "owner",
+                ReviewRecord.SignerRole.OWNER, "b".repeat(64), "quality_2"));
         assertThat(ledger.missingRequiredReviews(INTERACTIVE, required)).isEmpty();
         add(f, "quality_4", ReviewRecord.Kind.ABSOLUTE_QUALITY, STUDY_TIP, SUBJECT,
                 ReviewRecord.Outcome.BLOCKING_CONCERN, ReviewRecord.SignerRole.PRODUCT_UX);
@@ -95,6 +101,12 @@ class ReviewLedgerTest {
                 .containsExactly("CLASS_B_WORKFLOW:STUDY_TIP:STUDY_TIP");
         assertThat(ledger.blocksBenchmarkPass(INTERACTIVE)).isTrue();
         complete(f, "tip_3", STUDY_TIP);
+        assertThat(ledger.missingRequiredReviews(INTERACTIVE, Set.of()))
+                .containsExactly("CLASS_B_WORKFLOW:STUDY_TIP:STUDY_TIP");
+        f.reviews().create(new ReviewRecord("tip_4", "2026-11-16T00:05:00Z",
+                IntegritySupport.detachedHash(f.lock()), ReviewRecord.Kind.CLASS_B_WORKFLOW,
+                STUDY_TIP, STUDY_TIP, ReviewRecord.Outcome.COMPLETE, "owner",
+                ReviewRecord.SignerRole.OWNER, "b".repeat(64), "tip_2"));
         assertThat(ledger.missingRequiredReviews(INTERACTIVE, Set.of())).isEmpty();
     }
     @Test void extrasRequireExactOwnerCompleteAndRejectOtherKindsOrRoutes() throws Exception {

@@ -82,13 +82,22 @@ final class FindingsLedger {
                 PostLockContext.id(extra.subjectId());
                 required.add(extra);
             }
-            Map<ReviewSubject, ReviewRecord> latest = new java.util.HashMap<>();
-            for (ReviewRecord review : reviews.records())
-                latest.put(new ReviewSubject(review.kind(), review.workflow(), review.subjectId()), review);
+            Set<ReviewSubject> completed = new java.util.HashSet<>();
+            Set<String> cleared = new java.util.HashSet<>();
+            List<ReviewRecord> records = reviews.records();
+            for (ReviewRecord review : records) {
+                if (review.outcome() == ReviewRecord.Outcome.COMPLETE)
+                    completed.add(new ReviewSubject(review.kind(), review.workflow(), review.subjectId()));
+                if (review.supersedes() != null) cleared.add(review.supersedes());
+            }
+            Set<ReviewSubject> open = new java.util.HashSet<>();
+            for (ReviewRecord review : records)
+                if (review.outcome() == ReviewRecord.Outcome.BLOCKING_CONCERN
+                        && !cleared.contains(review.reviewId()))
+                    open.add(new ReviewSubject(review.kind(), review.workflow(), review.subjectId()));
             Set<String> missing = new TreeSet<>();
             for (ReviewSubject subject : required) {
-                ReviewRecord record = latest.get(subject);
-                if (record == null || record.outcome() != ReviewRecord.Outcome.COMPLETE)
+                if (!completed.contains(subject) || open.contains(subject))
                     missing.add(subject.kind() + ":" + subject.workflow() + ":" + subject.subjectId());
             }
             return java.util.Collections.unmodifiableSet(missing);
