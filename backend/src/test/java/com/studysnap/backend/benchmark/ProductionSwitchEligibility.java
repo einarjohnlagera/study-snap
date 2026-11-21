@@ -17,7 +17,8 @@ import java.util.TreeSet;
  * baseline arm labels are replayed from the original composition, including a possibly lax caller
  * value. costFlags is checked against replayed external ledgers only when costLedgers is supplied;
  * ownerVetoFindingIds, establishedOperationalCaseIds,
- * expansionOutcomeByWorkflow, the report and pendingRoutes remain trusted assertions. The
+ * expansionOutcomeByWorkflow and the caller's additions to pendingRoutes remain trusted assertions.
+ * The report can be replayed with the opt-in recomputation overload. The
  * rendered classification text is not eligibility. No pipeline wiring or operator caller exists.
  * The workload estimate is
  * run-wide, so an exceeded limit blocks every route; real-data flagless PASS remains unreachable
@@ -39,6 +40,8 @@ final class ProductionSwitchEligibility {
     static final String PENDING_REVIEW_ITEMS = "PENDING_REVIEW_ITEMS";
     static final String REVIEW_CHECK_ROUTE_MISMATCH = "REVIEW_CHECK_ROUTE_MISMATCH";
     static final String EVALUATION_FAILED = "EVALUATION_FAILED";
+    static final String REPORT_RECOMPUTATION_FAILED = "REPORT_RECOMPUTATION_FAILED";
+    static final String REPORT_DIFFERS_FROM_RECOMPUTATION = "REPORT_DIFFERS_FROM_RECOMPUTATION";
 
     record Decision(boolean eligible, List<String> reasons) {}
     record CostLedgerInput(Path ledgerFile, ApprovedCaps approved) {}
@@ -51,7 +54,7 @@ final class ProductionSwitchEligibility {
             Map<String, FindingsLedger.ExternalHeads> freshNotedHeadsByLockSha256,
             Set<String> pendingRoutes) {
         return check(route, report, input, run, frb, ledgersByLockSha256,
-                freshNotedHeadsByLockSha256, pendingRoutes, null);
+                freshNotedHeadsByLockSha256, pendingRoutes, null, false);
     }
 
     static Decision check(String route, RouteVerdictCalculator.RouteReport report,
@@ -59,6 +62,15 @@ final class ProductionSwitchEligibility {
             ResultsPipeline.FrbInput frb, Map<String, FindingsLedger> ledgersByLockSha256,
             Map<String, FindingsLedger.ExternalHeads> freshNotedHeadsByLockSha256,
             Set<String> pendingRoutes, List<CostLedgerInput> costLedgers) {
+        return check(route, report, input, run, frb, ledgersByLockSha256,
+                freshNotedHeadsByLockSha256, pendingRoutes, costLedgers, false);
+    }
+
+    static Decision check(String route, RouteVerdictCalculator.RouteReport report,
+            FrbClassificationInput input, ResultsPipeline.FrbRunInput run,
+            ResultsPipeline.FrbInput frb, Map<String, FindingsLedger> ledgersByLockSha256,
+            Map<String, FindingsLedger.ExternalHeads> freshNotedHeadsByLockSha256,
+            Set<String> pendingRoutes, List<CostLedgerInput> costLedgers, boolean recomputeReport) {
         TreeSet<String> reasons = new TreeSet<>();
         reasons.add(COST_EVIDENCE_NOT_LEDGER_BACKED);
         reasons.add(SWITCH_ASSERTIONS_NOT_VERIFIED);
@@ -87,6 +99,14 @@ final class ProductionSwitchEligibility {
                     || input.reviewCheck() == null) {
                 reasons.add(EVALUATION_FAILED);
                 return decision(reasons);
+            }
+            if (recomputeReport) {
+                try {
+                    if (!report.equals(ReportRecomputation.recompute(run, frb).get(route)))
+                        reasons.add(REPORT_DIFFERS_FROM_RECOMPUTATION);
+                } catch (InvalidReportRecomputation exception) {
+                    reasons.add(REPORT_RECOMPUTATION_FAILED);
+                }
             }
             ReviewComposition.ComposedReviewCheck original = input.reviewCheck();
             if (!route.equals(original.route())) {
