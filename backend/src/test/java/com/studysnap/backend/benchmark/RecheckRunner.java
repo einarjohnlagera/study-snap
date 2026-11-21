@@ -126,7 +126,7 @@ final class RecheckRunner {
                             throw new InvalidRecheck("Case identifier escapes recheck directory");
                         StageRunner.RunInput repeatInput = new StageRunner.RunInput(input.model(), input.key(),
                                 input.stage(), input.approvedCaps(), input.forecasts(), input.priceIn(),
-                                input.priceOut(), input.inputPath(), directory);
+                                input.priceOut(), input.inputPath(), directory, input.providerBounds());
                         int attemptsBefore = ledger.attempts(input.stage());
                         StageRunner.RunSummary run;
                         try {
