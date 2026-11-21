@@ -28,11 +28,18 @@ final class StageRunner {
     record RunInput(String model, String key, StageCapLedger.Stage stage,
                     Map<StageCapLedger.Stage, BigDecimal> approvedCaps,
                     Map<String, ForecastReservation> forecasts, BigDecimal priceIn,
-                    BigDecimal priceOut, Path inputPath, Path outputDir) {
+                    BigDecimal priceOut, Path inputPath, Path outputDir,
+                    ProviderBoundReservation providerBounds) {
+        RunInput(String model, String key, StageCapLedger.Stage stage,
+                 Map<StageCapLedger.Stage, BigDecimal> approvedCaps,
+                 Map<String, ForecastReservation> forecasts, BigDecimal priceIn,
+                 BigDecimal priceOut, Path inputPath, Path outputDir) {
+            this(model, key, stage, approvedCaps, forecasts, priceIn, priceOut, inputPath, outputDir, null);
+        }
         RunInput(String model, String key, StageCapLedger.Stage stage,
                  Map<String, ForecastReservation> forecasts, BigDecimal priceIn,
                  BigDecimal priceOut, Path inputPath, Path outputDir) {
-            this(model, key, stage, null, forecasts, priceIn, priceOut, inputPath, outputDir);
+            this(model, key, stage, null, forecasts, priceIn, priceOut, inputPath, outputDir, null);
         }
     }
     record AttemptRef(String generationId, int attempt) {}
@@ -146,6 +153,7 @@ final class StageRunner {
                                   StageCapLedger ledger, FreezeGuard.Verified verified) throws Exception {
         if (verified == null || !verified.real())
             throw new FreezeRecord.InvalidFreeze("Verified real freeze record required");
+        requireProviderBounds(input);
         return runInternal(input, null, cases, ledger, null);
     }
 
@@ -154,7 +162,13 @@ final class StageRunner {
                                   StageCapLedger.Reservation budget) throws Exception {
         if (verified == null || !verified.real())
             throw new FreezeRecord.InvalidFreeze("Verified real freeze record required");
+        requireProviderBounds(input);
         return runInternal(input, null, cases, ledger, budget);
+    }
+
+    private static void requireProviderBounds(RunInput input) {
+        if (input.providerBounds() == null)
+            throw new StageCapLedger.SpendStop(ProviderBoundReservation.TABLE_REQUIRED);
     }
 
     private static RunSummary runInternal(RunInput input, ClientHttpRequestFactory requestFactory,
@@ -167,21 +181,23 @@ final class StageRunner {
         if (input.priceIn() == null || input.priceOut() == null
                 || input.priceIn().signum() < 0 || input.priceOut().signum() < 0)
             throw new IllegalArgumentException("Prices must be nonnegative");
-        for (ForecastReservation forecast : input.forecasts().values())
-            if (forecast.priceIn().compareTo(input.priceIn()) != 0
-                    || forecast.priceOut().compareTo(input.priceOut()) != 0)
-                throw new IllegalArgumentException("Forecast prices differ from meter prices");
+        if (input.providerBounds() == null)
+            for (ForecastReservation forecast : input.forecasts().values())
+                if (forecast.priceIn().compareTo(input.priceIn()) != 0
+                        || forecast.priceOut().compareTo(input.priceOut()) != 0)
+                    throw new IllegalArgumentException("Forecast prices differ from meter prices");
         if (ledger.cap(input.stage()) == null) throw new StageCapLedger.SpendStop("No approved cap for " + input.stage());
         Path repo = findRepo(Path.of("").toAbsolutePath().normalize());
         if (input.inputPath() != null) LlmModelBenchmark.Config.rejectInsideRepoForTest(input.inputPath(), repo);
         LlmModelBenchmark.Config.rejectInsideRepoForTest(input.outputDir(), repo);
+        ObjectMapper mapper = new ObjectMapper();
+        ArmAssertingInterceptor path = new ArmAssertingInterceptor(mapper, input.model(), input.key(),
+                input.outputDir(), ledger, input.stage(), input.priceIn(), input.priceOut(),
+                input.forecasts(), input.providerBounds(), budget);
         StudySnapProperties properties = ArmRouting.forModel(input.model(), input.key());
         if (requestFactory != null) properties.getLlm().getApi().setBaseUrl("https://offline.invalid");
         requireAllSlots(properties);
         Files.createDirectories(input.outputDir());
-        ObjectMapper mapper = new ObjectMapper();
-        ArmAssertingInterceptor path = new ArmAssertingInterceptor(mapper, input.model(), input.key(),
-                input.outputDir(), ledger, input.stage(), input.priceIn(), input.priceOut(), input.forecasts(), budget);
         RestClient client = RestClient.builder()
                 .requestFactory(requestFactory == null ? productionFactory(properties) : requestFactory)
                 .baseUrl(properties.getLlm().getApi().getBaseUrl())

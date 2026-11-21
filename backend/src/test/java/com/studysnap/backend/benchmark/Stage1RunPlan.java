@@ -42,7 +42,8 @@ final class Stage1RunPlan implements StageRunner.RunPlanProvider {
     }
     private record RunFile(String arm, String model, StageCapLedger.Stage stage,
                            BigDecimal priceIn, BigDecimal priceOut,
-                           Map<String, ForecastReservation> forecasts, Path outputDir,
+                           Map<String, ForecastReservation> forecasts,
+                           ProviderBoundReservation providerBounds, Path outputDir,
                            Path receiptFile, Path freezeFile, Path parametersFile,
                            Map<String, Path> manifests, String reserveWorkflow,
                            boolean explicitlySelected, List<Path> baselineReceipts, Path t2TriggerRecord) {}
@@ -88,6 +89,8 @@ final class Stage1RunPlan implements StageRunner.RunPlanProvider {
                 input().model(), config.manifests(), workflows);
         if (!fresh.sha256().equals(verified.sha256()) || !fresh.head().equals(verified.head()))
             throw new FreezeRecord.InvalidFreeze("Freeze changed since run-plan preparation");
+        if (input().providerBounds() == null)
+            throw new StageCapLedger.SpendStop(ProviderBoundReservation.TABLE_REQUIRED);
         verified = fresh;
         return fresh;
     }
@@ -381,13 +384,16 @@ final class Stage1RunPlan implements StageRunner.RunPlanProvider {
             RunFile file = JSON.copy().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                     .readValue(path.toFile(), RunFile.class);
             if (file.arm() == null || file.model() == null || file.stage() == null
-                    || file.priceIn() == null || file.priceOut() == null || file.forecasts() == null
+                    || file.priceIn() == null || file.priceOut() == null
+                    || file.forecasts() == null && file.providerBounds() == null
                     || file.outputDir() == null || file.receiptFile() == null || file.freezeFile() == null
                     || file.parametersFile() == null || file.manifests() == null
                     || file.baselineReceipts() == null || file.reserveWorkflow() != null && file.t2TriggerRecord() == null)
                 throw new InvalidRunPlan("Incomplete real-run input");
             var input = new StageRunner.RunInput(file.model(), key, file.stage(),
-                    null, file.forecasts(), file.priceIn(), file.priceOut(), path, file.outputDir());
+                    null, file.forecasts() == null ? Map.of() : file.forecasts(),
+                    file.priceIn(), file.priceOut(), path, file.outputDir(),
+                    file.providerBounds());
             return new Config(input, file.arm(), file.freezeFile(), file.parametersFile(), file.manifests(),
                     file.reserveWorkflow(), file.explicitlySelected(), file.baselineReceipts(),
                     file.receiptFile(), null, file.t2TriggerRecord());

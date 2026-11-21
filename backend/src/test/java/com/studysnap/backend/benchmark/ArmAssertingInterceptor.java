@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,6 +22,12 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
     private static final ThreadLocal<byte[]> IN_FLIGHT_REQUEST_BODY = new ThreadLocal<>();
     private static final String OUTPUT_TOKENS_DETAILS = "output_tokens_details";
     private static final String REASONING_TOKENS = "reasoning_tokens";
+    private static final String MODEL_FIELD = "model";
+    private static final String INPUT_FIELD = "input";
+    private static final String TEXT_FIELD = "text";
+    private static final String CONTENT_FIELD = "content";
+    private static final String PRICE_MISMATCH_REASON = "PROVIDER_BOUND_PRICE_MISMATCH";
+    private static final String UNPRICEABLE_REASON = "UNPRICEABLE_REQUEST";
     static final class ArmMismatch extends RuntimeException {
         ArmMismatch(String message) { super(message); }
     }
@@ -41,6 +48,7 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
     private final BigDecimal priceIn;
     private final BigDecimal priceOut;
     private final java.util.Map<String, ForecastReservation> forecasts;
+    private final ProviderBoundReservation providerBounds;
     private final StageCapLedger.Reservation recheckBudget;
     private final ThreadLocal<Context> context = new ThreadLocal<>();
     private final AtomicReference<CaseContext> activeCase = new AtomicReference<>();
@@ -60,10 +68,32 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
             StageCapLedger ledger, StageCapLedger.Stage stage, BigDecimal priceIn, BigDecimal priceOut,
             java.util.Map<String, ForecastReservation> forecasts,
             StageCapLedger.Reservation recheckBudget) {
-        this.mapper = mapper; this.model = model; this.key = key; this.outDir = outDir;
+        this(mapper, model, key, outDir, ledger, stage, priceIn, priceOut, forecasts, null, recheckBudget);
+    }
+
+    ArmAssertingInterceptor(ObjectMapper mapper, String model, String apiKey, Path outDir,
+            StageCapLedger ledger, StageCapLedger.Stage stage, BigDecimal priceIn, BigDecimal priceOut,
+            java.util.Map<String, ForecastReservation> forecasts, ProviderBoundReservation providerBounds,
+            StageCapLedger.Reservation recheckBudget) {
+        this.mapper = mapper; this.model = model; this.key = apiKey; this.outDir = outDir;
         this.ledger = ledger; this.stage = stage; this.priceIn = priceIn; this.priceOut = priceOut;
-        this.forecasts = java.util.Map.copyOf(forecasts);
+        this.forecasts = providerBounds != null && forecasts == null
+                ? java.util.Map.of() : java.util.Map.copyOf(forecasts);
+        this.providerBounds = providerBounds;
         this.recheckBudget = recheckBudget;
+        if (providerBounds != null) {
+            ProviderBoundReservation.ModelPrice row;
+            try { row = providerBounds.requireModel(model); }
+            catch (StageCapLedger.SpendStop ex) {
+                ledger.stopRunOnly(ex.getMessage());
+                throw ex;
+            }
+            if (row.inputPerMillion().compareTo(priceIn) != 0
+                    || row.outputPerMillion().compareTo(priceOut) != 0) {
+                ledger.stopRunOnly(PRICE_MISMATCH_REASON);
+                throw new StageCapLedger.SpendStop(PRICE_MISMATCH_REASON);
+            }
+        }
     }
 
     void begin(String generationId, String cellId) throws IOException {
@@ -85,36 +115,71 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
             ClientHttpRequestExecution execution) throws IOException {
         String bodyDigest = digest(body);
         bodyDigests.add(bodyDigest);
-        JsonNode json = mapper.readTree(body);
+        JsonNode json;
+        try { json = mapper.readTree(body); }
+        catch (IOException ex) {
+            if (providerBounds != null) throw refuse(UNPRICEABLE_REASON);
+            throw ex;
+        }
+        if (providerBounds != null) requireAllowedRequest(json);
         String modelRemovedDigest = modelRemovedDigest(json);
-        int questionCount = json.path("text").path("format").path("schema")
+        int questionCount = json.path(TEXT_FIELD).path("format").path("schema")
                 .path("properties").path("questions").path("minItems").asInt(0);
         requestQuestionCounts.add(questionCount);
-        if (!model.equals(json.path("model").asText(null))) {
+        if (!model.equals(json.path(MODEL_FIELD).asText(null))) {
             ledger.stopRunOnly("Arm model mismatch");
             throw new ArmMismatch("Outgoing model differs from arm model");
         }
         Context active = contextForThread();
-        ForecastReservation forecast = forecasts.get(active.cellId());
-        if (forecast == null) throw new IllegalArgumentException("No forecast for cell " + active.cellId());
-        StageCapLedger.Reservation reservation = recheckBudget == null
-                ? ledger.reserve(stage, active.cellId(), forecast.usd())
-                : ledger.reserveFrom(recheckBudget, stage, active.cellId(), forecast.usd());
-        String requestBody = new String(body, java.nio.charset.StandardCharsets.UTF_8);
-        active.meter().redactRaw(requestBody);
-        String escapedBody = mapper.writeValueAsString(requestBody);
-        active.meter().redactRaw(escapedBody.substring(1, escapedBody.length() - 1));
+        BigDecimal strict = null;
+        BigDecimal amount;
+        if (providerBounds == null) {
+            ForecastReservation forecast = forecasts.get(active.cellId());
+            if (forecast == null) throw new IllegalArgumentException("No forecast for cell " + active.cellId());
+            amount = forecast.usd();
+        } else {
+            if (body.length > providerBounds.longContextThreshold() - providerBounds.framingMargin())
+                throw refuse("PROVIDER_BOUND_INPUT_MARGIN_EXCEEDED");
+            try { strict = providerBounds.usd(model, body); }
+            catch (StageCapLedger.SpendStop ex) { throw refuse(ex.getMessage()); }
+            amount = strict;
+        }
         boolean closed = false;
+        boolean[] dispatched = {false};
         int before = active.meter().calls().size();
-        IN_FLIGHT_REQUEST_BODY.set(body.clone());
+        StageCapLedger.Reservation reservation;
         try {
-            ClientHttpResponse response = active.meter().intercept(request, body, execution);
+            reservation = recheckBudget == null
+                    ? ledger.reserve(stage, active.cellId(), amount)
+                    : ledger.reserveFrom(recheckBudget, stage, active.cellId(), amount);
+        } catch (StageCapLedger.LedgerFailure ex) {
+            ledger.stopRunOnly("LEDGER_FAILURE");
+            throw ex;
+        }
+        try {
+            String requestBody = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+            active.meter().redactRaw(requestBody);
+            String escapedBody = mapper.writeValueAsString(requestBody);
+            active.meter().redactRaw(escapedBody.substring(1, escapedBody.length() - 1));
+            IN_FLIGHT_REQUEST_BODY.set(body.clone());
+            ClientHttpResponse response = active.meter().intercept(request, body, (outgoing, bytes) -> {
+                dispatched[0] = true;
+                return execution.execute(outgoing, bytes);
+            });
             MeteringInterceptor.Call call = active.meter().calls().get(before);
             receipts.add(new CallReceipt(call, questionCount, bodyDigest, modelRemovedDigest));
-            if (response.getStatusCode().is2xxSuccessful() && !usable(call.usage())) {
+            if (providerBounds != null && !usable(call.usage())) {
+                reservation.settle(strict, BigDecimal.ZERO);
+                closed = true;
+                if (response.getStatusCode().is2xxSuccessful()) ledger.stop("UNMETERED response: " + stage);
+            } else if (response.getStatusCode().is2xxSuccessful() && !usable(call.usage())) {
                 reservation.settle(null, null);
             } else {
                 reservation.settle(call.conservativeUsd(), call.nonAdditiveUsd());
+                closed = true;
+                if (providerBounds != null && (call.outputTokens() > providerBounds.requireModel(model).maximumOutputTokens()
+                        || call.nonAdditiveUsd().compareTo(strict) > 0))
+                    ledger.stop("PROVIDER_BOUND_EXCEEDED");
             }
             closed = true;
             if (call.status() >= 400) noteHttpError();
@@ -131,9 +196,34 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
         } finally {
             IN_FLIGHT_REQUEST_BODY.remove();
             if (!closed && !reservation.closed()) {
-                try { reservation.abandon(); }
+                try {
+                    if (providerBounds != null && dispatched[0]) reservation.settle(strict, BigDecimal.ZERO);
+                    else reservation.abandon();
+                }
                 catch (StageCapLedger.LedgerFailure ignored) { /* unresolved reservation remains charged on replay */ }
             }
+        }
+    }
+
+    private StageCapLedger.SpendStop refuse(String reason) {
+        ledger.stopRunOnly(reason);
+        return new StageCapLedger.SpendStop(reason);
+    }
+
+    private void requireAllowedRequest(JsonNode json) {
+        if (json == null || !json.isObject() || !json.path(MODEL_FIELD).isTextual()
+                || json.path(MODEL_FIELD).asText().isBlank()
+                || !json.path(INPUT_FIELD).isArray() || !json.path(TEXT_FIELD).isObject())
+            throw refuse(UNPRICEABLE_REASON);
+        for (var fields = json.fieldNames(); fields.hasNext(); )
+            if (!Set.of(MODEL_FIELD, INPUT_FIELD, TEXT_FIELD).contains(fields.next()))
+                throw refuse("FORBIDDEN_REQUEST_PARAMETER");
+        for (JsonNode message : json.path(INPUT_FIELD)) {
+            if (!message.isObject() || !message.path(CONTENT_FIELD).isArray())
+                throw refuse("UNPRICEABLE_REQUEST_CONTENT");
+            for (JsonNode part : message.path(CONTENT_FIELD))
+                if (!part.isObject() || !Set.of("input_text", "output_text").contains(part.path("type").asText()))
+                    throw refuse("FORBIDDEN_REQUEST_CONTENT_TYPE");
         }
     }
 
@@ -148,7 +238,7 @@ final class ArmAssertingInterceptor implements ClientHttpRequestInterceptor {
 
     static String modelRemovedDigest(JsonNode body) throws IOException {
         com.fasterxml.jackson.databind.node.ObjectNode copy = body.deepCopy();
-        copy.remove("model");
+        copy.remove(MODEL_FIELD);
         return digest(new ObjectMapper().writeValueAsBytes(copy));
     }
 
