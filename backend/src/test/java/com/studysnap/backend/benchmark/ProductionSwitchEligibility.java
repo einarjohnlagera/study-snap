@@ -1,6 +1,7 @@
 package com.studysnap.backend.benchmark;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -14,7 +15,8 @@ import java.util.TreeSet;
  *
  * Workload parameters (hMaxHours, otherPlannedHours and minutesPerCaseReview) and candidate and
  * baseline arm labels are replayed from the original composition, including a possibly lax caller
- * value. costFlags, ownerVetoFindingIds, establishedOperationalCaseIds,
+ * value. costFlags is checked against replayed external ledgers only when costLedgers is supplied;
+ * ownerVetoFindingIds, establishedOperationalCaseIds,
  * expansionOutcomeByWorkflow, the report and pendingRoutes remain trusted assertions. The
  * rendered classification text is not eligibility. No pipeline wiring or operator caller exists.
  * The workload estimate is
@@ -22,11 +24,13 @@ import java.util.TreeSet;
  * until the owner resolves T-A through T-D (route-scoped estimation for T-D is separate work).
  * A disposition retains the review flag unless its id has a required class-A KEY_DEFECT subject
  * in the composed check; class-B dispositions keep the flag.
- * The two permanent reasons prevent a switch until ledger-backed cost evidence and validated
- * producers or owner attestations for the other assertions are implemented.
+ * The cost reason remains until matching ledger-backed evidence is supplied. The assertion reason
+ * prevents a switch until validated producers or owner attestations for the other assertions exist.
  */
 final class ProductionSwitchEligibility {
     static final String COST_EVIDENCE_NOT_LEDGER_BACKED = "COST_EVIDENCE_NOT_LEDGER_BACKED";
+    static final String COST_EVIDENCE_FAILED = "COST_EVIDENCE_FAILED";
+    static final String COST_FLAGS_DIFFER_FROM_LEDGER = "COST_FLAGS_DIFFER_FROM_LEDGER";
     static final String SWITCH_ASSERTIONS_NOT_VERIFIED = "SWITCH_ASSERTIONS_NOT_VERIFIED";
     static final String LEDGER_CHECK_FAILED = "LEDGER_CHECK_FAILED";
     static final String COMPOSITION_FAILED = "COMPOSITION_FAILED";
@@ -37,6 +41,7 @@ final class ProductionSwitchEligibility {
     static final String EVALUATION_FAILED = "EVALUATION_FAILED";
 
     record Decision(boolean eligible, List<String> reasons) {}
+    record CostLedgerInput(Path ledgerFile, ApprovedCaps approved) {}
 
     private ProductionSwitchEligibility() {}
 
@@ -45,9 +50,37 @@ final class ProductionSwitchEligibility {
             ResultsPipeline.FrbInput frb, Map<String, FindingsLedger> ledgersByLockSha256,
             Map<String, FindingsLedger.ExternalHeads> freshNotedHeadsByLockSha256,
             Set<String> pendingRoutes) {
+        return check(route, report, input, run, frb, ledgersByLockSha256,
+                freshNotedHeadsByLockSha256, pendingRoutes, null);
+    }
+
+    static Decision check(String route, RouteVerdictCalculator.RouteReport report,
+            FrbClassificationInput input, ResultsPipeline.FrbRunInput run,
+            ResultsPipeline.FrbInput frb, Map<String, FindingsLedger> ledgersByLockSha256,
+            Map<String, FindingsLedger.ExternalHeads> freshNotedHeadsByLockSha256,
+            Set<String> pendingRoutes, List<CostLedgerInput> costLedgers) {
         TreeSet<String> reasons = new TreeSet<>();
         reasons.add(COST_EVIDENCE_NOT_LEDGER_BACKED);
         reasons.add(SWITCH_ASSERTIONS_NOT_VERIFIED);
+        if (costLedgers != null && !costLedgers.isEmpty()) {
+            try {
+                Set<Path> seen = new java.util.HashSet<>();
+                TreeSet<String> produced = new TreeSet<>();
+                for (CostLedgerInput item : costLedgers) {
+                    if (item == null || item.ledgerFile() == null)
+                        throw new InvalidCostEvidence("Missing cost ledger input");
+                    CostEvidenceProducer.requireExternal(item.ledgerFile());
+                    if (!seen.add(item.ledgerFile().toRealPath()))
+                        throw new InvalidCostEvidence("Duplicate cost ledger file");
+                    produced.addAll(CostEvidenceProducer.produce(item.ledgerFile(), item.approved()).flags());
+                }
+                if (input == null || input.costFlags() == null || !input.costFlags().equals(produced))
+                    reasons.add(COST_FLAGS_DIFFER_FROM_LEDGER);
+                else reasons.remove(COST_EVIDENCE_NOT_LEDGER_BACKED);
+            } catch (IOException | InvalidCostEvidence exception) {
+                reasons.add(COST_EVIDENCE_FAILED);
+            }
+        }
         try {
             if (route == null || report == null || input == null || run == null || frb == null
                     || ledgersByLockSha256 == null || freshNotedHeadsByLockSha256 == null
