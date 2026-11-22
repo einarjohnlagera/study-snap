@@ -22,7 +22,7 @@ record ReviewRecord(String reviewId, String recordedAtUtc, String lockSha256, Ki
         this(reviewId, recordedAtUtc, lockSha256, kind, workflow, subjectId, outcome,
                 signer, signerRole, evidenceSha256, null, null);
     }
-    enum Kind { CLASS_B_WORKFLOW, KEY_DEFECT, ABSOLUTE_QUALITY }
+    enum Kind { CLASS_B_WORKFLOW, KEY_DEFECT, ABSOLUTE_QUALITY, NO_VETO, OWNER_VETO }
     enum Outcome { COMPLETE, BLOCKING_CONCERN }
     enum SignerRole { OWNER, PRODUCT_UX }
     enum ResolutionCode { FIXED, ACCEPTED_WITH_RATIONALE, NOT_APPLICABLE }

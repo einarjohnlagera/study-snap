@@ -11,8 +11,10 @@ import java.util.Set;
  * Append-only review claims bound to one verified lock. Every read validates all record semantics.
  * A removed suffix and its files can hide a blocking concern; callers must verify an
  * externally noted prefix before relying on the chain. Integrity failure means BLOCKED.
+ * A stored OWNER role is a claim, not authenticated identity; no new authentication is authorized.
  */
 final class ReviewRecordStore {
+    private static final String CANNOT_LOAD_REVIEW = "Cannot load review";
     static final class InvalidStore extends RuntimeException {
         InvalidStore(String message, Throwable cause) { super(message, cause); }
     }
@@ -37,7 +39,7 @@ final class ReviewRecordStore {
         try {
             for (ReviewRecord review : records()) if (id.equals(review.reviewId())) return review;
             throw new PostLockStoreIndex.InvalidStore("Unindexed review");
-        } catch (Exception exception) { throw new InvalidStore("Cannot load review", exception); }
+        } catch (Exception exception) { throw new InvalidStore(CANNOT_LOAD_REVIEW, exception); }
     }
     private ReviewRecord loadOne(String id) {
         try {
@@ -46,7 +48,7 @@ final class ReviewRecordStore {
             if (!id.equals(review.reviewId()))
                 throw new PostLockStoreIndex.InvalidStore("Review stem differs");
             return review;
-        } catch (Exception exception) { throw new InvalidStore("Cannot load review", exception); }
+        } catch (Exception exception) { throw new InvalidStore(CANNOT_LOAD_REVIEW, exception); }
     }
     List<ReviewRecord> records() {
         try {
@@ -89,18 +91,28 @@ final class ReviewRecordStore {
         if (!PostLockContext.utc(review.recordedAtUtc())
                 .isAfter(PostLockContext.utc(verified.lock().lockedAtUtc())))
             throw new PostLockStoreIndex.InvalidStore("Review must follow lock");
-        core.context().route(verified, review.workflow());
+        String route = core.context().route(verified, review.workflow());
         if (review.kind() == ReviewRecord.Kind.CLASS_B_WORKFLOW) {
             if (!review.workflow().equals(review.subjectId())
                     || !verified.parameters().frbClassBWorkflows.contains(review.workflow()))
                 throw new PostLockStoreIndex.InvalidStore("Invalid class-B subject");
+        } else if (review.kind() == ReviewRecord.Kind.NO_VETO) {
+            if (!route.equals(review.subjectId()))
+                throw new PostLockStoreIndex.InvalidStore("NO_VETO subject differs from route");
         } else PostLockContext.id(review.subjectId());
-        // OWNER may record either outcome (a concern retracts an earlier completion); only an OWNER
-        // COMPLETE satisfies a requirement. PRODUCT_UX may record only a concern, only for ABSOLUTE_QUALITY.
+        // Legacy kinds permit either owner outcome; only an OWNER COMPLETE satisfies a requirement.
+        // PRODUCT_UX may record only a concern, only for ABSOLUTE_QUALITY.
         if (review.signerRole() == ReviewRecord.SignerRole.PRODUCT_UX
                 && (review.kind() != ReviewRecord.Kind.ABSOLUTE_QUALITY
                 || review.outcome() != ReviewRecord.Outcome.BLOCKING_CONCERN))
             throw new PostLockStoreIndex.InvalidStore("Product UX review role invalid");
+        if (review.kind() == ReviewRecord.Kind.NO_VETO
+                && (review.outcome() != ReviewRecord.Outcome.COMPLETE || review.supersedes() != null))
+            throw new PostLockStoreIndex.InvalidStore("NO_VETO must be an independent owner completion");
+        if (review.kind() == ReviewRecord.Kind.OWNER_VETO
+                && (review.outcome() == ReviewRecord.Outcome.BLOCKING_CONCERN && review.supersedes() != null
+                || review.outcome() == ReviewRecord.Outcome.COMPLETE && review.supersedes() == null))
+            throw new PostLockStoreIndex.InvalidStore("OWNER_VETO needs an open concern or explicit resolution");
         if ((review.supersedes() == null) != (review.resolutionCode() == null))
             throw new PostLockStoreIndex.InvalidStore("Resolution code must match supersession");
         if (review.supersedes() != null) {
