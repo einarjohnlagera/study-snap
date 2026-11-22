@@ -24,6 +24,8 @@ import java.util.TreeSet;
  * heads are only as external as the operator's independent note of each append to every store.
  */
 final class ReviewComposition {
+    private static final String SEPARATOR = ":";
+    private static final String RESERVE_PREFIX = "reserve.";
     private static final String LOCK_LABEL = "^(primary\\.\\d+|reserve\\.[A-Za-z0-9_-]+\\.(forPrimary|forReserve))\\.lock$";
     private static final List<String> HEAD_STORES = List.of("safety", "disputes", "reviews");
     static final class InvalidComposition extends RuntimeException {
@@ -104,6 +106,14 @@ final class ReviewComposition {
             ResultsPipeline.FrbInput frb, RouteVerdictCalculator.RouteReport report,
             List<FindingsLedger.ReviewCheck> tokens, KeyDefectWorkload.Parameters workloadParameters,
             Set<String> candidateArms, Set<String> baselineArms) {
+        return compose(route, run, frb, report, tokens, workloadParameters, candidateArms,
+                baselineArms, false);
+    }
+
+    static ComposedReviewCheck compose(String route, ResultsPipeline.FrbRunInput run,
+            ResultsPipeline.FrbInput frb, RouteVerdictCalculator.RouteReport report,
+            List<FindingsLedger.ReviewCheck> tokens, KeyDefectWorkload.Parameters workloadParameters,
+            Set<String> candidateArms, Set<String> baselineArms, boolean requireOwnerAttestations) {
         // Keep the existing named provenance failure visible to the caller.
         FrbProvenance.Verified provenance = FrbProvenance.verify(run, frb);
         try {
@@ -150,11 +160,17 @@ final class ReviewComposition {
             Set<FindingsLedger.ReviewSubject> derived = KeyDefectSubjects.derive(frb.bundle(),
                     workflowByCaseId, classA, parameters.frbClassBWorkflows);
             Set<FindingsLedger.ReviewSubject> routeDerived = routeScoped(derived, declaration);
+            Set<FindingsLedger.ReviewSubject> attestationSubjects = new HashSet<>();
+            if (requireOwnerAttestations)
+                for (String workflow : declaration.workflows())
+                    attestationSubjects.add(new FindingsLedger.ReviewSubject(
+                            ReviewRecord.Kind.NO_VETO, workflow, route));
             Set<FindingsLedger.ReviewSubject> allExtras = new HashSet<>();
             byLock.values().forEach(token -> allExtras.addAll(token.extras()));
             Set<FindingsLedger.ReviewSubject> required = new HashSet<>(
                     requiredSubjects(parameters, declaration, routeDerived));
             required.addAll(allExtras);
+            required.addAll(attestationSubjects);
 
             Map<String, String> heads = new TreeMap<>();
             Map<String, Set<FindingsLedger.ReviewSubject>> extras = new TreeMap<>();
@@ -162,6 +178,7 @@ final class ReviewComposition {
                 FindingsLedger.ReviewCheck token = entry.getValue();
                 if (!token.openSafetyFindingIds().isEmpty() || !token.openDisputeIds().isEmpty()
                         || !token.openConcernIds().isEmpty() || !token.extras().containsAll(routeDerived)
+                        || !token.extras().containsAll(attestationSubjects)
                         || !token.extras().containsAll(allExtras)
                         || token.heads() == null || !token.heads().keySet().equals(Set.copyOf(HEAD_STORES)))
                     throw new InvalidComposition("Lock has open records, omitted extras or incomplete heads");
@@ -174,7 +191,7 @@ final class ReviewComposition {
                 extras.put(entry.getKey(), token.extras());
             }
             for (FindingsLedger.ReviewSubject subject : required) {
-                String name = subject.kind() + ":" + subject.workflow() + ":" + subject.subjectId();
+                String name = subject.kind() + SEPARATOR + subject.workflow() + SEPARATOR + subject.subjectId();
                 boolean completed = false;
                 for (var entry : byLock.entrySet()) {
                     if (coverage.get(entry.getKey()).contains(subject.workflow())
@@ -217,8 +234,8 @@ final class ReviewComposition {
         for (ResultsPipeline.PrimaryExport export : logs.primaries())
             result.put("primary." + index++ + ".lock", export.lockFile());
         logs.reserves().forEach((workflow, export) -> {
-            result.put("reserve." + workflow + ".forPrimary.lock", export.lockForPrimaryOpening());
-            result.put("reserve." + workflow + ".forReserve.lock", export.lockForReserveOpening());
+            result.put(RESERVE_PREFIX + workflow + ".forPrimary.lock", export.lockForPrimaryOpening());
+            result.put(RESERVE_PREFIX + workflow + ".forReserve.lock", export.lockForReserveOpening());
         });
         return result;
     }

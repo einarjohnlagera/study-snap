@@ -17,8 +17,16 @@ import java.util.TreeSet;
  * finding or dispute does not invalidate an earlier review; an open one blocks independently.
  * Review queries do not check an external head, so a removed suffix can reveal an older COMPLETE.
  * Callers must verifyReviewPrefix against the externally noted head before an attended save.
+ * A bad append-only OWNER_VETO reference makes every route's checkLedger and
+ * openOwnerVetoFindingIds fail permanently; the store cannot erase that record.
  */
 final class FindingsLedger {
+    private static final String CANNOT_INITIALIZE_LEDGER = "Cannot initialize findings ledger";
+    private static final String REVIEW_STORE_REQUIRED = "Review store required for owner vetoes";
+    private static final String SEPARATOR = ":";
+    private static final String SAFETY = "safety";
+    private static final String DISPUTES = "disputes";
+    private static final String REVIEWS = "reviews";
     static final class InvalidLedger extends RuntimeException {
         InvalidLedger(String message) { super(message); }
         InvalidLedger(String message, Throwable cause) { super(message, cause); }
@@ -114,7 +122,7 @@ final class FindingsLedger {
             disputes = new EvidenceDisputeStore(disputeDir, context);
             reviews = null;
             safety.headSha256(); disputes.headSha256();
-        } catch (Exception exception) { throw new InvalidLedger("Cannot initialize findings ledger", exception); }
+        } catch (Exception exception) { throw new InvalidLedger(CANNOT_INITIALIZE_LEDGER, exception); }
     }
     FindingsLedger(Path safetyDir, Path disputeDir, Path reviewDir, PostLockContext context) {
         try {
@@ -126,7 +134,7 @@ final class FindingsLedger {
             disputes = new EvidenceDisputeStore(disputeDir, context);
             reviews = new ReviewRecordStore(reviewDir, context);
             safety.headSha256(); disputes.headSha256(); reviews.headSha256();
-        } catch (Exception exception) { throw new InvalidLedger("Cannot initialize findings ledger", exception); }
+        } catch (Exception exception) { throw new InvalidLedger(CANNOT_INITIALIZE_LEDGER, exception); }
     }
     List<SafetyFinding> openSafetyFindings(String route) {
         try { validate(route); return safety.open(route); }
@@ -163,7 +171,10 @@ final class FindingsLedger {
                 if (extra == null || extra.kind() == null || extra.kind() == ReviewRecord.Kind.CLASS_B_WORKFLOW
                         || !route.equals(context.route(verified, extra.workflow())))
                     throw new PostLockStoreIndex.InvalidStore("Invalid extra review subject");
-                PostLockContext.id(extra.subjectId());
+                if (extra.kind() == ReviewRecord.Kind.NO_VETO) {
+                    if (!route.equals(extra.subjectId()))
+                        throw new PostLockStoreIndex.InvalidStore("NO_VETO extra differs from route");
+                } else PostLockContext.id(extra.subjectId());
                 required.add(extra);
             }
             Set<ReviewSubject> completed = new java.util.HashSet<>();
@@ -182,7 +193,7 @@ final class FindingsLedger {
             Set<String> missing = new TreeSet<>();
             for (ReviewSubject subject : required) {
                 if (!completed.contains(subject) || open.contains(subject))
-                    missing.add(subject.kind() + ":" + subject.workflow() + ":" + subject.subjectId());
+                    missing.add(subject.kind() + SEPARATOR + subject.workflow() + SEPARATOR + subject.subjectId());
             }
             return java.util.Collections.unmodifiableSet(missing);
         } catch (Exception exception) { throw new InvalidLedger("Cannot query required reviews", exception); }
@@ -190,11 +201,43 @@ final class FindingsLedger {
     Map<String, String> headHashes() {
         try {
             Map<String, String> heads = new TreeMap<>();
-            heads.put("safety", format(safety.headSha256()));
-            heads.put("disputes", format(disputes.headSha256()));
-            if (reviews != null) heads.put("reviews", format(reviews.headSha256()));
+            heads.put(SAFETY, format(safety.headSha256()));
+            heads.put(DISPUTES, format(disputes.headSha256()));
+            if (reviews != null) heads.put(REVIEWS, format(reviews.headSha256()));
             return Map.copyOf(heads);
         } catch (Exception exception) { throw new InvalidLedger("Cannot query ledger heads", exception); }
+    }
+    java.util.SortedSet<String> openOwnerVetoFindingIds(String route) {
+        try {
+            if (reviews == null) throw new InvalidLedger(REVIEW_STORE_REQUIRED);
+            PostLockContext.Verified verified = context.verify();
+            context.routeName(verified, route);
+            validateOwnerVetoReferences();
+            Set<String> openIds = Set.copyOf(reviews.openConcerns());
+            java.util.SortedSet<String> result = new TreeSet<>();
+            for (ReviewRecord review : reviews.records())
+                if (review.kind() == ReviewRecord.Kind.OWNER_VETO
+                        && openIds.contains(review.reviewId())
+                        && route.equals(context.route(verified, review.workflow())))
+                    result.add(review.subjectId());
+            return Collections.unmodifiableSortedSet(result);
+        } catch (InvalidLedger exception) { throw exception; }
+        catch (Exception exception) { throw new InvalidLedger("Cannot query owner vetoes", exception); }
+    }
+    private void validateOwnerVetoReferences() {
+        try {
+            if (reviews == null) throw new InvalidLedger(REVIEW_STORE_REQUIRED);
+            PostLockContext.Verified verified = context.verify();
+            for (ReviewRecord review : reviews.records()) {
+                if (review.kind() != ReviewRecord.Kind.OWNER_VETO) continue;
+                SafetyFinding finding = safety.load(review.subjectId());
+                String route = context.route(verified, review.workflow());
+                if (!finding.affectedRoutes().contains(route)
+                        && !finding.affectedRoutes().contains("ALL_ROUTES"))
+                    throw new InvalidLedger("Owner veto finding excludes workflow route");
+            }
+        } catch (InvalidLedger exception) { throw exception; }
+        catch (Exception exception) { throw new InvalidLedger("Invalid owner veto reference", exception); }
     }
     ReviewCheck checkLedger(String route, Set<ReviewSubject> extras, ExternalHeads noted) {
         try {
@@ -202,6 +245,7 @@ final class FindingsLedger {
                 throw new InvalidLedger("Review store and external notes are required");
             PostLockContext.Verified verified = context.verify();
             context.routeName(verified, route);
+            validateOwnerVetoReferences();
             PostLockStoreIndex.Head safetyHead = checkedHead(safety.headSha256(), noted.safety());
             safety.verifyPrefix(noted.safety().seq(), noted.safety().sha256());
             PostLockStoreIndex.Head disputeHead = checkedHead(disputes.headSha256(), noted.disputes());
@@ -220,8 +264,8 @@ final class FindingsLedger {
                     || !reviewHead.equals(reviews.headSha256()))
                 throw new InvalidLedger("Ledger head changed during review check");
             return new ReviewCheck(route, coverage, missing, extras, findings, openDisputes, concerns,
-                    Map.of("safety", format(safetyHead), "disputes", format(disputeHead),
-                            "reviews", format(reviewHead)), verified.lockSha256(), verified.parameters().sha256);
+                    Map.of(SAFETY, format(safetyHead), DISPUTES, format(disputeHead),
+                            REVIEWS, format(reviewHead)), verified.lockSha256(), verified.parameters().sha256);
         } catch (InvalidLedger exception) { throw exception; }
         catch (Exception exception) { throw new InvalidLedger("Cannot check ledger", exception); }
     }
@@ -258,7 +302,7 @@ final class FindingsLedger {
             reviews.verifyPrefix(seq, sha);
         } catch (Exception exception) { throw new InvalidLedger("Cannot verify review prefix", exception); }
     }
-    private static String format(PostLockStoreIndex.Head head) { return head.seq() + ":" + head.sha256(); }
+    private static String format(PostLockStoreIndex.Head head) { return head.seq() + SEPARATOR + head.sha256(); }
     String checklistLine(String route) {
         try {
             List<String> ids = new ArrayList<>();
@@ -267,8 +311,8 @@ final class FindingsLedger {
             ids.sort(String::compareTo);
             PostLockStoreIndex.Head a = safety.headSha256(), b = disputes.headSha256();
             return (ids.isEmpty() ? "no open safety finding" : "open safety findings or disputes: " + String.join(",", ids))
-                    + "\nsafety store head: " + a.seq() + ":" + a.sha256()
-                    + "\ndispute store head: " + b.seq() + ":" + b.sha256()
+                    + "\nsafety store head: " + a.seq() + SEPARATOR + a.sha256()
+                    + "\ndispute store head: " + b.seq() + SEPARATOR + b.sha256()
                     + (reviews == null ? "" : "\nreview store head: " + format(reviews.headSha256()));
         } catch (Exception exception) { throw new InvalidLedger("Cannot build checklist line", exception); }
     }

@@ -16,7 +16,8 @@ import java.util.TreeSet;
  * Workload parameters (hMaxHours, otherPlannedHours and minutesPerCaseReview) and candidate and
  * baseline arm labels are replayed from the original composition, including a possibly lax caller
  * value. costFlags is checked against replayed external ledgers only when costLedgers is supplied;
- * ownerVetoFindingIds, establishedOperationalCaseIds,
+ * ownerVetoFindingIds is ledger-derived when owner attestations are required;
+ * establishedOperationalCaseIds,
  * expansionOutcomeByWorkflow and the caller's additions to pendingRoutes remain trusted assertions.
  * The report can be replayed with the opt-in recomputation overload. The
  * rendered classification text is not eligibility. No pipeline wiring or operator caller exists.
@@ -42,9 +43,12 @@ final class ProductionSwitchEligibility {
     static final String EVALUATION_FAILED = "EVALUATION_FAILED";
     static final String REPORT_RECOMPUTATION_FAILED = "REPORT_RECOMPUTATION_FAILED";
     static final String REPORT_DIFFERS_FROM_RECOMPUTATION = "REPORT_DIFFERS_FROM_RECOMPUTATION";
+    static final String OWNER_VETO_DIFFERS_FROM_LEDGER = "OWNER_VETO_DIFFERS_FROM_LEDGER";
 
     record Decision(boolean eligible, List<String> reasons) {}
     record CostLedgerInput(Path ledgerFile, ApprovedCaps approved) {}
+    record SwitchOptions(List<CostLedgerInput> costLedgers, boolean recomputeReport,
+            boolean requireOwnerAttestations) {}
 
     private ProductionSwitchEligibility() {}
 
@@ -62,8 +66,8 @@ final class ProductionSwitchEligibility {
             ResultsPipeline.FrbInput frb, Map<String, FindingsLedger> ledgersByLockSha256,
             Map<String, FindingsLedger.ExternalHeads> freshNotedHeadsByLockSha256,
             Set<String> pendingRoutes, List<CostLedgerInput> costLedgers) {
-        return check(route, report, input, run, frb, ledgersByLockSha256,
-                freshNotedHeadsByLockSha256, pendingRoutes, costLedgers, false);
+        return checkWithOptions(route, report, input, run, frb, ledgersByLockSha256,
+                freshNotedHeadsByLockSha256, pendingRoutes, new SwitchOptions(costLedgers, false, false));
     }
 
     static Decision check(String route, RouteVerdictCalculator.RouteReport report,
@@ -71,9 +75,24 @@ final class ProductionSwitchEligibility {
             ResultsPipeline.FrbInput frb, Map<String, FindingsLedger> ledgersByLockSha256,
             Map<String, FindingsLedger.ExternalHeads> freshNotedHeadsByLockSha256,
             Set<String> pendingRoutes, List<CostLedgerInput> costLedgers, boolean recomputeReport) {
+        return checkWithOptions(route, report, input, run, frb, ledgersByLockSha256,
+                freshNotedHeadsByLockSha256, pendingRoutes,
+                new SwitchOptions(costLedgers, recomputeReport, false));
+    }
+
+    static Decision checkWithOptions(String route, RouteVerdictCalculator.RouteReport report,
+            FrbClassificationInput input, ResultsPipeline.FrbRunInput run,
+            ResultsPipeline.FrbInput frb, Map<String, FindingsLedger> ledgersByLockSha256,
+            Map<String, FindingsLedger.ExternalHeads> freshNotedHeadsByLockSha256,
+            Set<String> pendingRoutes, SwitchOptions options) {
         TreeSet<String> reasons = new TreeSet<>();
         reasons.add(COST_EVIDENCE_NOT_LEDGER_BACKED);
         reasons.add(SWITCH_ASSERTIONS_NOT_VERIFIED);
+        if (options == null) {
+            reasons.add(EVALUATION_FAILED);
+            return decision(reasons);
+        }
+        List<CostLedgerInput> costLedgers = options.costLedgers();
         if (costLedgers != null && !costLedgers.isEmpty()) {
             try {
                 Set<Path> seen = new java.util.HashSet<>();
@@ -100,7 +119,7 @@ final class ProductionSwitchEligibility {
                 reasons.add(EVALUATION_FAILED);
                 return decision(reasons);
             }
-            if (recomputeReport) {
+            if (options.recomputeReport()) {
                 try {
                     if (!report.equals(ReportRecomputation.recompute(run, frb).get(route)))
                         reasons.add(REPORT_DIFFERS_FROM_RECOMPUTATION);
@@ -112,6 +131,35 @@ final class ProductionSwitchEligibility {
             if (!route.equals(original.route())) {
                 reasons.add(REVIEW_CHECK_ROUTE_MISMATCH);
                 return decision(reasons);
+            }
+
+            FrbClassificationInput classificationInput = input;
+            if (options.requireOwnerAttestations()) {
+                TreeSet<String> derived = new TreeSet<>();
+                boolean derivedSuccessfully = true;
+                for (String lock : original.lockSha256s()) {
+                    FindingsLedger ledger = ledgersByLockSha256.get(lock);
+                    if (ledger == null) {
+                        reasons.add(LEDGER_CHECK_FAILED);
+                        derivedSuccessfully = false;
+                        break;
+                    }
+                    try { derived.addAll(ledger.openOwnerVetoFindingIds(route)); }
+                    catch (FindingsLedger.InvalidLedger exception) {
+                        reasons.add(LEDGER_CHECK_FAILED);
+                        derivedSuccessfully = false;
+                        break;
+                    }
+                }
+                if (derivedSuccessfully) {
+                    if (!derived.equals(input.ownerVetoFindingIds()))
+                        reasons.add(OWNER_VETO_DIFFERS_FROM_LEDGER);
+                    classificationInput = new FrbClassificationInput(input.openSafetyFindingIds(),
+                            input.openDisputeIds(), input.missingRequiredReviews(), input.costFlags(),
+                            input.establishedOperationalCaseIds(), input.ledgerFailure(),
+                            input.solRecommended(), Set.copyOf(derived), input.expansionOutcomeByWorkflow(),
+                            input.ledgerHeadHashes(), input.reviewCheck());
+                }
             }
 
             Set<String> allPending = new TreeSet<>();
@@ -126,7 +174,7 @@ final class ProductionSwitchEligibility {
             }
             if (allPending.contains(route)) reasons.add(PENDING_REVIEW_ITEMS);
             FrbClassification classification = ResultsPipeline.classifyFrbRoutes(
-                    Map.of(route, report), Map.of(route, input), allPending).get(route);
+                    Map.of(route, report), Map.of(route, classificationInput), allPending).get(route);
             if (classification.classification() != DeadlineRule.Classification.BENCHMARK_PASS
                     || classification.blocksProductionSwitch()
                     || classification.flags().contains("REVIEWS_NOT_MACHINE_CHECKED")
@@ -152,7 +200,7 @@ final class ProductionSwitchEligibility {
             try {
                 ReviewComposition.ComposedReviewCheck fresh = ReviewComposition.compose(route, run, frb,
                         report, freshTokens, original.workloadParameters(), original.candidateArms(),
-                        original.baselineArms());
+                        original.baselineArms(), options.requireOwnerAttestations());
                 if (!fresh.equals(original)) reasons.add(COMPOSITION_DIFFERS);
             } catch (ReviewComposition.InvalidComposition exception) {
                 reasons.add(COMPOSITION_FAILED);
