@@ -499,7 +499,7 @@ final class ResultsPipeline {
         }
     }
 
-    private static Map<String, FrozenCase> loadCases(Map<String, Path> manifests, FreezeRecord freeze) throws IOException {
+    static Map<String, FrozenCase> loadCases(Map<String, Path> manifests, FreezeRecord freeze) throws IOException {
         Map<String, FrozenCase> result = new LinkedHashMap<>();
         for (String key : List.of("classA.primary", "classB.primary")) {
             Path file = manifests.get(key);
@@ -565,7 +565,7 @@ final class ResultsPipeline {
         return Map.copyOf(result);
     }
 
-    private static Map<String, FrozenCase> loadReserveCases(Map<String, Path> manifests,
+    static Map<String, FrozenCase> loadReserveCases(Map<String, Path> manifests,
                                                             FreezeRecord freeze) throws IOException {
         Map<String, FrozenCase> result = new LinkedHashMap<>();
         for (String key : List.of("classA.reserve", "classB.reserve")) {
