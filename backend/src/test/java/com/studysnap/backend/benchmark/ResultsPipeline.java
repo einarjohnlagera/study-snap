@@ -17,6 +17,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 /** Preregistration sections 1, 4, 7, 8 and 9: offline evidence-to-verdict and reserve-trigger pipeline. */
 final class ResultsPipeline {
@@ -65,10 +67,16 @@ final class ResultsPipeline {
     record ProvenanceLogs(List<PrimaryExport> primaries, Map<String, ReserveExport> reserves) {}
     record FrbInput(FrbEvidenceBundle bundle, Path reserveRecordFile,
                     ReserveVerification verification, ProvenanceLogs provenance,
-                    Map<String, FrbClassificationInput> routeClassifications) {
+                    Map<String, FrbClassificationInput> routeClassifications,
+                    boolean operationalCostReview) {
+        FrbInput(FrbEvidenceBundle bundle, Path reserveRecordFile,
+                 ReserveVerification verification, ProvenanceLogs provenance,
+                 Map<String, FrbClassificationInput> routeClassifications) {
+            this(bundle, reserveRecordFile, verification, provenance, routeClassifications, false);
+        }
         FrbInput(FrbEvidenceBundle bundle, Path reserveRecordFile,
                  ReserveVerification verification, ProvenanceLogs provenance) {
-            this(bundle, reserveRecordFile, verification, provenance, null);
+            this(bundle, reserveRecordFile, verification, provenance, null, false);
         }
     }
     record Result(Map<String, RouteVerdictCalculator.RouteReport> routes, Path report, Path triggerRecord,
@@ -100,6 +108,7 @@ final class ResultsPipeline {
     private static final String PARAMETER_SHA_FIELD = "parameterSha256";
     private static final String ROUTES_FIELD = "routes";
     private static final String RESERVE_RESULTS_FIELD = "reserveResults";
+    private static final String OPERATIONAL_COST_REVIEW_FIELD = "operationalCostReview";
     private static final String MISSING_RECHECK_DIRECTORY = "Missing recheck output directory: ";
     private static final String NOT_APPLICABLE = "NOT_APPLICABLE";
     private static final Set<String> CLASS_B_WORKFLOWS = java.util.Arrays.stream(ClassBCaseManifest.Workflow.values())
@@ -161,17 +170,15 @@ final class ResultsPipeline {
                 FrozenCase fixture = item.getValue();
                 String workflow = fixture.workflow();
                 String route = parameters.workflows.get(workflow).route();
-                ArmEvidence baseline = freeze.arms().get(BASELINE_41_ARM).workflows().contains(workflow)
+                ArmEvidence baseline = OperationalCostReview.usesPaidBaseline(freeze, workflow)
                         ? paid : mini;
                 Stage1Receipt.CaseRow baselineRow = baseline.rows().get(id);
                 Stage1Receipt.CaseRow candidateRow = target.rows().get(id);
                 requireRow(fixture, baselineRow, baseline.receipt().arm());
                 requireRow(fixture, candidateRow, target.receipt().arm());
                 guardClassBPair(id, fixture, baseline, target, scores, input.classB(), classBSupplied);
-                RouteVerdictCalculator.ArmResult b = arm(id, fixture, baseline, scores, mapping,
-                        freeze.costForecastUsdPerDeliveredCase().get(workflow));
-                RouteVerdictCalculator.ArmResult c = arm(id, fixture, target, scores, mapping,
-                        freeze.costForecastUsdPerDeliveredCase().get(workflow));
+                RouteVerdictCalculator.ArmResult b = arm(id, fixture, baseline, scores, mapping);
+                RouteVerdictCalculator.ArmResult c = arm(id, fixture, target, scores, mapping);
                 boolean recheckedFailure = hasEligibleFailureWithRechecks(id, baseline, freeze)
                         || hasEligibleFailureWithRechecks(id, target, freeze);
                 if (scores.excluded().contains(id) && !recheckedFailure) {
@@ -233,8 +240,10 @@ final class ResultsPipeline {
             Map<String, Path> recheckLinks = triggerRecheckPaths(input);
             Map<String, Set<String>> triggers = T2TriggerRecord.recompute(linked, recheckLinks, freezeHash);
             T2TriggerRecord.create(linked, recheckLinks, triggers, freezeHash, trigger);
+            Map<String, OperationalCostReview.Result> costReview = operationalCostReview(
+                    parameters, freeze, mapping, frozen, mini, paid, target);
             writeReport(input, freezeHash, parameters, mapping, mini, paid, target, scores, suites,
-                    costs, dispositions, reserveByRoute, routeReports, deadline, excludedEvidence);
+                    costs, costReview, dispositions, reserveByRoute, routeReports, deadline, excludedEvidence);
             Map<String, List<RouteVerdictCalculator.CaseRecord>> immutableRecords = new LinkedHashMap<>();
             records.forEach((route, cases) -> immutableRecords.put(route, List.copyOf(cases)));
             return new Result(Map.copyOf(routeReports), input.report(), trigger, Map.copyOf(triggers),
@@ -303,7 +312,7 @@ final class ResultsPipeline {
                 FrozenCase fixture = item.getValue();
                 String workflow = fixture.workflow();
                 String route = parameters.workflows.get(workflow).route();
-                ArmEvidence baseline = freeze.arms().get(BASELINE_41_ARM).workflows().contains(workflow)
+                ArmEvidence baseline = OperationalCostReview.usesPaidBaseline(freeze, workflow)
                         ? paid : mini;
                 Stage1Receipt.CaseRow baselineRow = baseline.rows().get(id);
                 Stage1Receipt.CaseRow candidateRow = target.rows().get(id);
@@ -312,10 +321,8 @@ final class ResultsPipeline {
                 guardFrbClassBPair(id, fixture, baseline, target, adjudicated);
                 checkFrbWidth(id, fixture, baseline.receipt().arm(), adjudicated);
                 checkFrbWidth(id, fixture, target.receipt().arm(), adjudicated);
-                RouteVerdictCalculator.ArmResult b = arm(id, fixture, baseline, scores, mapping,
-                        freeze.costForecastUsdPerDeliveredCase().get(workflow), adjudicated);
-                RouteVerdictCalculator.ArmResult c = arm(id, fixture, target, scores, mapping,
-                        freeze.costForecastUsdPerDeliveredCase().get(workflow), adjudicated);
+                RouteVerdictCalculator.ArmResult b = arm(id, fixture, baseline, scores, mapping, adjudicated);
+                RouteVerdictCalculator.ArmResult c = arm(id, fixture, target, scores, mapping, adjudicated);
                 boolean baselineRechecked = hasEligibleFailureWithRechecks(id, baseline, freeze);
                 boolean candidateRechecked = hasEligibleFailureWithRechecks(id, target, freeze);
                 boolean recheckedFailure = baselineRechecked || candidateRechecked;
@@ -397,8 +404,12 @@ final class ResultsPipeline {
                 FrozenCase caseFact = frozen.containsKey(id) ? frozen.get(id) : frozenReserve.get(id);
                 if (caseFact != null) pendingRoutes.add(parameters.workflows.get(caseFact.workflow()).route());
             }
+            Map<String, OperationalCostReview.Result> costReview = operationalCostReview(
+                    parameters, freeze, mapping, frozen, mini, paid, target);
+            Map<String, SortedSet<String>> costFlags = frb.operationalCostReview()
+                    ? OperationalCostReview.flagsByRoute(costReview, parameters) : Map.of();
             Map<String, FrbClassification> classifications = classifyFrbRoutes(routeReports,
-                    frb.routeClassifications(), pendingRoutes);
+                    frb.routeClassifications(), pendingRoutes, costFlags);
             classifications.forEach((route, classification) -> deadline.put(route,
                     renderFrbClassification(classification)));
             Map<String, RouteVerdictCalculator.CaseRecord> recordsById = new HashMap<>();
@@ -425,7 +436,7 @@ final class ResultsPipeline {
                 shortDeliveryReport.add(detail);
             }
             writeFrbReport(run, frb, provenance, freezeHash, parameters, mapping, mini, paid, target,
-                    scores, suites, costs, dispositions, reserveByRoute, routeReports, deadline,
+                    scores, suites, costs, costReview, dispositions, reserveByRoute, routeReports, deadline,
                     classifications, excludedEvidence, shortDeliveryReport);
             Map<String, List<RouteVerdictCalculator.CaseRecord>> immutableRecords = new LinkedHashMap<>();
             records.forEach((route, cases) -> immutableRecords.put(route, List.copyOf(cases)));
@@ -563,6 +574,31 @@ final class ResultsPipeline {
                 throw new InvalidInput("Duplicate frozen case across primary and reserve: " + id);
         });
         return Map.copyOf(result);
+    }
+
+    static Map<String, OperationalCostReview.Result> operationalCostReview(FrbRunInput run) throws IOException {
+        FreezeRecord freeze = FreezeRecord.load(run.freeze());
+        FrozenGateParameters parameters = FrozenGateParameters.load(run.parameters());
+        EvidenceMapping mapping = EvidenceMapping.load(run.mapping());
+        if (!parameters.sha256.equals(freeze.parametersSha256())
+                || !mapping.sha256.equals(freeze.evidenceMappingSha256()))
+            throw new InvalidCostReview("Cost review freeze parameter or mapping SHA-256 differs");
+        Map<String, FrozenCase> frozen = loadCases(run.manifests(), freeze);
+        String freezeHash = FreezeRecord.sha256(run.freeze());
+        String caseSetHash = caseSetHash(frozen);
+        ArmEvidence mini = loadArm(run.baselineMini(), freezeHash, caseSetHash, freeze.gitCommit());
+        ArmEvidence paid = loadArm(run.baseline41(), freezeHash, caseSetHash, freeze.gitCommit());
+        ArmEvidence candidate = loadArm(run.candidate(), freezeHash, caseSetHash, freeze.gitCommit());
+        return operationalCostReview(parameters, freeze, mapping, frozen, mini, paid, candidate);
+    }
+
+    private static Map<String, OperationalCostReview.Result> operationalCostReview(
+            FrozenGateParameters parameters, FreezeRecord freeze, EvidenceMapping mapping,
+            Map<String, FrozenCase> frozen, ArmEvidence mini, ArmEvidence paid, ArmEvidence candidate) {
+        Map<String, String> primaryWorkflows = new LinkedHashMap<>();
+        frozen.forEach((id, row) -> primaryWorkflows.put(id, row.workflow()));
+        return OperationalCostReview.review(parameters, freeze, mapping, primaryWorkflows,
+                mini.rows(), paid.rows(), candidate.rows());
     }
 
     static Map<String, FrozenCase> loadReserveCases(Map<String, Path> manifests,
@@ -739,12 +775,12 @@ final class ResultsPipeline {
     }
 
     private static RouteVerdictCalculator.ArmResult arm(String id, FrozenCase fixture, ArmEvidence source,
-            ScoreEvidence.Loaded scores, EvidenceMapping mapping, BigDecimal forecast) {
-        return arm(id, fixture, source, scores, mapping, forecast, null);
+            ScoreEvidence.Loaded scores, EvidenceMapping mapping) {
+        return arm(id, fixture, source, scores, mapping, null);
     }
 
     private static RouteVerdictCalculator.ArmResult arm(String id, FrozenCase fixture, ArmEvidence source,
-            ScoreEvidence.Loaded scores, EvidenceMapping mapping, BigDecimal forecast,
+            ScoreEvidence.Loaded scores, EvidenceMapping mapping,
             AdjudicatedLoaded adjudicated) {
         Stage1Receipt.CaseRow row = source.rows().get(id);
         if (row == null) return adjudicated == null ? missing() : unresolved(fixture.requiredQuestions());
@@ -757,9 +793,6 @@ final class ResultsPipeline {
             components.add(mapping.component("timeout"));
         if ("LONG_EXAM".equals(fixture.workflow()) && recoveredFallback(row))
             components.add(mapping.component("recoveredFallback"));
-        BigDecimal ceiling = forecast.multiply(mapping.costTolerance);
-        if (row.finalSuccess() && mapping.cost(row).compareTo(ceiling) > 0)
-            components.add(mapping.component("cost"));
         boolean rejected = row.llmCalls().stream().anyMatch(call -> call.httpStatus() == 400 || call.httpStatus() == 422);
         boolean successCall = row.llmCalls().stream().anyMatch(call -> SUCCESS_OUTCOME.equals(call.outcome()));
         ScoreEvidence.Facts facts = scores.get(id, source.receipt().arm());
@@ -915,8 +948,17 @@ final class ResultsPipeline {
     static Map<String, FrbClassification> classifyFrbRoutes(
             Map<String, RouteVerdictCalculator.RouteReport> routes,
             Map<String, FrbClassificationInput> inputs, Set<String> pendingRoutes) {
+        return classifyFrbRoutes(routes, inputs, pendingRoutes, Map.of());
+    }
+
+    static Map<String, FrbClassification> classifyFrbRoutes(
+            Map<String, RouteVerdictCalculator.RouteReport> routes,
+            Map<String, FrbClassificationInput> inputs, Set<String> pendingRoutes,
+            Map<String, SortedSet<String>> derivedCostFlags) {
         if (inputs != null && !routes.keySet().containsAll(inputs.keySet()))
             throw new InvalidInput("FRB classification input names an unknown route");
+        if (derivedCostFlags != null && !routes.keySet().containsAll(derivedCostFlags.keySet()))
+            throw new InvalidInput("Cost review names an unknown route");
         Map<String, FrbClassification> classified = new java.util.TreeMap<>();
         routes.forEach((route, report) -> {
             FrbClassification result = DeadlineRule.classifyFrb(report,
@@ -926,6 +968,15 @@ final class ResultsPipeline {
                 causes.add("PENDING_REVIEW_ITEMS");
                 result = new FrbClassification(DeadlineRule.Classification.RETURN_TO_OWNER,
                         java.util.Collections.unmodifiableSortedSet(causes), result.flags(), true);
+            }
+            SortedSet<String> derived = derivedCostFlags == null ? null : derivedCostFlags.get(route);
+            if (derived != null && !derived.isEmpty()) {
+                SortedSet<String> flags = new TreeSet<>(result.flags());
+                flags.addAll(derived);
+                result = new FrbClassification(result.classification(), result.causes(),
+                        java.util.Collections.unmodifiableSortedSet(flags),
+                        FrbClassification.switchBlocked(result.classification(), flags, false)
+                                || result.blocksProductionSwitch());
             }
             classified.put(route, result);
         });
@@ -964,7 +1015,7 @@ final class ResultsPipeline {
                 throw new InvalidInput("Reserve receipt freeze or case set differs: " + workflow);
             ArmEvidence baseline = loadArm(input.baseline(), freezeHash, b.caseSetSha256(), freeze.gitCommit());
             ArmEvidence candidate = loadArm(input.candidate(), freezeHash, c.caseSetSha256(), freeze.gitCommit());
-            String mappedBaseline = freeze.arms().get(BASELINE_41_ARM).workflows().contains(workflow)
+            String mappedBaseline = OperationalCostReview.usesPaidBaseline(freeze, workflow)
                     ? BASELINE_41_ARM : BASELINE_MINI_ARM;
             if (!b.arm().equals(mappedBaseline) || !c.arm().equals(candidateArm))
                 throw new InvalidInput("Reserve receipt arm differs from mapped arms: " + workflow);
@@ -979,10 +1030,8 @@ final class ResultsPipeline {
                 requireRow(fixture, row, c.arm());
                 requireRow(fixture, baseline.rows().get(row.id()), b.arm());
                 guardClassBPair(row.id(), fixture, baseline, candidate, scores, input.classB(), classBSupplied);
-                RouteVerdictCalculator.ArmResult left = arm(row.id(), fixture, baseline, scores, mapping,
-                        freeze.costForecastUsdPerDeliveredCase().get(workflow));
-                RouteVerdictCalculator.ArmResult right = arm(row.id(), fixture, candidate, scores, mapping,
-                        freeze.costForecastUsdPerDeliveredCase().get(workflow));
+                RouteVerdictCalculator.ArmResult left = arm(row.id(), fixture, baseline, scores, mapping);
+                RouteVerdictCalculator.ArmResult right = arm(row.id(), fixture, candidate, scores, mapping);
                 rows.add(new RouteVerdictCalculator.ReserveCase(row.id(), left.evidence(), right.evidence(),
                         left.critical(), right.critical()));
             }
@@ -1011,7 +1060,7 @@ final class ResultsPipeline {
                 throw new InvalidInput("FRB reserve receipt freeze or case set differs: " + workflow);
             ArmEvidence baseline = loadArm(input.baseline(), freezeHash, b.caseSetSha256(), freeze.gitCommit());
             ArmEvidence candidate = loadArm(input.candidate(), freezeHash, c.caseSetSha256(), freeze.gitCommit());
-            String mappedBaseline = freeze.arms().get(BASELINE_41_ARM).workflows().contains(workflow)
+            String mappedBaseline = OperationalCostReview.usesPaidBaseline(freeze, workflow)
                     ? BASELINE_41_ARM : BASELINE_MINI_ARM;
             if (!b.arm().equals(mappedBaseline) || !c.arm().equals(candidateArm))
                 throw new InvalidInput("FRB reserve receipt arm differs from mapped arms: " + workflow);
@@ -1033,10 +1082,8 @@ final class ResultsPipeline {
                 guardFrbClassBPair(row.id(), fixture, baseline, candidate, adjudicated);
                 checkFrbWidth(row.id(), fixture, b.arm(), adjudicated);
                 checkFrbWidth(row.id(), fixture, c.arm(), adjudicated);
-                RouteVerdictCalculator.ArmResult left = arm(row.id(), fixture, baseline, scores, mapping,
-                        freeze.costForecastUsdPerDeliveredCase().get(workflow), adjudicated);
-                RouteVerdictCalculator.ArmResult right = arm(row.id(), fixture, candidate, scores, mapping,
-                        freeze.costForecastUsdPerDeliveredCase().get(workflow), adjudicated);
+                RouteVerdictCalculator.ArmResult left = arm(row.id(), fixture, baseline, scores, mapping, adjudicated);
+                RouteVerdictCalculator.ArmResult right = arm(row.id(), fixture, candidate, scores, mapping, adjudicated);
                 AdjudicatedFacts leftFact = adjudicated.get(row.id(), b.arm());
                 AdjudicatedFacts rightFact = adjudicated.get(row.id(), c.arm());
                 RouteVerdictCalculator.Evidence leftEvidence = leftFact != null && leftFact.unresolvedQuestions() > 0
@@ -1093,7 +1140,8 @@ final class ResultsPipeline {
     private static void writeReport(Input input, String freezeHash, FrozenGateParameters parameters,
             EvidenceMapping mapping, ArmEvidence mini, ArmEvidence paid, ArmEvidence candidate,
             ScoreEvidence.Loaded scores, Map<String, CompatibilitySuiteEvidence.State> suites,
-            Map<String, Object> costs, List<RouteVerdictCalculator.OwnerDisposition> dispositions,
+            Map<String, Object> costs, Map<String, OperationalCostReview.Result> costReview,
+            List<RouteVerdictCalculator.OwnerDisposition> dispositions,
             Map<String, Map<String, List<RouteVerdictCalculator.ReserveCase>>> reserves,
             Map<String, RouteVerdictCalculator.RouteReport> routes, Map<String, Object> deadline,
             Map<String, String> excludedEvidence) throws IOException {
@@ -1138,6 +1186,7 @@ final class ResultsPipeline {
                 state.passed() == null ? "NOT_EXECUTED" : state.passed() ? "EXECUTED_PASS" : "EXECUTED_FAIL"));
         report.put("compatibilitySuitesRegressionEvidenceOnly", suiteStates);
         report.put("costPerDeliveredCase", costs);
+        report.put(OPERATIONAL_COST_REVIEW_FIELD, costReview);
         report.put("ownerDispositionCount", dispositions.size());
         report.put("excludedFixtureIdsInconclusive", scores.excluded());
         report.put("excludedFixtureEvidence", excludedEvidence);
@@ -1154,7 +1203,8 @@ final class ResultsPipeline {
             FrbProvenance.Verified provenance, String freezeHash, FrozenGateParameters parameters,
             EvidenceMapping mapping, ArmEvidence mini, ArmEvidence paid, ArmEvidence candidate,
             ScoreEvidence.Loaded scores, Map<String, CompatibilitySuiteEvidence.State> suites,
-            Map<String, Object> costs, List<RouteVerdictCalculator.OwnerDisposition> dispositions,
+            Map<String, Object> costs, Map<String, OperationalCostReview.Result> costReview,
+            List<RouteVerdictCalculator.OwnerDisposition> dispositions,
             Map<String, Map<String, List<RouteVerdictCalculator.ReserveCase>>> reserves,
             Map<String, RouteVerdictCalculator.RouteReport> routes, Map<String, Object> deadline,
             Map<String, FrbClassification> classifications,
@@ -1194,6 +1244,7 @@ final class ResultsPipeline {
                 state.passed() == null ? "NOT_EXECUTED" : state.passed() ? "EXECUTED_PASS" : "EXECUTED_FAIL"));
         report.put("compatibilitySuitesRegressionEvidenceOnly", suiteStates);
         report.put("costPerDeliveredCase", costs);
+        report.put(OPERATIONAL_COST_REVIEW_FIELD, costReview);
         report.put("ownerDispositionCount", dispositions.size());
         report.put("excludedFixtureIdsInconclusive", scores.excluded());
         report.put("excludedFixtureEvidence", excludedEvidence);

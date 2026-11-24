@@ -120,6 +120,7 @@ final class EvidenceMapping {
         return value;
     }
     private static Map<String, String> components(JsonNode node) {
+        // The frozen cost component remains required for schema compatibility; D5 no longer emits it.
         Set<String> required = Set.of("recoveredParse", "recoveredFallback", "timeout",
                 "isolatedFinalFailure", "cost", "quality");
         if (node == null || !node.isObject()) throw new InvalidMapping(INVALID_STRUCTURAL_COMPONENTS);
