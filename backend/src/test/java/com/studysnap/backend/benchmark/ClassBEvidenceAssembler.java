@@ -18,6 +18,8 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Stream;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /** File-backed class-B half of the FRB evidence assembly. */
 final class ClassBEvidenceAssembler {
@@ -190,6 +192,26 @@ record SourceDigests(SortedMap<String, String> values) {
     static final class Builder {
         private static final String PACKET_SUFFIX = ".jsonl";
         private final SortedMap<String, String> values = new TreeMap<>();
+        private final Predicate<String> packetName;
+        private final Function<String, ? extends RuntimeException> failure;
+        private final boolean classB;
+
+        Builder() {
+            this(name -> java.util.Arrays.stream(ClassBCaseManifest.Workflow.values())
+                    .anyMatch(workflow -> name.equals(workflow.name() + PACKET_SUFFIX)),
+                    InvalidClassBAssembly::new, true);
+        }
+
+        Builder(Predicate<String> packetName, Function<String, ? extends RuntimeException> failure) {
+            this(packetName, failure, false);
+        }
+
+        private Builder(Predicate<String> packetName, Function<String, ? extends RuntimeException> failure,
+                boolean classB) {
+            this.packetName = java.util.Objects.requireNonNull(packetName);
+            this.failure = java.util.Objects.requireNonNull(failure);
+            this.classB = classB;
+        }
 
         <T> T file(String role, Path path, Source<T> source) throws IOException {
             String before = FreezeRecord.sha256(path);
@@ -197,10 +219,12 @@ record SourceDigests(SortedMap<String, String> values) {
             String detachedBefore = Files.exists(detached) ? FreezeRecord.sha256(detached) : null;
             T loaded = source.load();
             String after = FreezeRecord.sha256(path);
-            if (!before.equals(after)) throw new InvalidClassBAssembly("Class-B source changed while loading: " + role);
+            if (!before.equals(after)) throw failure.apply((classB ? "Class-B source" : "Source")
+                    + " changed while loading: " + role);
             if (detachedBefore != null) {
                 if (!detachedBefore.equals(FreezeRecord.sha256(detached)))
-                    throw new InvalidClassBAssembly("Class-B detached digest changed while loading: " + role);
+                    throw failure.apply((classB ? "Class-B detached digest" : "Detached digest")
+                            + " changed while loading: " + role);
                 put(role + ".sha256", detachedBefore);
             }
             put(role, before);
@@ -208,10 +232,11 @@ record SourceDigests(SortedMap<String, String> values) {
         }
 
         <T> T directory(String role, Path path, Source<T> source) throws IOException {
-            String before = directoryHash(path);
+            String before = directoryHash(path, packetName, failure, classB);
             T loaded = source.load();
-            String after = directoryHash(path);
-            if (!before.equals(after)) throw new InvalidClassBAssembly("Class-B packets changed while loading: " + role);
+            String after = directoryHash(path, packetName, failure, classB);
+            if (!before.equals(after)) throw failure.apply((classB ? "Class-B packets" : "Packets")
+                    + " changed while loading: " + role);
             put(role, before);
             return loaded;
         }
@@ -240,31 +265,41 @@ record SourceDigests(SortedMap<String, String> values) {
         private void put(String role, String hash) {
             String previous = values.putIfAbsent(role, hash);
             if (previous != null && !previous.equals(hash))
-                throw new InvalidClassBAssembly("Class-B source changed between reads: " + role);
+                throw failure.apply((classB ? "Class-B source" : "Source")
+                        + " changed between reads: " + role);
         }
 
         SourceDigests build() { return new SourceDigests(values); }
 
-        private static String directoryHash(Path directory) throws IOException {
+        private static String directoryHash(Path directory, Predicate<String> packetName,
+                Function<String, ? extends RuntimeException> failure, boolean classB) throws IOException {
             try (Stream<Path> paths = Files.walk(directory)) {
-                return directoryHash(directory, paths.toList());
+                return directoryHash(directory, paths.toList(), packetName, failure, classB);
             }
         }
 
         static String directoryHash(Path directory, List<Path> entries) throws IOException {
+            Builder defaults = new Builder();
+            return directoryHash(directory, entries, defaults.packetName, defaults.failure, true);
+        }
+
+        private static String directoryHash(Path directory, List<Path> entries, Predicate<String> packetName,
+                Function<String, ? extends RuntimeException> failure, boolean classB) throws IOException {
             try {
                 if (entries.stream().anyMatch(path -> Files.isSymbolicLink(path)
                         || !Files.isDirectory(path) && !Files.isRegularFile(path)))
-                    throw new InvalidClassBAssembly("Invalid class-B packet directory entry");
+                    throw failure.apply(classB ? "Invalid class-B packet directory entry"
+                            : "Invalid packet directory entry");
                 List<Path> files = entries.stream().filter(Files::isRegularFile)
                         .sorted(java.util.Comparator.comparing(path -> directory.relativize(path).toString())).toList();
-                if (files.isEmpty()) throw new InvalidClassBAssembly("Empty class-B packet directory");
+                if (files.isEmpty()) throw failure.apply(classB ? "Empty class-B packet directory"
+                        : "Empty packet directory");
                 for (Path file : files) {
                     String name = file.getFileName().toString();
                     if (!directory.equals(file.getParent()) || !name.endsWith(PACKET_SUFFIX)
-                            || java.util.Arrays.stream(ClassBCaseManifest.Workflow.values())
-                                    .noneMatch(workflow -> name.equals(workflow.name() + PACKET_SUFFIX)))
-                        throw new InvalidClassBAssembly("Unexpected class-B packet filename");
+                            || !packetName.test(name))
+                        throw failure.apply(classB ? "Unexpected class-B packet filename"
+                                : "Unexpected packet filename");
                 }
                 MessageDigest digest = MessageDigest.getInstance("SHA-256");
                 for (Path file : files) {
@@ -275,7 +310,8 @@ record SourceDigests(SortedMap<String, String> values) {
                 }
                 return java.util.HexFormat.of().formatHex(digest.digest());
             } catch (NoSuchAlgorithmException exception) {
-                throw new InvalidClassBAssembly("SHA-256 unavailable", exception);
+                if (classB) throw new InvalidClassBAssembly("SHA-256 unavailable", exception);
+                throw failure.apply("SHA-256 unavailable");
             }
         }
     }
