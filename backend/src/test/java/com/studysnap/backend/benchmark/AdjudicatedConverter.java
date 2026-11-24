@@ -27,6 +27,7 @@ final class AdjudicatedConverter {
     private static final ObjectMapper JSON = new ObjectMapper()
             .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+    record Exclusions(Path fileOrNull, String expectedSha256OrNull) {}
 
     private AdjudicatedConverter() {}
 
@@ -34,15 +35,24 @@ final class AdjudicatedConverter {
             PairMap pairs, Set<String> classAWorkflowStems, Set<String> frozenClassACaseIds,
             Path exclusionsFileOrNull, String expectedExclusionsSha256OrNull,
             Map<String, Integer> requestedQuestionsByCaseId) {
+        return classAWithDeclaredPending(key, statuses, pairs, classAWorkflowStems, frozenClassACaseIds,
+                new Exclusions(exclusionsFileOrNull, expectedExclusionsSha256OrNull), requestedQuestionsByCaseId,
+                ExpansionDecision.Declared.NONE);
+    }
+
+    static AdjudicatedLoaded classAWithDeclaredPending(ArmKeyAccess.OpenedKey key, Map<String, QuestionStatus> statuses,
+            PairMap pairs, Set<String> classAWorkflowStems, Set<String> frozenClassACaseIds,
+            Exclusions exclusions, Map<String, Integer> requestedQuestionsByCaseId,
+            ExpansionDecision.Declared declared) {
         if (key == null || statuses == null || pairs == null || classAWorkflowStems == null
-                || frozenClassACaseIds == null)
+                || frozenClassACaseIds == null || exclusions == null)
             throw new InvalidEvidence("Opened key, blind evidence and frozen scope required");
         Map<String, Integer> widths = requestedWidths(requestedQuestionsByCaseId, frozenClassACaseIds);
-        Map<String, String> excludedReasons = exclusions(exclusionsFileOrNull, expectedExclusionsSha256OrNull);
+        Map<String, String> excludedReasons = exclusions(exclusions.fileOrNull(), exclusions.expectedSha256OrNull());
         Set<String> excluded = excludedReasons.keySet();
         if (statuses.values().stream().anyMatch(java.util.Objects::isNull))
             throw new InvalidEvidence("Null final question status");
-        LockReadiness.check(statuses, Set.of());
+        LockReadiness.check(statuses, Set.of(), declared);
 
         Map<String, ArmKeyAccess.KeyRow> selected = new LinkedHashMap<>();
         Set<String> keyedCases = new LinkedHashSet<>();
@@ -50,7 +60,8 @@ final class AdjudicatedConverter {
             selected.put(row.itemId(), row);
             keyedCases.add(row.caseId());
             QuestionStatus status = statuses.get(row.itemId());
-            if (status == null || !row.itemId().equals(status.itemId()) || status.f() == null)
+            if (status == null || !row.itemId().equals(status.itemId())
+                    || status.f() == null && !declared.itemIds().contains(row.itemId()))
                 throw new InvalidEvidence("Key item lacks final status: " + row.itemId());
             if (excluded.contains(row.caseId()))
                 throw new InvalidEvidence("Excluded case is keyed: " + row.caseId());
@@ -82,7 +93,7 @@ final class AdjudicatedConverter {
             MutableFacts facts = collected.computeIfAbsent(identity, ignored -> new MutableFacts(subgroup));
             if (!java.util.Objects.equals(facts.subgroup, subgroup))
                 throw new InvalidEvidence("Case arm crosses subgroups: " + identity);
-            facts.add(statuses.get(row.itemId()));
+            facts.add(statuses.get(row.itemId()), declared.itemIds().contains(row.itemId()));
         }
         Map<String, AdjudicatedFacts> result = new LinkedHashMap<>();
         collected.forEach((identity, facts) -> {
@@ -175,15 +186,15 @@ final class AdjudicatedConverter {
 
         private MutableFacts(String subgroup) { this.subgroup = subgroup; }
 
-        private void add(QuestionStatus status) {
+        private void add(QuestionStatus status, boolean declaredPending) {
             scoredQuestions++;
             criticalQuestions += status.f() == Verdict.CRITICAL ? 1 : 0;
             qualityFailQuestions += status.f() == Verdict.QUALITY_FAIL ? 1 : 0;
-            unresolvedQuestions += status.f() == Verdict.UNRESOLVED ? 1 : 0;
+            unresolvedQuestions += status.f() == Verdict.UNRESOLVED || declaredPending ? 1 : 0;
             pendingQuestions += status.state() == QuestionStatus.State.PENDING_REVIEW ? 1 : 0;
-            doubleMisses += status.doubleMiss() ? 1 : 0;
-            scorerFailureCriticals += status.scorerFailureCritical() ? 1 : 0;
-            humanCleared += status.humanCleared() ? 1 : 0;
+            doubleMisses += !declaredPending && status.doubleMiss() ? 1 : 0;
+            scorerFailureCriticals += !declaredPending && status.scorerFailureCritical() ? 1 : 0;
+            humanCleared += !declaredPending && status.humanCleared() ? 1 : 0;
         }
 
         private AdjudicatedFacts freeze() {

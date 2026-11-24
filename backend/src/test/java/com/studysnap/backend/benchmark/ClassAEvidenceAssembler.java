@@ -26,6 +26,8 @@ final class ClassAEvidenceAssembler {
     private static final String HUMAN_FILE = "human.jsonl";
     private static final String SPOT = SeedStreamRegistry.SPOT_CHECK;
     private static final String PACKET_SUFFIX = ".jsonl";
+    private static final String MANIFEST_ROLE_PREFIX = "manifest.";
+    private static final String LONG_EXAM_PREFIX = "LONG_EXAM_";
     private static final String ROLE_FREEZE = "freeze";
     private static final String ROLE_PARAMETERS = "parameters";
     private static final String ROLE_MAPPING = "mapping";
@@ -38,6 +40,7 @@ final class ClassAEvidenceAssembler {
     private static final String ROLE_DRAW = "classA.drawlog";
     private static final String ROLE_REGISTRY = "classA.registry";
     private static final String ROLE_EXCLUSIONS = "classA.exclusions";
+    private static final String ROLE_EXPANSION_DECISION = "classA.expansionDecision";
     private static final String ROLE_FINDING_PREFIX = "classA.lock.finding.";
     private static final String F_STEMS = "stems";
     private static final String F_EXPANSION = "expansion";
@@ -47,6 +50,7 @@ final class ClassAEvidenceAssembler {
     private static final String F_PRIORITY = "stemPriority";
     private static final String F_INITIAL = "initialAllocation";
     private static final String F_CASE_ID = "caseId";
+    private static final String F_SUBGROUP = "subgroup";
     private static final String F_QUESTION_COUNT = "requestedQuestionCount";
     private static final ObjectMapper PLAN_JSON = new ObjectMapper()
             .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
@@ -69,10 +73,10 @@ final class ClassAEvidenceAssembler {
                     || !mapping.sha256.equals(freeze.evidenceMappingSha256()))
                 throw new InvalidClassAAssembly("Frozen parameters or mapping differ");
             Path manifestFile = pinned(sources, freeze, PRIMARY);
-            Map<String, FrozenRow> all = digests.file("manifest." + PRIMARY, manifestFile,
+            Map<String, FrozenRow> all = digests.file(MANIFEST_ROLE_PREFIX + PRIMARY, manifestFile,
                     () -> manifest(manifestFile));
             Path planFile = pinned(sources, freeze, PLAN);
-            SpotPlan plan = digests.file("manifest." + PLAN, planFile,
+            SpotPlan plan = digests.file(MANIFEST_ROLE_PREFIX + PLAN, planFile,
                     () -> spotPlan(planFile));
             ArmKeySeal.Seal seal = digests.file(ROLE_SEAL, export.sealFile(),
                     () -> ArmKeySeal.load(export.sealFile()));
@@ -111,17 +115,33 @@ final class ClassAEvidenceAssembler {
             Map<String, Set<String>> workflowStems = workflowStems(all, stems);
             Map<String, ExpansionObligation.Disclosure> obligations = ExpansionObligation.verify(plan,
                     workflowStems, pairs, sets, statuses, entries, registry);
+            Path decisionFile = export.pScores().getParent().resolve(ExpansionDecision.FILE_NAME);
+            ExpansionDecision.Declared declared = ExpansionDecision.Declared.NONE;
+            if (Files.exists(decisionFile)) {
+                LockRecord.Finding decisionFinding = lock.findings().stream()
+                        .filter(finding -> finding.name().equals(ExpansionDecision.FILE_NAME))
+                        .findFirst().orElseThrow(() -> new InvalidExpansionDecision(
+                                "Decision file is not a lock finding"));
+                if (!decisionFinding.sha256().equals(FreezeRecord.sha256(decisionFile)))
+                    throw new InvalidExpansionDecision("Decision finding hash differs");
+                ExpansionDecision.Context decisionContext = new ExpansionDecision.Context(decisionFile,
+                        sources.freezeFile(), sources.parametersFile(), export.sealFile(),
+                        sources.drawLogFile(), sources.seedRegistryFile());
+                declared = ExpansionDecision.verify(decisionContext, statuses, pairs, sets, entries,
+                        workflowStems, Set.of(decisionFile));
+                digests.file(ROLE_EXPANSION_DECISION, decisionFile, () -> null);
+            }
             Scope scope = scope(all, freeze, export.key(), stems);
             if (export.exclusionsFileOrNull() != null)
                 digests.file(ROLE_EXCLUSIONS, export.exclusionsFileOrNull(), () -> null);
-            AdjudicatedLoaded facts = AdjudicatedConverter.classA(export.key(), Map.copyOf(statuses), pairs,
-                    stems, scope.ids(), export.exclusionsFileOrNull(), export.expectedExclusionsSha256OrNull(),
-                    scope.widths());
+            AdjudicatedLoaded facts = AdjudicatedConverter.classAWithDeclaredPending(export.key(), Map.copyOf(statuses), pairs,
+                    stems, scope.ids(), new AdjudicatedConverter.Exclusions(export.exclusionsFileOrNull(),
+                            export.expectedExclusionsSha256OrNull()), scope.widths(), declared);
             digests.file(ROLE_FREEZE, sources.freezeFile(), () -> null);
             digests.file(ROLE_PARAMETERS, sources.parametersFile(), () -> null);
             digests.file(ROLE_MAPPING, sources.mappingFile(), () -> null);
-            digests.file("manifest." + PRIMARY, manifestFile, () -> null);
-            digests.file("manifest." + PLAN, planFile, () -> null);
+            digests.file(MANIFEST_ROLE_PREFIX + PRIMARY, manifestFile, () -> null);
+            digests.file(MANIFEST_ROLE_PREFIX + PLAN, planFile, () -> null);
             digests.directory(ROLE_PACKETS, export.packetDirectory(), () -> null);
             digests.file(ROLE_SEAL, export.sealFile(), () -> null);
             digests.file(ROLE_LOCK, export.lockFile(), () -> null);
@@ -132,6 +152,8 @@ final class ClassAEvidenceAssembler {
             digests.file(ROLE_REGISTRY, sources.seedRegistryFile(), () -> null);
             if (export.exclusionsFileOrNull() != null)
                 digests.file(ROLE_EXCLUSIONS, export.exclusionsFileOrNull(), () -> null);
+            if (Files.exists(decisionFile))
+                digests.file(ROLE_EXPANSION_DECISION, decisionFile, () -> null);
             for (int i = 0; i < lock.findings().size(); i++) {
                 LockRecord.Finding finding = lock.findings().get(i);
                 digests.file(ROLE_FINDING_PREFIX + i,
@@ -141,7 +163,7 @@ final class ClassAEvidenceAssembler {
             pinned(sources, freeze, PLAN);
             verifySealAndLock(export, sources, seal, lock);
             return new ClassAAssembly(facts, Map.copyOf(statuses), pairs, sets, required,
-                    List.copyOf(entries), digests.build(), obligations);
+                    List.copyOf(entries), digests.build(), obligations, declared);
         } catch (IOException exception) {
             throw new InvalidClassAAssembly("Cannot read class-A assembly source", exception);
         }
@@ -173,11 +195,12 @@ final class ClassAEvidenceAssembler {
     private static boolean packetName(String name) {
         if (!name.endsWith(PACKET_SUFFIX)) return false;
         String stem = name.substring(0, name.length() - PACKET_SUFFIX.length());
-        if (stem.startsWith("LONG_EXAM_"))
+        if (stem.startsWith(LONG_EXAM_PREFIX))
             return java.util.Arrays.stream(ClassACaseManifest.Subgroup.values())
-                    .anyMatch(group -> stem.equals("LONG_EXAM_" + group.name()));
+                    .anyMatch(group -> stem.equals(LONG_EXAM_PREFIX + group.name()));
         return java.util.Arrays.stream(ClassACaseManifest.Workflow.values())
-                .anyMatch(workflow -> stem.equals(workflow.name()));
+                .anyMatch(workflow -> stem.equals(workflow.name())
+                        || stem.equals(Stage1RunPlan.workflowName(workflow.name())));
     }
 
     private static Path pinned(ClassASources sources, FreezeRecord freeze, String role) throws IOException {
@@ -212,7 +235,7 @@ final class ClassAEvidenceAssembler {
                 throw new InvalidClassAAssembly("Malformed class-A manifest row");
             String id = row.path(F_CASE_ID).asText();
             String workflow = Stage1RunPlan.workflowName(row.path(F_WORKFLOW).asText());
-            String subgroup = row.path("subgroup").isTextual() ? row.path("subgroup").asText() : null;
+            String subgroup = row.path(F_SUBGROUP).isTextual() ? row.path(F_SUBGROUP).asText() : null;
             String stem = workflow + (subgroup == null ? "" : "_" + subgroup);
             int width = row.path(F_QUESTION_COUNT).asInt();
             if (id.isBlank() || width < 1 || !packetName(stem + PACKET_SUFFIX)
@@ -334,7 +357,7 @@ final class ClassAEvidenceAssembler {
                 if (entry.round() != 1 || entry.count() != plan.get(entry.workflow())
                         || spotCount.putIfAbsent(entry.workflow(), 1) != null)
                     throw new InvalidClassAAssembly("Spot-check draw differs from frozen plan");
-                Path replayFile = Files.createTempFile("class-a-draw-replay-", ".jsonl");
+                Path replayFile = Files.createTempFile("class-a-draw-replay-", PACKET_SUFFIX);
                 try {
                     Files.delete(replayFile);
                     DrawLog.Entry replay = PairSampler.draw(registry, new DrawLog(replayFile), pairs,
@@ -362,16 +385,24 @@ record ClassAExport(Path packetDirectory, Path pScores, Path sScores, Path hScor
         Path exclusionsFileOrNull, String expectedExclusionsSha256OrNull) {}
 record ClassAAssembly(AdjudicatedLoaded facts, Map<String, QuestionStatus> statuses, PairMap pairs,
         ReviewSets sets, Set<String> reviewRequiredPairs, List<DrawLog.Entry> drawEntries, SourceDigests digests,
-        Map<String, ExpansionObligation.Disclosure> expansionObligations) {
+        Map<String, ExpansionObligation.Disclosure> expansionObligations, ExpansionDecision.Declared declared) {
     ClassAAssembly(AdjudicatedLoaded facts, Map<String, QuestionStatus> statuses, PairMap pairs,
             ReviewSets sets, Set<String> reviewRequiredPairs, List<DrawLog.Entry> drawEntries, SourceDigests digests) {
-        this(facts, statuses, pairs, sets, reviewRequiredPairs, drawEntries, digests, Map.of());
+        this(facts, statuses, pairs, sets, reviewRequiredPairs, drawEntries, digests, Map.of(),
+                ExpansionDecision.Declared.NONE);
+    }
+    ClassAAssembly(AdjudicatedLoaded facts, Map<String, QuestionStatus> statuses, PairMap pairs,
+            ReviewSets sets, Set<String> reviewRequiredPairs, List<DrawLog.Entry> drawEntries, SourceDigests digests,
+            Map<String, ExpansionObligation.Disclosure> expansionObligations) {
+        this(facts, statuses, pairs, sets, reviewRequiredPairs, drawEntries, digests,
+                expansionObligations, ExpansionDecision.Declared.NONE);
     }
     ClassAAssembly {
         statuses = Map.copyOf(statuses);
         reviewRequiredPairs = Set.copyOf(reviewRequiredPairs);
         drawEntries = List.copyOf(drawEntries);
         expansionObligations = Map.copyOf(expansionObligations);
+        if (declared == null) throw new InvalidExpansionDecision("Verified declaration required");
     }
 }
 final class InvalidClassAAssembly extends RuntimeException {
