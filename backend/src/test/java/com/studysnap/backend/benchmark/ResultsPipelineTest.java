@@ -427,7 +427,7 @@ class ResultsPipelineTest {
         assertThat(Files.readString(result.report())).contains("NOT_EXECUTED");
     }
 
-    @Test void costAboveFrozenForecastTimesMappingToleranceIsOneT3Event() throws Exception {
+    @Test void costAboveOldPerCaseCeilingDoesNotCreateT3Event() throws Exception {
         Fixture fixture = fixture(false, false, false);
         ObjectNode receipt = (ObjectNode) JSON.readTree(fixture.candidateReceipt().toFile());
         ObjectNode row = (ObjectNode) receipt.path("cases").get(1);
@@ -436,20 +436,24 @@ class ResultsPipelineTest {
         JSON.writeValue(fixture.candidateReceipt().toFile(), receipt);
         ResultsPipeline.Result result = ResultsPipeline.run(fixture.input());
         var paid = result.routes().get(PAID_ROUTE);
-        assertThat(paid.failedTiers()).containsExactly(RouteVerdictCalculator.Tier.T3);
-        assertThat(paid.workflows().get(INTERVIEW).candidateComponents()).containsEntry("COST", 1);
+        assertThat(paid.failedTiers()).isEmpty();
+        assertThat(paid.workflows().get(INTERVIEW).candidateComponents()).isEmpty();
+        // ceilingUsd remains informational for existing report consumers; it is no longer a gate.
         assertThat(Files.readString(result.report())).contains("\"ceilingUsd\":1.25",
-                "\"candidateConservativeUsd\":2.0", "\"candidateBilledUsd\":1.0");
+                "\"candidateConservativeUsd\":2.0", "\"candidateBilledUsd\":1.0",
+                "\"operationalCostReview\"");
     }
 
-    @Test void refrozenToleranceAndCriticalTypesChangePipelineEvidence() throws Exception {
+    @Test void refrozenCriticalTypesChangePipelineEvidenceAndCostToleranceNoLongerMovesT3() throws Exception {
         Fixture fixture = fixture(false, true, false);
         ObjectNode receipt = (ObjectNode) JSON.readTree(fixture.candidateReceipt().toFile());
         ((ObjectNode) receipt.path("cases").get(1)).put(CONSERVATIVE_USD_FIELD, 1.30);
         JSON.writeValue(fixture.candidateReceipt().toFile(), receipt);
         ResultsPipeline.Result before = ResultsPipeline.run(fixture.input());
+        // D5: cost is no longer a per-case T3 event, so a candidate cost above the old ceiling leaves the
+        // paid route's T3 untouched; the tolerance now feeds only the separate operational cost review.
         assertThat(before.routes().get(PAID_ROUTE).failedTiers())
-                .contains(RouteVerdictCalculator.Tier.T3);
+                .doesNotContain(RouteVerdictCalculator.Tier.T3);
         assertThat(before.triggers().get(NOTE)).contains(CASE_NOTE);
         String changed = Files.readString(fixture.input().mapping())
                 .replace("1.25", "1.50").replace("\"WRONG_KEY\", ", "");

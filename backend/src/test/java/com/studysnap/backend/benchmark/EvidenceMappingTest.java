@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Preregistration sections 4, 7 and 8 mapping and detached-hash mutation checks. */
 class EvidenceMappingTest {
     private static final Path SOURCE = Path.of("src/test/java/com/studysnap/backend/benchmark/evidence-mapping.json");
-    private static final String NEW_HASH = "555e4abe87706815a8ecfc4fa8461b17948be53218f2943151d61ddde456b367";
+    private static final String NEW_HASH = "7b2cb6866e3f341529ab256799a876cca137c72ea32ef6124e04f2eca3672224";
     private static final ObjectMapper JSON = new ObjectMapper();
     @TempDir Path temp;
 
@@ -54,6 +54,7 @@ class EvidenceMappingTest {
         assertThat(shipped.sha256).isEqualTo(NEW_HASH);
         assertThat(FreezeRecord.sha256(SOURCE)).isEqualTo(NEW_HASH);
         assertThat(shipped.classACriticalTypes).contains("KEY_NOT_DEFENSIBLE");
+        assertThat(shipped.costFigure).isEqualTo("billedUsd");
     }
 
     @Test void mappingBytesControlInterpretationAndDetachedHash() throws Exception {
@@ -71,12 +72,12 @@ class EvidenceMappingTest {
     @Test void costToleranceAndFigureComeFromMappingFile() throws Exception {
         Path file = mapping();
         String changed = Files.readString(file).replace("1.25", "1.50")
-                .replace("conservativeUsd", "billedUsd");
+                .replace("billedUsd", "conservativeUsd");
         Files.writeString(file, changed);
         Files.writeString(file.resolveSibling("mapping.json.sha256"), FreezeRecord.sha256(file));
         EvidenceMapping amended = EvidenceMapping.load(file);
         assertThat(amended.costTolerance).isEqualByComparingTo("1.50");
-        assertThat(amended.costFigure).isEqualTo("billedUsd");
+        assertThat(amended.costFigure).isEqualTo("conservativeUsd");
     }
 
     @Test void unknownMappingFieldRefusesEvenWhenRehashed() throws Exception {

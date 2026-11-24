@@ -7,7 +7,7 @@
   "classBQualityDimensions": ["taskFulfilled", "grounded", "actionable"],
   "classBCriticalDimension": "noCriticalMisleading",
   "costTolerance": 1.25,
-  "costFigure": "conservativeUsd",
+  "costFigure": "billedUsd",
   "structuralComponents": {
     "recoveredParse": "RECOVERED_PARSE",
     "recoveredFallback": "RECOVERED_FALLBACK",

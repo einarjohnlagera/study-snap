@@ -44,11 +44,18 @@ final class ProductionSwitchEligibility {
     static final String REPORT_RECOMPUTATION_FAILED = "REPORT_RECOMPUTATION_FAILED";
     static final String REPORT_DIFFERS_FROM_RECOMPUTATION = "REPORT_DIFFERS_FROM_RECOMPUTATION";
     static final String OWNER_VETO_DIFFERS_FROM_LEDGER = "OWNER_VETO_DIFFERS_FROM_LEDGER";
+    static final String COST_REVIEW_REQUIRED = "COST_REVIEW_REQUIRED";
+    static final String COST_REVIEW_RECOMPUTATION_FAILED = "COST_REVIEW_RECOMPUTATION_FAILED";
 
     record Decision(boolean eligible, List<String> reasons) {}
     record CostLedgerInput(Path ledgerFile, ApprovedCaps approved) {}
     record SwitchOptions(List<CostLedgerInput> costLedgers, boolean recomputeReport,
-            boolean requireOwnerAttestations) {}
+            boolean requireOwnerAttestations, boolean requireOperationalCostReview) {
+        SwitchOptions(List<CostLedgerInput> costLedgers, boolean recomputeReport,
+                boolean requireOwnerAttestations) {
+            this(costLedgers, recomputeReport, requireOwnerAttestations, false);
+        }
+    }
 
     private ProductionSwitchEligibility() {}
 
@@ -91,6 +98,17 @@ final class ProductionSwitchEligibility {
         if (options == null) {
             reasons.add(EVALUATION_FAILED);
             return decision(reasons);
+        }
+        if (options.requireOperationalCostReview()) {
+            try {
+                var review = ResultsPipeline.operationalCostReview(run);
+                var parametersForCost = FrozenGateParameters.load(run.parameters());
+                if (!OperationalCostReview.flagsByRoute(review, parametersForCost)
+                        .getOrDefault(route, new TreeSet<>()).isEmpty())
+                    reasons.add(COST_REVIEW_REQUIRED);
+            } catch (IOException | RuntimeException exception) {
+                reasons.add(COST_REVIEW_RECOMPUTATION_FAILED);
+            }
         }
         List<CostLedgerInput> costLedgers = options.costLedgers();
         if (costLedgers != null && !costLedgers.isEmpty()) {
