@@ -224,6 +224,43 @@ final class FindingsLedger {
         } catch (InvalidLedger exception) { throw exception; }
         catch (Exception exception) { throw new InvalidLedger("Cannot query owner vetoes", exception); }
     }
+    record ResolvedOperationalConcern(ReviewSubject subject, String concernReviewId,
+            ReviewRecord.ResolutionCode resolutionCode) {}
+    record OperationalCauseReviews(List<ReviewRecord> records, Set<ReviewSubject> openSubjects,
+            List<ResolvedOperationalConcern> resolvedConcerns) {}
+
+    /** Validated, route-scoped claims in store order; concerns are queried over the whole store. */
+    OperationalCauseReviews operationalCauseReviews(String route) {
+        try {
+            if (reviews == null) throw new InvalidLedger(REVIEW_STORE_REQUIRED);
+            PostLockContext.Verified verified = context.verify();
+            context.routeName(verified, route);
+            List<ReviewRecord> records = reviews.records();
+            Set<String> openIds = Set.copyOf(reviews.openConcerns());
+            List<ReviewRecord> selected = new ArrayList<>();
+            Set<ReviewSubject> open = new java.util.HashSet<>();
+            Map<String, ReviewRecord> concernsById = new java.util.HashMap<>();
+            List<ResolvedOperationalConcern> resolved = new ArrayList<>();
+            for (ReviewRecord review : records) {
+                if (review.kind() != ReviewRecord.Kind.OPERATIONAL_CAUSE
+                        || !route.equals(context.route(verified, review.workflow()))) continue;
+                selected.add(review);
+                ReviewSubject subject = new ReviewSubject(review.kind(), review.workflow(), review.subjectId());
+                if (review.outcome() == ReviewRecord.Outcome.BLOCKING_CONCERN) {
+                    concernsById.put(review.reviewId(), review);
+                    if (openIds.contains(review.reviewId())) open.add(subject);
+                }
+                if (review.supersedes() != null) {
+                    ReviewRecord concern = concernsById.get(review.supersedes());
+                    if (concern == null) throw new InvalidLedger("Operational concern resolution differs");
+                    resolved.add(new ResolvedOperationalConcern(subject, concern.reviewId(),
+                            review.resolutionCode()));
+                }
+            }
+            return new OperationalCauseReviews(List.copyOf(selected), Set.copyOf(open), List.copyOf(resolved));
+        } catch (InvalidLedger exception) { throw exception; }
+        catch (Exception exception) { throw new InvalidLedger("Cannot query operational causes", exception); }
+    }
     private void validateOwnerVetoReferences() {
         try {
             if (reviews == null) throw new InvalidLedger(REVIEW_STORE_REQUIRED);

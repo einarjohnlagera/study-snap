@@ -15,6 +15,7 @@ import java.util.Set;
  */
 final class ReviewRecordStore {
     private static final String CANNOT_LOAD_REVIEW = "Cannot load review";
+    private static final String OPERATIONAL_SUBJECT = "oc-(po|os|ot)-[0-9a-f]{32}";
     static final class InvalidStore extends RuntimeException {
         InvalidStore(String message, Throwable cause) { super(message, cause); }
     }
@@ -99,6 +100,10 @@ final class ReviewRecordStore {
         } else if (review.kind() == ReviewRecord.Kind.NO_VETO) {
             if (!route.equals(review.subjectId()))
                 throw new PostLockStoreIndex.InvalidStore("NO_VETO subject differs from route");
+        } else if (review.kind() == ReviewRecord.Kind.OPERATIONAL_CAUSE) {
+            PostLockContext.id(review.subjectId());
+            if (!review.subjectId().matches(OPERATIONAL_SUBJECT))
+                throw new PostLockStoreIndex.InvalidStore("Invalid operational cause subject");
         } else PostLockContext.id(review.subjectId());
         // Legacy kinds permit either owner outcome; only an OWNER COMPLETE satisfies a requirement.
         // PRODUCT_UX may record only a concern, only for ABSOLUTE_QUALITY.
