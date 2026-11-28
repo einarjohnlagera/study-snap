@@ -1,6 +1,11 @@
 package com.studysnap.backend.benchmark;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.file.Path;
+import java.util.function.BiPredicate;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -10,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** P scores the declared Anthropic half and S the OpenAI half until the family-based evaluator lands. */
+/** Pilot bars with a historical label path and a sealed declared-family path. */
 final class PilotBarsEvaluator {
     private static final String L_P = "P";
     private static final String L_S = "S";
@@ -28,9 +33,81 @@ final class PilotBarsEvaluator {
     record PilotBarReport(Map<String, ScorerReport> scorers, boolean pilotPassed, double psVerdictAgreementRate) {}
     private PilotBarsEvaluator() {}
 
+    /** @deprecated For historical tests only; family-declared bars require evaluateByFamily. */
+    @Deprecated
     static PilotBarReport evaluate(PilotKey key, Map<String, ClassAScoreFilesV2.ItemScores> scores,
                                    EvidenceMapping mapping, PilotBars bars, List<PilotLeakCheck.Hit> leakHits,
                                    PilotOwnerRatings ratings) {
+        if (bars != null && bars.scorerFamilies() != null)
+            throw new PilotBars.InvalidPilotBars("Family bars require evaluateByFamily");
+        return evaluateCore(key, scores, mapping, bars, leakHits, ratings,
+                (role, row) -> L_P.equals(role) ? row.authoringFamily() == ModelFamily.ANTHROPIC
+                        : row.authoringFamily() == ModelFamily.OPENAI,
+                (recall, count) -> count > 0 && (double) recall / count >= bars.minCrossFamilyRecallFraction);
+    }
+
+    /**
+     * Evaluates declared family identity against an assembly-bound digest. This cannot prove
+     * who authored items, session isolation, tool honesty, or when scoring occurred.
+     */
+    static PilotBarReport evaluateByFamily(PilotKey key, Map<String, ClassAScoreFilesV2.ItemScores> scores,
+            EvidenceMapping mapping, PilotBars bars, List<PilotLeakCheck.Hit> leakHits,
+            PilotOwnerRatings ratings, PilotFamilies families, Path assemblyReportFile) {
+        if (key == null || scores == null || mapping == null || bars == null || leakHits == null
+                || ratings == null || families == null || assemblyReportFile == null)
+            throw new PilotBars.InvalidPilotBars("Family evaluator inputs required");
+        if (bars.scorerFamilies() == null) throw new PilotBars.InvalidPilotBars("Frozen scorerFamilies required");
+        for (String role : List.of(L_P, L_S)) {
+            PilotFamilies.Scorer scorer = families.scorers().get(role);
+            if (scorer.family() != bars.scorerFamilies().get(role))
+                throw new PilotBars.InvalidPilotBars("Scorer family differs from bars: " + role);
+            if (!scorer.modelId().equals(bars.limits(role).model()))
+                throw new PilotBars.InvalidPilotBars("Scorer modelId differs from bars: " + role);
+        }
+        try {
+            String reportDigest = IntegritySupport.detachedHash(assemblyReportFile);
+            byte[] reportBytes = java.nio.file.Files.readAllBytes(assemblyReportFile);
+            if (!FreezeRecord.sha256(reportBytes).equals(reportDigest))
+                throw new PilotBars.InvalidPilotBars("Assembly report changed while loading");
+            JsonNode report = IntegritySupport.JSON.readTree(reportBytes);
+            if (!report.path("familiesSha256").isTextual()
+                    || !families.sha256OfBytes().equals(report.path("familiesSha256").asText()))
+                throw new PilotBars.InvalidPilotBars("Assembly families SHA-256 differs");
+        } catch (PilotBars.InvalidPilotBars exception) { throw exception; }
+        catch (IOException exception) { throw new PilotBars.InvalidPilotBars("Invalid assembly report digest", exception); }
+        for (PilotKey.Row row : key.rows()) {
+            PilotFamilies.Packet packet = families.packets().get(row.packetId());
+            if (packet == null) throw new PilotBars.InvalidPilotBars("Unknown family packet: " + row.packetId());
+            if (row.authoringFamily() != packet.authorFamily())
+                throw new PilotBars.InvalidPilotBars("Key author family differs from packet: " + row.id());
+        }
+        for (String role : List.of(L_P, L_S)) {
+            ModelFamily scorerFamily = families.scorers().get(role).family();
+            long crossCount = key.rows().stream().filter(row -> row.severity() == PlantedType.Severity.CRITICAL
+                    && families.packets().get(row.packetId()).authorFamily() != scorerFamily).count();
+            if (crossCount == 0) throw new PilotBars.InvalidPilotBars("Empty cross-family critical set: " + role);
+        }
+        BigDecimal exact = BigDecimal.valueOf(bars.minCrossFamilyRecallFraction).stripTrailingZeros();
+        BigInteger numerator = exact.unscaledValue();
+        BigInteger denominator = BigInteger.TEN.pow(Math.max(0, exact.scale()));
+        if (exact.scale() < 0) numerator = numerator.multiply(BigInteger.TEN.pow(-exact.scale()));
+        BigInteger gcd = numerator.gcd(denominator);
+        numerator = numerator.divide(gcd); denominator = denominator.divide(gcd);
+        if (denominator.compareTo(BigInteger.valueOf(100)) > 0)
+            throw new PilotBars.InvalidPilotBars("Cross-family fraction denominator exceeds 100");
+        final BigInteger num = numerator, den = denominator;
+        return evaluateCore(key, scores, mapping, bars, leakHits, ratings,
+                (role, row) -> families.packets().get(row.packetId()).authorFamily()
+                        != families.scorers().get(role).family(),
+                (recall, count) -> count > 0 && BigInteger.valueOf(recall).multiply(den)
+                        .compareTo(num.multiply(BigInteger.valueOf(count))) >= 0);
+    }
+
+    private interface CrossClause { boolean passes(int recall, int count); }
+    private static PilotBarReport evaluateCore(PilotKey key, Map<String, ClassAScoreFilesV2.ItemScores> scores,
+                                   EvidenceMapping mapping, PilotBars bars, List<PilotLeakCheck.Hit> leakHits,
+                                   PilotOwnerRatings ratings, BiPredicate<String, PilotKey.Row> crossPredicate,
+                                   CrossClause crossClause) {
         if (key == null || scores == null || mapping == null || bars == null || leakHits == null || ratings == null
                 || ratings.ratings() == null) throw new PilotBars.InvalidPilotBars("Evaluator inputs required");
         composition(key, bars);
@@ -73,9 +150,7 @@ final class PilotBarsEvaluator {
                     typeHits.merge(keyRow.plantedType(), 1, Integer::sum);
                 if (keyRow.severity() == PlantedType.Severity.CRITICAL) {
                     if (markedCritical) criticalRecall++;
-                    boolean cross = L_P.equals(role)
-                            ? keyRow.authoringFamily() == ModelFamily.ANTHROPIC
-                            : keyRow.authoringFamily() == ModelFamily.OPENAI;
+                    boolean cross = crossPredicate.test(role, keyRow);
                     if (cross) { crossCount++; if (markedCritical) crossRecall++; }
                     else { ownCount++; if (markedCritical) ownRecall++; }
                 }
@@ -103,7 +178,7 @@ final class PilotBarsEvaluator {
             boolean criticalPass = criticalRecall >= bars.minCriticalRecallCount
                     && material >= bars.minMaterialAmbiguityMaterialCount
                     && zeroCorrect == key.countsByType().get(PlantedType.MATERIAL_AMBIGUITY_ZERO)
-                    && crossCount > 0 && (double) crossRecall / crossCount >= bars.minCrossFamilyRecallFraction;
+                    && crossClause.passes(crossRecall, crossCount);
             result.put(2, new Bar(criticalPass,
                     "critical=" + criticalRecall + ", material=" + material + ", zero=" + zeroCorrect
                             + ", cross=" + crossRecall + L_SLASH + crossCount,

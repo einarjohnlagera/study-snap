@@ -114,8 +114,37 @@ final class PilotFixtureAssembly {
         catch (Exception exception) { throw new InvalidAssembly("Cannot check fixture directory"); }
     }
 
+    /** @deprecated Historical assembly path; the operator uses assembleWithFamilies. */
+    @Deprecated
     static Assembled assemble(Path fixtureDir, Path labels, Path packetOut, Path sealedOut, long seed, Path reportOut) {
+        return assembleCore(check(fixtureDir), labels, packetOut, sealedOut, seed, reportOut, null, null);
+    }
+
+    /**
+     * Binds owner-declared families into the sealed export. Declarations cannot prove authorship,
+     * session isolation, tool honesty, or scoring time. Failure during export invalidates its
+     * partial output directory; a re-run into that directory is refused.
+     */
+    static Assembled assembleWithFamilies(Path fixtureDir, Path labels, Path packetOut, Path sealedOut,
+            long seed, Path reportOut, Path familiesFile) {
         Checked checked = check(fixtureDir);
+        if (familiesFile == null) throw new PilotFamilies.InvalidPilotFamilies("Families file required");
+        if (packetOut == null || sealedOut == null) throw new InvalidAssembly("Assembly paths required");
+        guard(familiesFile);
+        Path familyPath = familiesFile.toAbsolutePath().normalize();
+        if (familyPath.startsWith(fixtureDir.toAbsolutePath().normalize())
+                || familyPath.startsWith(packetOut.toAbsolutePath().normalize())
+                || familyPath.startsWith(sealedOut.toAbsolutePath().normalize()))
+            throw new PilotFamilies.InvalidPilotFamilies("Families input must be outside fixtures and outputs");
+        PilotFamilies families = PilotFamilies.load(familiesFile);
+        if (checked.critical().getOrDefault(ModelFamily.ANTHROPIC, 0) != 10
+                || checked.critical().getOrDefault(ModelFamily.OPENAI, 0) != 11)
+            throw new InvalidAssembly("Family critical allocation must be Anthropic 10 and OpenAI 11");
+        return assembleCore(checked, labels, packetOut, sealedOut, seed, reportOut, familiesFile, families);
+    }
+
+    private static Assembled assembleCore(Checked checked, Path labels, Path packetOut, Path sealedOut,
+            long seed, Path reportOut, Path familiesFile, PilotFamilies families) {
         try {
             guard(labels); guard(packetOut); guard(sealedOut); guard(reportOut);
             if (labels == null || packetOut == null || sealedOut == null || reportOut == null)
@@ -139,6 +168,12 @@ final class PilotFixtureAssembly {
             String canary = "CANARY-" + java.util.HexFormat.of().withUpperCase().formatHex(random).substring(0, 16);
             Path sealed = sealedOut.resolve(SEALED_NAME);
             var export = PilotPacketExport.export(checked.files(), packetOut, sealed, canary, seed);
+            if (families != null) {
+                Path sealedFamilies = sealedOut.resolve("pilot-families.json");
+                IntegritySupport.create(sealedFamilies, Files.readAllBytes(familiesFile));
+                if (!IntegritySupport.detachedHash(sealedFamilies).equals(families.sha256OfBytes()))
+                    throw new PilotFamilies.InvalidPilotFamilies("Copied families differ from validated bytes");
+            }
             Map<String, Object> report = new LinkedHashMap<>();
             Map<String, Integer> sizes = new LinkedHashMap<>();
             Map<String, String> packetHashes = new LinkedHashMap<>();
@@ -159,11 +194,24 @@ final class PilotFixtureAssembly {
             report.put("seed", seed);
             report.put("confirmedByVerifier", summary.confirmed());
             report.put("disputesRemaining", summary.disputes());
+            if (families != null) {
+                report.put("familiesSha256", families.sha256OfBytes());
+                Map<String, ModelFamily> byPacket = new LinkedHashMap<>();
+                for (int n = 1; n <= SIZES.size(); n++) {
+                    String id = "pilot-%02d".formatted(n);
+                    byPacket.put(id, families.packets().get(id).authorFamily());
+                }
+                report.put("familyByPacket", byPacket);
+                report.put("scorerFamilies", Map.of("P", families.scorers().get("P").family(),
+                        "S", families.scorers().get("S").family()));
+                report.put("requiredCrossRecall", Map.of("P", "9/10", "S", "10/11"));
+            }
             byte[] bytes = (IntegritySupport.JSON.writeValueAsString(report) + "\n").getBytes(StandardCharsets.UTF_8);
             Files.createDirectories(reportOut.toAbsolutePath().getParent());
             IntegritySupport.create(reportOut, bytes);
             return new Assembled(reportOut, export.packets(), sealed);
-        } catch (PilotLabelVerification.InvalidLabelVerification | InvalidAssembly exception) { throw exception; }
+        } catch (PilotLabelVerification.InvalidLabelVerification | InvalidAssembly
+                | PilotFamilies.InvalidPilotFamilies exception) { throw exception; }
         catch (Exception exception) { throw new InvalidAssembly("Cannot assemble pilot fixtures"); }
     }
 
