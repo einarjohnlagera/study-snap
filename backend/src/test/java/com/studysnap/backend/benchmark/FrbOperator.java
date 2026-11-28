@@ -31,9 +31,9 @@ import java.util.TreeSet;
  * (3) The decisions are CLASSIFICATION-TIME advice, not switch-time evidence: the ledger check
  * requires the noted heads to equal the current store heads, and within one run call the ledgers
  * cannot change, so in a clean run the fresh heads equal the classification heads; a later attended
- * switch needs a NEW run with newly noted heads. (4) ProductionSwitchEligibility is unchanged, so
- * every decision this flow returns still carries SWITCH_ASSERTIONS_NOT_VERIFIED and none is
- * eligible until Brief 5r-2c. A completed Outcome is not an eligible switch. (5) The flow deploys
+ * switch needs a NEW run with newly noted heads. (4) The switch check re-derives its remaining
+ * assertions when its opt-in gates pass. An eligible decision is advice for the owner's attended
+ * decision, and a completed Outcome alone is not an eligible switch. (5) The flow deploys
  * nothing, changes no environment variable and switches no model. (6) The per-log anchor sets are
  * NARROWER than what FrbProvenance accepts (it lets an entry name any supplied lock): a primary log
  * may name only its own primary lock and the RESERVE-kind lock for primary opening of every drawn
@@ -199,7 +199,8 @@ final class FrbOperator {
         Map<String, ProductionSwitchEligibility.Decision> decisions = new TreeMap<>();
         try {
             ProductionSwitchEligibility.SwitchOptions options =
-                    new ProductionSwitchEligibility.SwitchOptions(sources.costLedgers(), true, true, true);
+                    new ProductionSwitchEligibility.SwitchOptions(sources.costLedgers(), true, true, true,
+                            sources.bundleSources(), true);
             for (String route : new TreeSet<>(built.reports().keySet())) {
                 ProductionSwitchEligibility.Decision decision = checker.check(route, built.reports().get(route),
                         built.inputs().get(route), sources.run(), frbFinal, sources.ledgers().ledgersByLockSha256(),

@@ -461,7 +461,7 @@ class FrbOperatorTest {
 
     // ---- Happy path ----
 
-    @Test void happyPathClassifiesLikeTheBuilderPinsTheReportAndNoDecisionIsEligible() throws Exception {
+    @Test void happyPathClassifiesLikeTheBuilderPinsTheReportAndClearsAssertionReason() throws Exception {
         Harness h = harness(true);
         Map<Path, String> notes = notes(h.setup().frb().provenance());
         // Note keys are compared after normalization: a dotted path still names the class-A log.
@@ -481,9 +481,7 @@ class FrbOperatorTest {
         assertThat(outcome.decisions()).containsOnlyKeys(outcome.built().reports().keySet());
         assertThat(outcome.decisions().values()).allSatisfy(decision -> {
             assertThat(decision.eligible()).isFalse();
-            assertThat(decision.reasons()).contains(ProductionSwitchEligibility.SWITCH_ASSERTIONS_NOT_VERIFIED)
-                    .doesNotContain(ProductionSwitchEligibility.COST_EVIDENCE_NOT_LEDGER_BACKED,
-                            ProductionSwitchEligibility.LEDGER_CHECK_FAILED);
+            assertThat(decision.reasons()).containsExactly(ProductionSwitchEligibility.CLASSIFICATION_BLOCKS_SWITCH);
         });
         assertThat(outcome.assembled().bundle()).isEqualTo(h.setup().assembled().bundle());
     }
@@ -497,8 +495,8 @@ class FrbOperatorTest {
         assertCompleted(outcome, h.run());
         assertThat(outcome.decisions().get(ROUTE).eligible()).isFalse();
         assertThat(outcome.decisions().get(ROUTE).reasons()).contains(
-                ProductionSwitchEligibility.SWITCH_ASSERTIONS_NOT_VERIFIED,
-                ProductionSwitchEligibility.COST_EVIDENCE_NOT_LEDGER_BACKED);
+                ProductionSwitchEligibility.COST_EVIDENCE_NOT_LEDGER_BACKED)
+                .doesNotContain(ProductionSwitchEligibility.SWITCH_ASSERTIONS_NOT_VERIFIED);
         assertThat(outcome.classifications().get(ROUTE).flags()).contains("COST_REVIEW_UNDETERMINED");
     }
 
@@ -550,6 +548,8 @@ class FrbOperatorTest {
         assertThat(call.options().recomputeReport()).isTrue();
         assertThat(call.options().requireOwnerAttestations()).isTrue();
         assertThat(call.options().requireOperationalCostReview()).isTrue();
+        assertThat(call.options().requireVerifiedAssertions()).isTrue();
+        assertThat(call.options().reassemblySources()).isSameAs(sources.bundleSources());
         assertThat(call.options().costLedgers()).isEqualTo(cost);
         assertThat(call.frb()).isSameAs(runnerFrb.getFirst());
         assertThat(call.frb().routeClassifications()).isEqualTo(outcome.built().inputs());
