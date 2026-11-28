@@ -16,6 +16,7 @@ import java.util.Set;
 /** Owner-frozen pilot bars and execution limits. */
 final class PilotBars {
     private static final String L_BARS = "bars";
+    private static final String L_SCORER_FAMILIES = "scorerFamilies";
     private static final String L_LIMITS = "limits";
     private static final String L_MINCRITICALRECALLCOUNT = "minCriticalRecallCount";
     private static final String L_CRITICALTOTAL = "criticalTotal";
@@ -68,9 +69,26 @@ final class PilotBars {
     final List<Integer> ownerFullReviewSizes;
     final Map<String, Limits> limits;
     private final String sha256;
+    private final Map<String, ModelFamily> scorerFamilies;
 
     private PilotBars(JsonNode root, String hash) {
-        fields(root, ROOT_FIELDS);
+        if (!root.isObject()) throw new InvalidPilotBars("Expected object");
+        Set<String> rootFields = new HashSet<>();
+        root.fieldNames().forEachRemaining(rootFields::add);
+        if (!rootFields.containsAll(ROOT_FIELDS) || !Set.of(L_BARS, L_LIMITS, L_SCORER_FAMILIES).containsAll(rootFields))
+            throw new InvalidPilotBars("Missing or unknown bars fields: " + rootFields);
+        if (root.has(L_SCORER_FAMILIES)) {
+            JsonNode declared = root.path(L_SCORER_FAMILIES);
+            fields(declared, Set.of(L_P, L_S));
+            Map<String, ModelFamily> parsed = new HashMap<>();
+            for (String role : Set.of(L_P, L_S)) {
+                try { parsed.put(role, ModelFamily.valueOf(text(declared, role))); }
+                catch (IllegalArgumentException exception) { throw new InvalidPilotBars("Invalid scorerFamilies: " + role, exception); }
+            }
+            if (parsed.get(L_P) != ModelFamily.OPENAI || parsed.get(L_S) != ModelFamily.ANTHROPIC)
+                throw new InvalidPilotBars("Scorer family allocation differs");
+            scorerFamilies = Map.copyOf(parsed);
+        } else scorerFamilies = null;
         JsonNode bars = root.path(L_BARS);
         fields(bars, BAR_FIELDS);
         JsonNode limitsNode = root.path(L_LIMITS);
@@ -124,6 +142,7 @@ final class PilotBars {
         catch (Exception exception) { throw new InvalidPilotBars("Cannot load pilot bars: " + file, exception); }
     }
     String sha256() { return sha256; }
+    Map<String, ModelFamily> scorerFamilies() { return scorerFamilies; }
     Limits limits(String role) {
         Limits value = limits.get(role);
         if (value == null) throw new InvalidPilotBars("Unknown role " + role);

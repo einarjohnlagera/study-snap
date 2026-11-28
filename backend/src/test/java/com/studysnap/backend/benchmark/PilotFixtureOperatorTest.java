@@ -23,8 +23,8 @@ class PilotFixtureOperatorTest {
             long seed;
             try { seed = Long.parseLong(System.getProperty(PREFIX + "seed")); }
             catch (Exception exception) { throw new PilotFixtureAssembly.InvalidAssembly("Pilot fixture seed required", exception); }
-            var result = PilotFixtureAssembly.assemble(dir, required("labels"), required("packets"),
-                    required("sealed"), seed, required("report"));
+            var result = PilotFixtureAssembly.assembleWithFamilies(dir, required("labels"), required("packets"),
+                    required("sealed"), seed, required("report"), requiredFamilies());
             PilotKey loaded = PilotKey.load(result.sealed());
             loaded.requireRevision4Composition();
             var artifacts = java.util.Map.of(PilotLeakCheck.ArtifactClass.PACKET, result.packets(),
@@ -38,6 +38,11 @@ class PilotFixtureOperatorTest {
                     + ": " + exception.getMessage());
             throw new AssertionError("pilot fixture operation failed");
         }
+    }
+    static Path requiredFamilies() {
+        Path path = required("families");
+        if (!path.isAbsolute()) throw new PilotFixtureAssembly.InvalidAssembly("Absolute pilot fixture path required: families");
+        return path;
     }
     private static Path required(String name) {
         String value = System.getProperty(PREFIX + name);
