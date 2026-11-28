@@ -71,7 +71,7 @@ class PilotFixtureAssemblyTest {
                 boolean input = authorCodex && type == PlantedType.WRONG_KEY && !rootSet;
                 if (input) rootSet = true;
                 item.putObject("planted").put("plantedType", type.name())
-                        .put("authoringSource", authorCodex ? "CODEX" : "CLAUDE_OR_OWNER")
+                        .put("authoringFamily", authorCodex ? "OPENAI" : "ANTHROPIC")
                         .put("rootCauseInput", input);
             }
             Files.writeString(dir.resolve(id + ".json"), IntegritySupport.JSON.writeValueAsString(root));
@@ -85,7 +85,7 @@ class PilotFixtureAssemblyTest {
         for (int p = 0; p < SIZES.length; p++) {
             String id = "pilot-%02d".formatted(p + 1);
             Path file = dir.resolve(id + ".json");
-            String verifier = p == 0 || p == 1 || p == 5 ? "CLAUDE_OR_OWNER" : "CODEX";
+            String verifier = p == 0 || p == 1 || p == 5 ? "ANTHROPIC" : "OPENAI";
             String hash = FreezeRecord.sha256(file);
             for (int i = 0; i < SIZES[p]; i++) rows.add(row(id, i, verifier, hash, "LABEL_CONFIRMED", "NONE"));
         }
@@ -113,10 +113,10 @@ class PilotFixtureAssemblyTest {
     @Test void allocationAndPilotCompositionPassIncludingFinalGate() throws Exception {
         SetUp setup = synthetic();
         var checked = PilotFixtureAssembly.check(setup.dir());
-        assertThat(checked.planted()).containsEntry(PilotFixtureSource.AuthoringSource.CODEX, 17)
-                .containsEntry(PilotFixtureSource.AuthoringSource.CLAUDE_OR_OWNER, 16);
-        assertThat(checked.critical()).containsEntry(PilotFixtureSource.AuthoringSource.CODEX, 11)
-                .containsEntry(PilotFixtureSource.AuthoringSource.CLAUDE_OR_OWNER, 10);
+        assertThat(checked.planted()).containsEntry(ModelFamily.OPENAI, 17)
+                .containsEntry(ModelFamily.ANTHROPIC, 16);
+        assertThat(checked.critical()).containsEntry(ModelFamily.OPENAI, 11)
+                .containsEntry(ModelFamily.ANTHROPIC, 10);
         var result = assemble(setup, "a");
         PilotKey sealed = PilotKey.load(result.sealed());
         sealed.requireRevision4Composition();
@@ -174,7 +174,7 @@ class PilotFixtureAssemblyTest {
     }
     @Test void authorshipAllocationAndMixedPacketFail() throws Exception {
         SetUp setup = synthetic(); ObjectNode node = root(setup.dir(), "pilot-01");
-        planted(node, 0).put("authoringSource", "CLAUDE_OR_OWNER"); save(setup.dir(), "pilot-01", node);
+        planted(node, 0).put("authoringFamily", "ANTHROPIC"); save(setup.dir(), "pilot-01", node);
         assertThatThrownBy(() -> PilotFixtureAssembly.check(setup.dir())).isInstanceOf(PilotFixtureAssembly.InvalidAssembly.class).hasMessageContaining("authorship");
     }
     @Test void repositoryPathsFail() {
@@ -193,10 +193,10 @@ class PilotFixtureAssemblyTest {
         assertThatThrownBy(() -> assemble(setup, "missing")).isInstanceOf(PilotLabelVerification.InvalidLabelVerification.class).hasMessageContaining("Missing");
         Files.writeString(setup.labels(), original);
         String hash = FreezeRecord.sha256(setup.dir().resolve("pilot-01.json"));
-        Files.writeString(setup.labels(), original + row("pilot-01", 0, "CLAUDE_OR_OWNER", hash,
+        Files.writeString(setup.labels(), original + row("pilot-01", 0, "ANTHROPIC", hash,
                 "LABEL_DISPUTED", "OTHER") + "\n");
         assertThatThrownBy(() -> assemble(setup, "disputed")).isInstanceOf(PilotLabelVerification.InvalidLabelVerification.class).hasMessageContaining("Disputed");
-        Files.writeString(setup.labels(), Files.readString(setup.labels()) + row("pilot-01", 0, "CLAUDE_OR_OWNER", hash,
+        Files.writeString(setup.labels(), Files.readString(setup.labels()) + row("pilot-01", 0, "ANTHROPIC", hash,
                 "LABEL_CONFIRMED", "NONE") + "\n");
         assemble(setup, "reconfirmed");
         ObjectNode node = root(setup.dir(), "pilot-01"); node.putArray("sourceNoteTexts").add("Synthetic amended source"); save(setup.dir(), "pilot-01", node);
@@ -205,10 +205,10 @@ class PilotFixtureAssemblyTest {
     @Test void invalidVerificationRowsFailWithoutExport() throws Exception {
         SetUp setup = synthetic(); String original = Files.readString(setup.labels());
         String hash = FreezeRecord.sha256(setup.dir().resolve("pilot-01.json"));
-        String[] invalid = {row("pilot-01", 0, "CODEX", hash, "LABEL_CONFIRMED", "NONE"),
-                row("pilot-01", 99, "CLAUDE_OR_OWNER", hash, "LABEL_CONFIRMED", "NONE"),
+        String[] invalid = {row("pilot-01", 0, "OPENAI", hash, "LABEL_CONFIRMED", "NONE"),
+                row("pilot-01", 99, "ANTHROPIC", hash, "LABEL_CONFIRMED", "NONE"),
                 "{\"packetId\":\"pilot-01\",\"packetId\":\"pilot-01\"}",
-                row("pilot-01", 0, "CLAUDE_OR_OWNER", hash, "LABEL_DISPUTED", "free text")};
+                row("pilot-01", 0, "ANTHROPIC", hash, "LABEL_DISPUTED", "free text")};
         for (int i = 0; i < invalid.length; i++) {
             Files.writeString(setup.labels(), original + invalid[i] + "\n");
             int suffix = i;
@@ -279,7 +279,7 @@ class PilotFixtureAssemblyTest {
     @Test void diagnosticsNeverPairPositionWithSensitiveLabel() throws Exception {
         SetUp setup = synthetic();
         ObjectNode node = root(setup.dir(), "pilot-01");
-        planted(node, 0).put("authoringSource", "CLAUDE_OR_OWNER");
+        planted(node, 0).put("authoringFamily", "ANTHROPIC");
         save(setup.dir(), "pilot-01", node);
         Throwable failure = org.assertj.core.api.Assertions.catchThrowable(() -> PilotFixtureAssembly.check(setup.dir()));
         assertThat(failure).isInstanceOf(PilotFixtureAssembly.InvalidAssembly.class);
@@ -322,7 +322,7 @@ class PilotFixtureAssemblyTest {
         SetUp setup = synthetic();
         String hash = FreezeRecord.sha256(setup.dir().resolve("pilot-01.json"));
         Files.writeString(setup.labels(), Files.readString(setup.labels())
-                + row("pilot-01", 0, "CLAUDE_OR_OWNER", hash, "LABEL_DISPUTED", "KEY_NOT_ACTUALLY_WRONG") + "\n");
+                + row("pilot-01", 0, "ANTHROPIC", hash, "LABEL_DISPUTED", "KEY_NOT_ACTUALLY_WRONG") + "\n");
         Throwable failure = org.assertj.core.api.Assertions.catchThrowable(() -> assemble(setup, "diagnostic"));
         assertThat(failure).isInstanceOf(PilotLabelVerification.InvalidLabelVerification.class);
         for (PlantedType type : PlantedType.values()) assertThat(failure.getMessage()).doesNotContain(type.name());

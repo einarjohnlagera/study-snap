@@ -26,7 +26,7 @@ final class NoArmFields {
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private static final Set<String> DENIED = Set.of("arm", "armkey", "armlabel", "baseline", "candidate",
             "model", "modelname", "modelid", "route", "tier", "planted", "plantedtype",
-            "authoringsource", "canary", "severity");
+            "authoringsource", "authoringfamily", "canary", "severity");
     private NoArmFields() {}
 
     static void check(String json) {

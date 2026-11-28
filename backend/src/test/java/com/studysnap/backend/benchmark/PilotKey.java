@@ -21,18 +21,18 @@ final class PilotKey {
         InvalidPilotKey(String message, Throwable cause) { super(message, cause); }
     }
     record Row(String id, String packetId, PlantedType plantedType, PlantedType.Severity severity,
-               PilotFixtureSource.AuthoringSource authoringSource, boolean rootCauseInput, String canary) {}
+               ModelFamily authoringFamily, boolean rootCauseInput, String canary) {}
     private static final ObjectMapper JSON = new ObjectMapper().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private static final String ID = "id";
     private static final String PACKET_ID = "packetId";
     private static final String PLANTED_TYPE = "plantedType";
     private static final String SEVERITY = "severity";
-    private static final String AUTHORING_SOURCE = "authoringSource";
+    private static final String AUTHORING_FAMILY = "authoringFamily";
     private static final String ROOT_CAUSE_INPUT = "rootCauseInput";
     private static final String CANARY = "canary";
     private static final Set<String> FIELDS = Set.of(ID, PACKET_ID, PLANTED_TYPE, SEVERITY,
-            AUTHORING_SOURCE, ROOT_CAUSE_INPUT, CANARY);
+            AUTHORING_FAMILY, ROOT_CAUSE_INPUT, CANARY);
     private static final Map<PlantedType, Integer> REVISION_4 = Map.ofEntries(
             Map.entry(PlantedType.WRONG_KEY, 6), Map.entry(PlantedType.EXPLANATION_CONTRADICTS_KEY, 3),
             Map.entry(PlantedType.SECOND_DEFENSIBLE_ANSWER, 5),
@@ -63,13 +63,13 @@ final class PilotKey {
                 JsonNode node = JSON.readTree(line);
                 if (!fields(node) || !text(node, ID) || !text(node, PACKET_ID)
                         || !text(node, PLANTED_TYPE) || !text(node, SEVERITY)
-                        || !text(node, AUTHORING_SOURCE) || !text(node, CANARY)
+                        || !text(node, AUTHORING_FAMILY) || !text(node, CANARY)
                         || !node.path(ROOT_CAUSE_INPUT).isBoolean())
                     throw new InvalidPilotKey("Malformed pilot key row");
                 PlantedType type = PlantedType.valueOf(node.path(PLANTED_TYPE).asText());
                 PlantedType.Severity severity = PlantedType.Severity.valueOf(node.path(SEVERITY).asText());
-                PilotFixtureSource.AuthoringSource author = PilotFixtureSource.AuthoringSource.valueOf(
-                        node.path(AUTHORING_SOURCE).asText());
+                ModelFamily author = ModelFamily.valueOf(
+                        node.path(AUTHORING_FAMILY).asText());
                 String rowCanary = node.path(CANARY).asText();
                 if (!rowCanary.matches("CANARY-[A-Z0-9]{16}") || (canary != null && !canary.equals(rowCanary))
                         || type.severity() != severity
@@ -109,8 +109,8 @@ final class PilotKey {
         for (Row row : rows) counts.merge(row.severity(), 1L, Long::sum);
         return Map.copyOf(counts);
     }
-    List<Row> byAuthor(PilotFixtureSource.AuthoringSource author) {
-        return rows.stream().filter(row -> row.authoringSource() == author).toList();
+    List<Row> byAuthor(ModelFamily author) {
+        return rows.stream().filter(row -> row.authoringFamily() == author).toList();
     }
     Map<String, Integer> packetSizes() {
         Map<String, Integer> sizes = new HashMap<>();
@@ -126,7 +126,7 @@ final class PilotKey {
                 throw new InvalidPilotKey("Revision 4 planted counts differ: " + entry.getKey());
         if (rows.stream().noneMatch(Row::rootCauseInput))
             throw new InvalidPilotKey("Revision 4 requires an input root cause");
-        for (PilotFixtureSource.AuthoringSource author : PilotFixtureSource.AuthoringSource.values())
+        for (ModelFamily author : ModelFamily.values())
             if (byAuthor(author).stream().filter(row -> row.severity() == PlantedType.Severity.CRITICAL).count() < 8)
                 throw new InvalidPilotKey("Revision 4 requires both author families among criticals");
     }

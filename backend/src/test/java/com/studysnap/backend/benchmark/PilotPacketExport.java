@@ -58,7 +58,7 @@ final class PilotPacketExport {
                     keyRow.put("packetId", fixture.packetId());
                     keyRow.put("plantedType", item.plantedType().name());
                     keyRow.put("severity", item.plantedType().severity().name());
-                    keyRow.put("authoringSource", item.authoringSource().name());
+                    keyRow.put("authoringFamily", item.authoringFamily().name());
                     keyRow.put("rootCauseInput", item.rootCauseInput());
                     keyRow.put("canary", canary);
                     keyRows.add(JSON.writeValueAsString(keyRow));
@@ -69,7 +69,8 @@ final class PilotPacketExport {
                 packet.put("outputs", List.of(Map.of("placement", "A", "items", shown)));
                 String body = JSON.writeValueAsString(packet) + NEWLINE;
                 if (ClassBBlindPacketExport.LEAK.matcher(body).find()
-                        || body.contains("planted") || body.contains("CODEX") || body.contains("CLAUDE_OR_OWNER")
+                        || body.contains("planted") || body.contains("OPENAI") || body.contains("ANTHROPIC")
+                        || body.contains("CODEX") || body.contains("CLAUDE_OR_OWNER")
                         || body.contains(canary) || body.contains(keyAbsolute.toString()))
                     throw new PilotFixtureSource.InvalidPilotFixture("Pilot packet leaks metadata: " + fixture.packetId());
                 packets.put(packetDirectory.resolve(fixture.packetId() + ".jsonl"),

@@ -39,8 +39,8 @@ class PilotKeyTest {
                 row.put("id", "pilot-%05d".formatted(++serial));
                 row.put("packetId", "packet-" + packet);
                 row.put("plantedType", type.name()).put("severity", type.severity().name());
-                row.put("authoringSource", type.severity() == PlantedType.Severity.CRITICAL && critical++ >= 11
-                        ? "CLAUDE_OR_OWNER" : "CODEX");
+                row.put("authoringFamily", type.severity() == PlantedType.Severity.CRITICAL && critical++ >= 11
+                        ? "ANTHROPIC" : "OPENAI");
                 row.put("rootCauseInput", serial == 1);
                 row.put("canary", PilotPacketExportTest.CANARY);
                 rows.add(row);
@@ -64,7 +64,7 @@ class PilotKeyTest {
                 .containsEntry(PlantedType.Severity.NONCRITICAL, 12L)
                 .containsEntry(PlantedType.Severity.CLEAN, 93L);
         assertThat(key.packetSizes().values()).containsExactlyInAnyOrder(7, 7, 10, 24, 30, 48);
-        assertThat(key.byAuthor(PilotFixtureSource.AuthoringSource.CLAUDE_OR_OWNER)).hasSize(10);
+        assertThat(key.byAuthor(ModelFamily.ANTHROPIC)).hasSize(10);
     }
     @Test void everyPlantedCountIsChecked() throws Exception {
         for (PlantedType type : PlantedType.values()) {
@@ -91,17 +91,17 @@ class PilotKeyTest {
                 .isInstanceOf(PilotKey.InvalidPilotKey.class).hasMessageContaining("root cause");
         rows = revision4();
         rows.stream().filter(row -> row.path("severity").asText().equals("CRITICAL"))
-                .forEach(row -> row.put("authoringSource", "CODEX"));
+                .forEach(row -> row.put("authoringFamily", "OPENAI"));
         PilotKey oneFamily = write(rows);
         assertThatThrownBy(oneFamily::requireRevision4Composition)
                 .isInstanceOf(PilotKey.InvalidPilotKey.class).hasMessageContaining("families");
         rows = revision4();
-        rows.stream().filter(row -> row.path("authoringSource").asText().equals("CLAUDE_OR_OWNER"))
-                .findFirst().orElseThrow().put("authoringSource", "CODEX");
-        rows.stream().filter(row -> row.path("authoringSource").asText().equals("CLAUDE_OR_OWNER"))
-                .findFirst().orElseThrow().put("authoringSource", "CODEX");
-        rows.stream().filter(row -> row.path("authoringSource").asText().equals("CLAUDE_OR_OWNER"))
-                .findFirst().orElseThrow().put("authoringSource", "CODEX");
+        rows.stream().filter(row -> row.path("authoringFamily").asText().equals("ANTHROPIC"))
+                .findFirst().orElseThrow().put("authoringFamily", "OPENAI");
+        rows.stream().filter(row -> row.path("authoringFamily").asText().equals("ANTHROPIC"))
+                .findFirst().orElseThrow().put("authoringFamily", "OPENAI");
+        rows.stream().filter(row -> row.path("authoringFamily").asText().equals("ANTHROPIC"))
+                .findFirst().orElseThrow().put("authoringFamily", "OPENAI");
         PilotKey underEight = write(rows);
         assertThatThrownBy(underEight::requireRevision4Composition)
                 .isInstanceOf(PilotKey.InvalidPilotKey.class).hasMessageContaining("families");

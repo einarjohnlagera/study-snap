@@ -19,10 +19,10 @@ final class PilotLabelVerification {
     enum Verdict { LABEL_CONFIRMED, LABEL_DISPUTED }
     enum Code { NONE, KEY_NOT_ACTUALLY_WRONG, CLEAN_ITEM_HAS_DEFECT, PLANTED_DEFECT_NOT_PRESENT,
         WRONG_PLANTED_TYPE, SOURCE_TEXT_ISSUE, OTHER }
-    record Row(String packetId, int index, PilotFixtureSource.AuthoringSource verifier,
+    record Row(String packetId, int index, ModelFamily verifier,
                String fixtureSha256, Verdict verdict, Code code) {}
-    record Summary(Map<PilotFixtureSource.AuthoringSource, Integer> confirmed, Map<String, Integer> disputes) {}
-    private record Position(String packetId, int index, PilotFixtureSource.AuthoringSource verifier) {}
+    record Summary(Map<ModelFamily, Integer> confirmed, Map<String, Integer> disputes) {}
+    private record Position(String packetId, int index, ModelFamily verifier) {}
     private static final Set<String> FIELDS = Set.of("packetId", "index", "verifier", "fixtureSha256", "verdict", "code");
     private PilotLabelVerification() {}
 
@@ -40,7 +40,7 @@ final class PilotLabelVerification {
                 String packet = IntegritySupport.string(node, "packetId");
                 JsonNode index = node.path("index");
                 if (!index.isInt() || index.asInt() < 0) throw new InvalidLabelVerification("Invalid verification index");
-                var verifier = PilotFixtureSource.AuthoringSource.valueOf(IntegritySupport.string(node, "verifier"));
+                var verifier = ModelFamily.valueOf(IntegritySupport.string(node, "verifier"));
                 String hash = IntegritySupport.hash(node, "fixtureSha256");
                 Verdict verdict = Verdict.valueOf(IntegritySupport.string(node, "verdict"));
                 Code code = Code.valueOf(IntegritySupport.string(node, "code"));
@@ -64,15 +64,15 @@ final class PilotLabelVerification {
                 throw new InvalidLabelVerification("Unknown verification packet or index");
             latest.put(new Position(row.packetId(), row.index(), row.verifier()), row);
         }
-        Map<PilotFixtureSource.AuthoringSource, Integer> confirmed = new java.util.EnumMap<>(PilotFixtureSource.AuthoringSource.class);
+        Map<ModelFamily, Integer> confirmed = new java.util.EnumMap<>(ModelFamily.class);
         Map<String, Integer> disputes = new java.util.LinkedHashMap<>();
         for (var entry : fixtures.entrySet()) {
             int disputed = 0;
             for (int index = 0; index < entry.getValue().questions().size(); index++) {
                 var item = entry.getValue().questions().get(index);
-                var other = item.authoringSource() == PilotFixtureSource.AuthoringSource.CODEX
-                        ? PilotFixtureSource.AuthoringSource.CLAUDE_OR_OWNER : PilotFixtureSource.AuthoringSource.CODEX;
-                if (latest.containsKey(new Position(entry.getKey(), index, item.authoringSource())))
+                var other = item.authoringFamily() == ModelFamily.OPENAI
+                        ? ModelFamily.ANTHROPIC : ModelFamily.OPENAI;
+                if (latest.containsKey(new Position(entry.getKey(), index, item.authoringFamily())))
                     throw new InvalidLabelVerification("Same-source verifier recorded");
                 Row row = latest.get(new Position(entry.getKey(), index, other));
                 if (row == null) throw new InvalidLabelVerification("Missing cross-source verification row");

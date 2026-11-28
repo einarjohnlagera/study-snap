@@ -55,6 +55,7 @@ class PilotLeakCheckTest {
         hit(PilotLeakCheck.ArtifactClass.OUTPUT, PilotPacketExportTest.CANARY, "CANARY");
         hit(PilotLeakCheck.ArtifactClass.PROMPT, temp.resolve("sealed-key.jsonl").toAbsolutePath().toString(), "KEY_PATH");
         hit(PilotLeakCheck.ArtifactClass.PROMPT, "CODEX", "AUTHOR");
+        hit(PilotLeakCheck.ArtifactClass.PROMPT, "OPENAI", "AUTHOR");
         hit(PilotLeakCheck.ArtifactClass.OUTPUT, "token", "STAGE1_LEAK");
         hit(PilotLeakCheck.ArtifactClass.PACKET, "WRONG_KEY", "PLANTED_TYPE");
         hit(PilotLeakCheck.ArtifactClass.PROMPT, "planted", "PLANTED_FIELD");

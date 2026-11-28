@@ -39,8 +39,10 @@ final class PilotLeakCheck {
         needles.add(new Needle("KEY_NAME", keyPath.getFileName().toString()));
         for (PlantedType type : PlantedType.values()) needles.add(new Needle("PLANTED_TYPE", type.name()));
         needles.add(new Needle("PLANTED_FIELD", "planted"));
-        for (PilotFixtureSource.AuthoringSource author : PilotFixtureSource.AuthoringSource.values())
+        for (ModelFamily author : ModelFamily.values())
             needles.add(new Needle("AUTHOR", author.name()));
+        for (String legacy : List.of("CODEX", "CLAUDE_OR_OWNER"))
+            needles.add(new Needle("AUTHOR", legacy));
         for (String extra : forbiddenExtras) needles.add(new Needle("FORBIDDEN_EXTRA", extra));
         for (ArtifactClass type : ArtifactClass.values()) for (Path path : artifacts.get(type)) {
             try {
