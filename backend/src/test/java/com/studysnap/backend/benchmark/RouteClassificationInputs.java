@@ -20,9 +20,10 @@ import java.util.TreeSet;
  * review-composition, operational-cause, veto, expansion and cost facts are derived from them.
  *
  * Honest limits. Nothing in the repository calls this class yet (the operator flow is Brief 5r-2b).
- * ProductionSwitchEligibility is unchanged: it still always adds SWITCH_ASSERTIONS_NOT_VERIFIED and
- * never reports eligible (re-deriving those assertions at switch time is Brief 5r-2c). The inputs are
- * buildable by this class; that is not an end-to-end verification of the classification.
+ * ProductionSwitchEligibility keeps SWITCH_ASSERTIONS_NOT_VERIFIED under its default options; under
+ * the opt-in requireVerifiedAssertions (Brief 5r-2c) it re-derives those assertions at switch time
+ * and may then report an eligible decision, which is advice for the owner's attended decision only.
+ * The inputs are buildable by this class; that is not an end-to-end verification of the classification.
  *
  * Owner-supplied trusted facts, validated for shape but not verified: the key-defect workload
  * parameters (including H_max), the candidate and baseline arm labels, solRecommended (nothing derives
