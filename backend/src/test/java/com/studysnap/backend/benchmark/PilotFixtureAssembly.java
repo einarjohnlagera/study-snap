@@ -32,9 +32,9 @@ final class PilotFixtureAssembly {
     private static final SecureRandom RANDOM = new SecureRandom();
     record Checked(List<Path> files, Map<String, PilotFixtureSource.Fixture> fixtures,
                    Map<String, String> hashes, Map<PlantedType, Integer> counts,
-                   Map<PilotFixtureSource.AuthoringSource, Map<PlantedType, Integer>> bySource,
-                   Map<PilotFixtureSource.AuthoringSource, Integer> critical,
-                   Map<PilotFixtureSource.AuthoringSource, Integer> planted) {}
+                   Map<ModelFamily, Map<PlantedType, Integer>> bySource,
+                   Map<ModelFamily, Integer> critical,
+                   Map<ModelFamily, Integer> planted) {}
     record Assembled(Path report, List<Path> packets, Path sealed) {}
     private PilotFixtureAssembly() {}
 
@@ -49,10 +49,10 @@ final class PilotFixtureAssembly {
             Map<String, PilotFixtureSource.Fixture> fixtures = new LinkedHashMap<>();
             Map<String, String> hashes = new LinkedHashMap<>();
             Map<PlantedType, Integer> counts = zeroCounts();
-            Map<PilotFixtureSource.AuthoringSource, Map<PlantedType, Integer>> bySource = new EnumMap<>(PilotFixtureSource.AuthoringSource.class);
-            Map<PilotFixtureSource.AuthoringSource, Integer> critical = new EnumMap<>(PilotFixtureSource.AuthoringSource.class);
-            Map<PilotFixtureSource.AuthoringSource, Integer> planted = new EnumMap<>(PilotFixtureSource.AuthoringSource.class);
-            for (var source : PilotFixtureSource.AuthoringSource.values()) bySource.put(source, zeroCounts());
+            Map<ModelFamily, Map<PlantedType, Integer>> bySource = new EnumMap<>(ModelFamily.class);
+            Map<ModelFamily, Integer> critical = new EnumMap<>(ModelFamily.class);
+            Map<ModelFamily, Integer> planted = new EnumMap<>(ModelFamily.class);
+            for (var source : ModelFamily.values()) bySource.put(source, zeroCounts());
             int rootCount = 0;
             int total = 0;
             for (int n = 0; n < SIZES.size(); n++) {
@@ -65,10 +65,10 @@ final class PilotFixtureAssembly {
                 catch (Exception exception) { throw new InvalidAssembly("Invalid fixture format: " + id); }
                 if (!id.equals(fixture.packetId())) throw new InvalidAssembly("Fixture stem and packetId differ: " + id);
                 if (fixture.questions().size() != SIZES.get(n)) throw new InvalidAssembly("Packet size differs: " + id);
-                var expected = n == 0 || n == 1 || n == 5 ? PilotFixtureSource.AuthoringSource.CODEX
-                        : PilotFixtureSource.AuthoringSource.CLAUDE_OR_OWNER;
+                var expected = n == 0 || n == 1 || n == 5 ? ModelFamily.OPENAI
+                        : ModelFamily.ANTHROPIC;
                 for (var item : fixture.questions()) {
-                    if (item.authoringSource() != expected) throw new InvalidAssembly("Packet authorship allocation or mixed authors: " + id);
+                    if (item.authoringFamily() != expected) throw new InvalidAssembly("Packet authorship allocation or mixed authors: " + id);
                     counts.merge(item.plantedType(), 1, Integer::sum);
                     bySource.get(expected).merge(item.plantedType(), 1, Integer::sum);
                     if (item.plantedType().severity() == PlantedType.Severity.CRITICAL) critical.merge(expected, 1, Integer::sum);
@@ -89,7 +89,7 @@ final class PilotFixtureAssembly {
                 if (!entry.getValue().equals(counts.get(entry.getKey())))
                     throw new InvalidAssembly("Composition count differs");
             if (rootCount != 1) throw new InvalidAssembly("Input root cause count must be one");
-            for (var source : PilotFixtureSource.AuthoringSource.values()) {
+            for (var source : ModelFamily.values()) {
                 if (planted.getOrDefault(source, 0) < 15)
                     throw new InvalidAssembly("Authorship planted below band: " + source);
                 if (planted.getOrDefault(source, 0) > 18)

@@ -17,7 +17,7 @@ class PilotFixtureSourceTest {
         Path file = PilotPacketExportTest.fixture(temp, "first", 2);
         assertThat(PilotFixtureSource.load(file).questions()).hasSize(2);
         String valid = Files.readString(file);
-        Files.writeString(file, valid.replace("\"authoringSource\":\"CODEX\",", ""));
+        Files.writeString(file, valid.replace("\"authoringFamily\":\"OPENAI\",", ""));
         assertThatThrownBy(() -> PilotFixtureSource.load(file))
                 .isInstanceOf(PilotFixtureSource.InvalidPilotFixture.class);
         Files.writeString(file, valid.replace("\"rootCauseInput\":false", "\"rootCauseInput\":true"));

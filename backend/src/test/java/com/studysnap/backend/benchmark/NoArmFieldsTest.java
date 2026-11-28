@@ -16,7 +16,7 @@ class NoArmFieldsTest {
     @Test void everyDeniedKeyIsFoundInsideAnArray() {
         for (String key : List.of("arm", "armKey", "armLabel", "baseline", "candidate", "model",
                 "modelName", "modelId", "route", "tier", "planted", "plantedType",
-                "authoringSource", "canary", "severity", "inputTokenCount", "costUsd", "usage")) {
+                "authoringSource", "authoringFamily", "canary", "severity", "inputTokenCount", "costUsd", "usage")) {
             String json = "{\"outer\":[{\"inner\":[{\"" + key + "\":\"neutral\"}]}]}";
             assertThatThrownBy(() -> NoArmFields.check(json))
                     .isInstanceOf(NoArmFields.ArmFieldDetected.class).hasMessageContaining(key);

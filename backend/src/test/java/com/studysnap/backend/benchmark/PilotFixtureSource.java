@@ -15,16 +15,16 @@ import java.util.Set;
  * One UTF-8 JSON file per packet: packetId, a nonempty sourceNoteTexts array of
  * nonblank strings, and a nonempty questions array. Each question entry has
  * exactly question (the delivered class-A question JSON) and planted, whose
- * fields are plantedType, authoringSource and rootCauseInput. Metadata stays
- * only in the sealed key. Duplicate JSON fields and unknown wrapper fields fail.
+ * fields are plantedType, authoringFamily and rootCauseInput. Metadata stays
+ * only in the sealed key. The family is declared metadata, not proof of which
+ * model authored an item. Duplicate JSON fields and unknown wrapper fields fail.
  */
 final class PilotFixtureSource {
     static final class InvalidPilotFixture extends RuntimeException {
         InvalidPilotFixture(String message) { super(message); }
         InvalidPilotFixture(String message, Throwable cause) { super(message, cause); }
     }
-    enum AuthoringSource { CODEX, CLAUDE_OR_OWNER }
-    record Item(JsonNode question, PlantedType plantedType, AuthoringSource authoringSource,
+    record Item(JsonNode question, PlantedType plantedType, ModelFamily authoringFamily,
                 boolean rootCauseInput) {}
     record Fixture(String packetId, List<String> sourceNoteTexts, List<Item> questions) {}
     private static final ObjectMapper JSON = new ObjectMapper().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
@@ -35,11 +35,11 @@ final class PilotFixtureSource {
     private static final String QUESTION = "question";
     private static final String PLANTED_FIELD = "planted";
     private static final String PLANTED_TYPE = "plantedType";
-    private static final String AUTHORING_SOURCE = "authoringSource";
+    private static final String AUTHORING_FAMILY = "authoringFamily";
     private static final String ROOT_CAUSE_INPUT = "rootCauseInput";
     private static final Set<String> TOP = Set.of(PACKET_ID, SOURCE_TEXTS, QUESTIONS);
     private static final Set<String> ITEM = Set.of(QUESTION, PLANTED_FIELD);
-    private static final Set<String> PLANTED = Set.of(PLANTED_TYPE, AUTHORING_SOURCE, ROOT_CAUSE_INPUT);
+    private static final Set<String> PLANTED = Set.of(PLANTED_TYPE, AUTHORING_FAMILY, ROOT_CAUSE_INPUT);
     private PilotFixtureSource() {}
 
     static Fixture load(Path file) {
@@ -61,11 +61,11 @@ final class PilotFixtureSource {
                 JsonNode planted = item.path(PLANTED_FIELD);
                 if (!fields(item, ITEM) || !fields(planted, PLANTED)
                         || !planted.path(PLANTED_TYPE).isTextual()
-                        || !planted.path(AUTHORING_SOURCE).isTextual()
+                        || !planted.path(AUTHORING_FAMILY).isTextual()
                         || !planted.path(ROOT_CAUSE_INPUT).isBoolean())
                     throw new InvalidPilotFixture("Malformed planted item in " + file);
                 PlantedType type = PlantedType.valueOf(planted.path(PLANTED_TYPE).asText());
-                AuthoringSource author = AuthoringSource.valueOf(planted.path(AUTHORING_SOURCE).asText());
+                ModelFamily author = ModelFamily.valueOf(planted.path(AUTHORING_FAMILY).asText());
                 boolean input = planted.path(ROOT_CAUSE_INPUT).asBoolean();
                 if (input && type.severity() != PlantedType.Severity.CRITICAL)
                     throw new InvalidPilotFixture("rootCauseInput requires CRITICAL in " + file);

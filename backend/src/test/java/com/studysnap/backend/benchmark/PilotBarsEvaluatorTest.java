@@ -70,12 +70,12 @@ class PilotBarsEvaluatorTest {
     }
     @Test void bar2PooledThresholdAndCrossFamilyAreIndependent() throws Exception {
         setup(); List<PilotKey.Row> own = key.rows().stream().filter(row -> row.severity() == PlantedType.Severity.CRITICAL
-                && row.authoringSource() == PilotFixtureSource.AuthoringSource.CODEX
+                && row.authoringFamily() == ModelFamily.OPENAI
                 && row.plantedType() == PlantedType.EXPLANATION_CONTRADICTS_KEY).toList();
         pClean(own.get(0)); pClean(own.get(1)); assertThat(bar(2)).isTrue();
         pClean(own.get(2)); assertThat(bar(2)).isFalse();
         setup(); List<PilotKey.Row> cross = key.rows().stream().filter(row -> row.severity() == PlantedType.Severity.CRITICAL
-                && row.authoringSource() == PilotFixtureSource.AuthoringSource.CLAUDE_OR_OWNER
+                && row.authoringFamily() == ModelFamily.ANTHROPIC
                 && row.plantedType() == PlantedType.SOURCE_CONTRADICTION).toList();
         pClean(cross.get(0)); pClean(cross.get(1));
         var result = evaluate().scorers().get(L_P).bars().get(2);

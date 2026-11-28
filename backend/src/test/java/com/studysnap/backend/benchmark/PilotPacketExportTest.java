@@ -32,7 +32,7 @@ class PilotPacketExportTest {
             question.put("sourceStudyPackId", 99);
             entry.set("question", question);
             entry.putObject("planted").put("plantedType", "CLEAN")
-                    .put("authoringSource", "CODEX").put("rootCauseInput", false);
+                    .put("authoringFamily", "OPENAI").put("rootCauseInput", false);
         }
         Path file = directory.resolve(packetId + ".json");
         Files.writeString(file, JSON.writeValueAsString(root));
@@ -80,7 +80,7 @@ class PilotPacketExportTest {
         });
         for (Path packet : result.packets()) {
             String body = Files.readString(packet);
-            assertThat(body).doesNotContain("planted", "authoringSource", CANARY,
+            assertThat(body).doesNotContain("planted", "authoringFamily", CANARY,
                     result.keyPath().toAbsolutePath().toString(), "sourceStudyPackId");
         }
     }
@@ -136,7 +136,7 @@ class PilotPacketExportTest {
                 .isInstanceOf(PilotFixtureSource.InvalidPilotFixture.class);
         PilotPacketExport.Export result = export(files, "good", 1);
         Files.writeString(result.keyPath(),
-                Files.readString(result.keyPath()).replaceFirst("CODEX", "CLAUDE_OR_OWNER"));
+                Files.readString(result.keyPath()).replaceFirst("OPENAI", "ANTHROPIC"));
         assertThatThrownBy(() -> PilotKey.load(result.keyPath()))
                 .isInstanceOf(PilotKey.InvalidPilotKey.class).hasMessageContaining("SHA-256");
     }

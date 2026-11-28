@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/** P scores the declared Anthropic half and S the OpenAI half until the family-based evaluator lands. */
 final class PilotBarsEvaluator {
     private static final String L_P = "P";
     private static final String L_S = "S";
@@ -73,8 +74,8 @@ final class PilotBarsEvaluator {
                 if (keyRow.severity() == PlantedType.Severity.CRITICAL) {
                     if (markedCritical) criticalRecall++;
                     boolean cross = L_P.equals(role)
-                            ? keyRow.authoringSource() == PilotFixtureSource.AuthoringSource.CLAUDE_OR_OWNER
-                            : keyRow.authoringSource() == PilotFixtureSource.AuthoringSource.CODEX;
+                            ? keyRow.authoringFamily() == ModelFamily.ANTHROPIC
+                            : keyRow.authoringFamily() == ModelFamily.OPENAI;
                     if (cross) { crossCount++; if (markedCritical) crossRecall++; }
                     else { ownCount++; if (markedCritical) ownRecall++; }
                 }
